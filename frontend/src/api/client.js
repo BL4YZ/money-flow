@@ -2,9 +2,7 @@ import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 
 // Cambiá esta URL cuando deploys en Railway
-const BASE_URL = __DEV__
-  ? 'http://192.168.1.5:3000/api'  // ← Tu IP local cuando desarrollás
-  : 'https://moneyflow-api.up.railway.app/api'; // ← URL producción
+const BASE_URL = 'https://money-flow-co41.onrender.com/api';
 
 const api = axios.create({
   baseURL: BASE_URL,
