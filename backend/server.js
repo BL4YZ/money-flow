@@ -1,4 +1,7 @@
 require('dotenv').config();
+// Forzar IPv4 en todas las conexiones DNS — fix para Render + Supabase
+const dns = require('dns');
+dns.setDefaultResultOrder('ipv4first');
 
 process.on('uncaughtException', (err) => {
   console.error('uncaughtException:', err.message, err.stack);
