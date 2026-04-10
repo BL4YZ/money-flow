@@ -1,27 +1,46 @@
 require('dotenv').config();
-const express = require('express');
 
-// Evitar que errores no capturados maten el proceso
 process.on('uncaughtException', (err) => {
-  console.error('uncaughtException:', err.message);
+  console.error('uncaughtException:', err.message, err.stack);
+  process.exit(1);
 });
 process.on('unhandledRejection', (reason) => {
   console.error('unhandledRejection:', reason);
+  process.exit(1);
 });
+
+console.log('Loading express...');
+const express = require('express');
+console.log('Loading cors...');
 const cors = require('cors');
+console.log('Loading express-rate-limit...');
 const rateLimit = require('express-rate-limit');
+
+console.log('Loading routes...');
+const authRoute = require('./routes/auth');
+console.log('auth OK');
+const uploadRoute = require('./routes/upload');
+console.log('upload OK');
+const transactionsRoute = require('./routes/transactions');
+console.log('transactions OK');
+const suggestionsRoute = require('./routes/suggestions');
+console.log('suggestions OK');
+const pricesRoute = require('./routes/prices');
+console.log('prices OK');
+const subscriptionsRoute = require('./routes/subscriptions');
+console.log('subscriptions OK');
+const goalsRoute = require('./routes/goals');
+console.log('goals OK');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// ─── Middlewares globales ────────────────────────────────────
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// Rate limiting global
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutos
+  windowMs: 15 * 60 * 1000,
   max: 100,
   standardHeaders: true,
   legacyHeaders: false,
@@ -29,34 +48,27 @@ const limiter = rateLimit({
 });
 app.use(limiter);
 
-// Rate limiting más estricto para auth
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 10,
   message: { error: 'Demasiados intentos de login, esperá 15 minutos' },
 });
 
-// ─── Rutas ──────────────────────────────────────────────────
-app.use('/api/auth', authLimiter, require('./routes/auth'));
-app.use('/api/upload', require('./routes/upload'));
-app.use('/api/transactions', require('./routes/transactions'));
-app.use('/api/suggestions', require('./routes/suggestions'));
-app.use('/api/prices', require('./routes/prices'));
-app.use('/api/subscriptions', require('./routes/subscriptions'));
-app.use('/api/goals', require('./routes/goals'));
+app.use('/api/auth', authLimiter, authRoute);
+app.use('/api/upload', uploadRoute);
+app.use('/api/transactions', transactionsRoute);
+app.use('/api/suggestions', suggestionsRoute);
+app.use('/api/prices', pricesRoute);
+app.use('/api/subscriptions', subscriptionsRoute);
+app.use('/api/goals', goalsRoute);
 
-// ─── Health check ────────────────────────────────────────────
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', version: '1.0.0', env: process.env.NODE_ENV || 'development' });
+  res.json({ status: 'ok', version: '1.0.0' });
 });
 
-// ─── Error handler global ────────────────────────────────────
 app.use((err, req, res, next) => {
   console.error(err.stack);
-  const status = err.status || 500;
-  res.status(status).json({
-    error: process.env.NODE_ENV === 'production' ? 'Error interno' : err.message,
-  });
+  res.status(err.status || 500).json({ error: err.message });
 });
 
 app.listen(PORT, () => {
