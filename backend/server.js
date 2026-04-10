@@ -1,5 +1,13 @@
 require('dotenv').config();
 const express = require('express');
+
+// Evitar que errores no capturados maten el proceso
+process.on('uncaughtException', (err) => {
+  console.error('uncaughtException:', err.message);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('unhandledRejection:', reason);
+});
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 

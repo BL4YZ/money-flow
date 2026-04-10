@@ -1,12 +1,11 @@
-const pdfParse = require('pdf-parse');
-
 /**
- * Extrae texto de un PDF usando pdf-parse (PDFs de texto).
- * Para PDFs escaneados se requiere instalación adicional de tesseract.
+ * Extrae texto de un PDF usando pdf-parse (lazy loaded para evitar crash al iniciar).
  * @param {Buffer} pdfBuffer
  * @returns {Promise<string>} texto extraído
  */
 async function extractTextFromPDF(pdfBuffer) {
+  // Lazy load para evitar el bug de pdf-parse que lee archivos de test al importarse
+  const pdfParse = require('pdf-parse/lib/pdf-parse');
   try {
     const data = await pdfParse(pdfBuffer);
     if (data.text && data.text.trim().length > 50) {
@@ -20,9 +19,6 @@ async function extractTextFromPDF(pdfBuffer) {
 
 /**
  * Parsea el texto de un estado de cuenta y extrae transacciones.
- * Maneja formatos comunes de bancos uruguayos (BROU, Santander, BBVA, Itaú).
- * @param {string} text
- * @returns {Array} transacciones
  */
 function parseTransactions(text) {
   const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
