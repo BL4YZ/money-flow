@@ -3,51 +3,107 @@ const axios = require('axios');
 const authMiddleware = require('../middleware/auth');
 
 const router = express.Router();
-router.use(authMiddleware);
 
 const SITE = process.env.MERCADOLIBRE_SITE || 'MLU';
 const ML_BASE = 'https://api.mercadolibre.com';
+const BACKEND_URL = process.env.BACKEND_URL || 'https://money-flow-co41.onrender.com';
 
-// Cache del token de MercadoLibre (expira en 6 horas)
-let mlToken = null;
-let mlTokenExpiry = 0;
+// ─── Token de usuario (Authorization Code) ───────────────────────
+// Persiste en memoria; se renueva automáticamente con refresh_token.
+// Si el servidor reinicia, usa las env vars como semilla.
+let userAccessToken = process.env.ML_ACCESS_TOKEN || null;
+let userRefreshToken = process.env.ML_REFRESH_TOKEN || null;
+let userTokenExpiry = parseInt(process.env.ML_TOKEN_EXPIRY || '0');
 
-async function getMLToken() {
-  if (mlToken && Date.now() < mlTokenExpiry) return mlToken;
+async function getUserToken() {
+  if (userAccessToken && Date.now() < userTokenExpiry) return userAccessToken;
 
-  const clientId = process.env.ML_CLIENT_ID;
-  const clientSecret = process.env.ML_CLIENT_SECRET;
-
-  if (!clientId || !clientSecret) {
-    throw new Error('ML_CLIENT_ID y ML_CLIENT_SECRET no configurados en variables de entorno');
+  if (!userRefreshToken) {
+    throw new Error('NO_TOKEN');
   }
 
-  const response = await axios.post(`${ML_BASE}/oauth/token`, {
-    grant_type: 'client_credentials',
-    client_id: clientId,
-    client_secret: clientSecret,
-  }, {
-    headers: { 'Content-Type': 'application/json' },
+  // Renovar con refresh_token
+  const resp = await axios.post(`${ML_BASE}/oauth/token`, null, {
+    params: {
+      grant_type: 'refresh_token',
+      client_id: process.env.ML_CLIENT_ID,
+      client_secret: process.env.ML_CLIENT_SECRET,
+      refresh_token: userRefreshToken,
+    },
     timeout: 8000,
   });
 
-  mlToken = response.data.access_token;
-  mlTokenExpiry = Date.now() + (response.data.expires_in - 300) * 1000; // 5 min de margen
-  return mlToken;
+  userAccessToken = resp.data.access_token;
+  userRefreshToken = resp.data.refresh_token || userRefreshToken;
+  userTokenExpiry = Date.now() + (resp.data.expires_in - 300) * 1000;
+  console.log('ML token renovado exitosamente');
+  return userAccessToken;
 }
 
-// ─── GET /api/prices/token ────────────────────────────────────
-// El frontend llama esto para obtener un token y buscar directo en ML
-router.get('/token', async (req, res) => {
+// ─── GET /api/prices/auth  (sin authMiddleware — es para el dueño) ─
+// Redirige a ML OAuth para autorizar la app con tu cuenta ML.
+router.get('/auth', (req, res) => {
+  const clientId = process.env.ML_CLIENT_ID;
+  if (!clientId) return res.status(503).send('ML_CLIENT_ID no configurado');
+
+  const redirectUri = `${BACKEND_URL}/api/prices/callback`;
+  const url = `https://auth.mercadolibre.com.uy/authorization?response_type=code&client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}`;
+  res.redirect(url);
+});
+
+// ─── GET /api/prices/callback  (sin authMiddleware) ──────────────
+router.get('/callback', async (req, res) => {
+  const { code, error } = req.query;
+
+  if (error) return res.status(400).send(`ML error: ${error}`);
+  if (!code) return res.status(400).send('No code recibido');
+
   try {
-    const token = await getMLToken();
-    res.json({ token });
+    const redirectUri = `${BACKEND_URL}/api/prices/callback`;
+    const resp = await axios.post(`${ML_BASE}/oauth/token`, null, {
+      params: {
+        grant_type: 'authorization_code',
+        client_id: process.env.ML_CLIENT_ID,
+        client_secret: process.env.ML_CLIENT_SECRET,
+        code,
+        redirect_uri: redirectUri,
+      },
+      timeout: 8000,
+    });
+
+    userAccessToken = resp.data.access_token;
+    userRefreshToken = resp.data.refresh_token;
+    userTokenExpiry = Date.now() + (resp.data.expires_in - 300) * 1000;
+
+    console.log('ML OAuth exitoso. Access token obtenido.');
+
+    res.send(`
+      <html><body style="font-family:sans-serif;padding:40px;max-width:600px">
+        <h2>✅ MercadoLibre autorizado</h2>
+        <p>Ya podés buscar precios en la app.</p>
+        <p><strong>Para que persista si el servidor reinicia, agregá estas variables en Render → Environment:</strong></p>
+        <pre style="background:#f0f0f0;padding:16px;border-radius:8px;word-break:break-all">ML_ACCESS_TOKEN=${userAccessToken}
+ML_REFRESH_TOKEN=${userRefreshToken}
+ML_TOKEN_EXPIRY=${userTokenExpiry}</pre>
+        <p style="color:#666;font-size:14px">El refresh_token dura ~6 meses. Si expira, volvé a entrar a /api/prices/auth</p>
+      </body></html>
+    `);
   } catch (err) {
-    res.status(503).json({ error: err.message });
+    console.error('ML callback error:', err.response?.data || err.message);
+    res.status(500).send(`Error: ${JSON.stringify(err.response?.data || err.message)}`);
   }
 });
 
-// ─── GET /api/prices/search?q=zapatillas&limit=10 ─────────────
+// ─── Rutas protegidas (requieren JWT de la app) ───────────────────
+router.use(authMiddleware);
+
+// GET /api/prices/status — para saber si ML está autorizado
+router.get('/status', (req, res) => {
+  const authorized = !!(userAccessToken && Date.now() < userTokenExpiry) || !!userRefreshToken;
+  res.json({ authorized, expiresIn: Math.max(0, Math.round((userTokenExpiry - Date.now()) / 1000)) });
+});
+
+// GET /api/prices/search?q=zapatillas&limit=10
 router.get('/search', async (req, res) => {
   const { q, limit = 10 } = req.query;
 
@@ -56,15 +112,15 @@ router.get('/search', async (req, res) => {
   }
 
   try {
-    const token = await getMLToken();
+    const token = await getUserToken();
 
     const response = await axios.get(`${ML_BASE}/sites/${SITE}/search`, {
       params: {
         q: q.trim(),
         limit: Math.min(parseInt(limit), 20),
         sort: 'price_asc',
-        access_token: token,
       },
+      headers: { 'Authorization': `Bearer ${token}` },
       timeout: 8000,
     });
 
@@ -87,24 +143,17 @@ router.get('/search', async (req, res) => {
       avg: Math.round(prices.reduce((a, b) => a + b, 0) / prices.length),
     } : null;
 
-    res.json({
-      query: q,
-      site: SITE,
-      items,
-      stats,
-      total: response.data.paging?.total || 0,
-    });
+    res.json({ query: q, site: SITE, items, stats, total: response.data.paging?.total || 0 });
 
   } catch (err) {
-    if (err.message.includes('no configurados')) {
-      return res.status(503).json({ error: 'Comparador no configurado. Contactá al administrador.' });
+    if (err.message === 'NO_TOKEN') {
+      return res.status(503).json({ error: 'Comparador no autorizado. El admin debe visitar /api/prices/auth' });
     }
     if (err.code === 'ECONNABORTED') {
       return res.status(504).json({ error: 'MercadoLibre tardó demasiado, intentá de nuevo' });
     }
-    const mlError = err.response?.data;
-    console.error('Prices error full:', JSON.stringify(mlError), 'status:', err.response?.status, 'msg:', err.message);
-    res.status(500).json({ error: 'Error al buscar precios', detail: mlError });
+    console.error('Prices error:', JSON.stringify(err.response?.data), 'status:', err.response?.status);
+    res.status(500).json({ error: 'Error al buscar precios', detail: err.response?.data });
   }
 });
 
