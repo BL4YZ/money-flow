@@ -36,6 +36,17 @@ async function getMLToken() {
   return mlToken;
 }
 
+// ─── GET /api/prices/token ────────────────────────────────────
+// El frontend llama esto para obtener un token y buscar directo en ML
+router.get('/token', async (req, res) => {
+  try {
+    const token = await getMLToken();
+    res.json({ token });
+  } catch (err) {
+    res.status(503).json({ error: err.message });
+  }
+});
+
 // ─── GET /api/prices/search?q=zapatillas&limit=10 ─────────────
 router.get('/search', async (req, res) => {
   const { q, limit = 10 } = req.query;

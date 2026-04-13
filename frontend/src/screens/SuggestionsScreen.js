@@ -42,10 +42,12 @@ export default function SuggestionsScreen() {
     setSearching(true);
     setSearchResults(null);
     try {
-      // Llamada directa a MercadoLibre desde el dispositivo (evita bloqueo de IP de Render)
+      // Obtener token del backend y buscar directo desde el dispositivo
+      const { data: tokenData } = await api.get('/prices/token');
       const site = 'MLU';
       const response = await fetch(
-        `https://api.mercadolibre.com/sites/${site}/search?q=${encodeURIComponent(searchQuery.trim())}&limit=10&sort=price_asc`
+        `https://api.mercadolibre.com/sites/${site}/search?q=${encodeURIComponent(searchQuery.trim())}&limit=10&sort=price_asc`,
+        { headers: { 'Authorization': `Bearer ${tokenData.token}` } }
       );
       const json = await response.json();
 
