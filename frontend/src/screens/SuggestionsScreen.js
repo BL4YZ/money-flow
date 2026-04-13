@@ -24,7 +24,11 @@ export default function SuggestionsScreen() {
   const [searching, setSearching] = useState(false);
   const [debugLog, setDebugLog] = useState([]);
 
-  const log = (msg) => setDebugLog(prev => [...prev, `${new Date().toISOString().slice(11,19)} ${msg}`]);
+  const log = (msg) => {
+    const line = `[ML] ${new Date().toISOString().slice(11,19)} ${msg}`;
+    console.log(line);
+    setDebugLog(prev => [...prev, line]);
+  };
 
   const fetchSuggestions = async () => {
     setLoading(true);
