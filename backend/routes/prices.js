@@ -145,8 +145,14 @@ router.get('/search', async (req, res) => {
         limit: Math.min(parseInt(limit), 20),
         sort: 'price_asc',
       },
-      headers: { 'Authorization': `Bearer ${token}` },
-      timeout: 8000,
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Accept': 'application/json',
+        'Accept-Language': 'es-UY,es;q=0.9',
+        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15',
+        'X-Format-New': 'true',
+      },
+      timeout: 10000,
     });
 
     const items = response.data.results.map(item => ({
