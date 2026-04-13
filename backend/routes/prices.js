@@ -1,6 +1,5 @@
 const express = require('express');
 const axios = require('axios');
-const crypto = require('crypto');
 const authMiddleware = require('../middleware/auth');
 
 const router = express.Router();
@@ -9,15 +8,7 @@ const SITE = process.env.MERCADOLIBRE_SITE || 'MLU';
 const ML_BASE = 'https://api.mercadolibre.com';
 const BACKEND_URL = process.env.BACKEND_URL || 'https://money-flow-co41.onrender.com';
 
-// PKCE helpers
-const pkceStore = new Map(); // state → codeVerifier
-
-function generateCodeVerifier() {
-  return crypto.randomBytes(32).toString('base64url');
-}
-function generateCodeChallenge(verifier) {
-  return crypto.createHash('sha256').update(verifier).digest('base64url');
-}
+const pkceStore = new Map(); // state → codeVerifier (reservado para si se activa PKCE)
 
 // ─── Token de usuario (Authorization Code) ───────────────────────
 // Persiste en memoria; se renueva automáticamente con refresh_token.
@@ -51,24 +42,29 @@ async function getUserToken() {
   return userAccessToken;
 }
 
+// ─── GET /api/prices/auth/debug  ─────────────────────────────────
+router.get('/auth/debug', (req, res) => {
+  const clientId = process.env.ML_CLIENT_ID;
+  const redirectUri = `${BACKEND_URL}/api/prices/callback`;
+  const authUrl = `https://auth.mercadolibre.com.uy/authorization?response_type=code&client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}`;
+  res.json({
+    clientId,
+    redirectUri,
+    authUrl,
+    backendUrl: BACKEND_URL,
+  });
+});
+
 // ─── GET /api/prices/auth  (sin authMiddleware — es para el dueño) ─
 router.get('/auth', (req, res) => {
   const clientId = process.env.ML_CLIENT_ID;
   if (!clientId) return res.status(503).send('ML_CLIENT_ID no configurado');
-
-  const codeVerifier = generateCodeVerifier();
-  const codeChallenge = generateCodeChallenge(codeVerifier);
-  const state = crypto.randomBytes(16).toString('hex');
-  pkceStore.set(state, codeVerifier);
 
   const redirectUri = `${BACKEND_URL}/api/prices/callback`;
   const params = new URLSearchParams({
     response_type: 'code',
     client_id: clientId,
     redirect_uri: redirectUri,
-    code_challenge: codeChallenge,
-    code_challenge_method: 'S256',
-    state,
   });
 
   res.redirect(`https://auth.mercadolibre.com.uy/authorization?${params}`);
