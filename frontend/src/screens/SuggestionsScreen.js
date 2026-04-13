@@ -61,8 +61,9 @@ export default function SuggestionsScreen() {
         log(`Backend OK: ${data.total} resultados`);
       } catch (backendErr) {
         const status = backendErr.response?.status;
-        const body = JSON.stringify(backendErr.response?.data);
-        log(`Backend ERROR ${status}: ${body}`);
+        const body = backendErr.response?.data;
+        log(`Backend ERROR ${status}: ${JSON.stringify(body)}`);
+        if (body?.detail) log(`ML detail: ${JSON.stringify(body.detail)}`);
         log(`--- Intentando ML directo desde celular ---`);
 
         const url = `https://api.mercadolibre.com/sites/MLU/search?q=${encodeURIComponent(q)}&limit=5&sort=price_asc`;

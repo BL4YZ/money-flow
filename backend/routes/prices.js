@@ -102,8 +102,9 @@ router.get('/search', async (req, res) => {
     if (err.code === 'ECONNABORTED') {
       return res.status(504).json({ error: 'MercadoLibre tardó demasiado, intentá de nuevo' });
     }
-    console.error('Prices error:', err.response?.data || err.message);
-    res.status(500).json({ error: 'Error al buscar precios' });
+    const mlError = err.response?.data;
+    console.error('Prices error full:', JSON.stringify(mlError), 'status:', err.response?.status, 'msg:', err.message);
+    res.status(500).json({ error: 'Error al buscar precios', detail: mlError });
   }
 });
 
