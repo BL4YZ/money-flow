@@ -23,7 +23,11 @@ router.get('/search', async (req, res) => {
         limit: Math.min(parseInt(limit), 20),
         sort: 'price_asc',
       },
-      timeout: 5000,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; MoneyFlow/1.0)',
+        'Accept': 'application/json',
+      },
+      timeout: 8000,
     });
 
     const items = response.data.results.map(item => ({
