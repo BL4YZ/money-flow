@@ -47,43 +47,30 @@ export default function SuggestionsScreen() {
     setDebugLog([]);
     try {
       const q = searchQuery.trim();
-      const url = `https://api.mercadolibre.com/sites/MLU/search?q=${encodeURIComponent(q)}&limit=10&sort=price_asc`;
-      log(`GET ${url}`);
+      log(`Buscando: "${q}"`);
+      log(`Backend: POST /api/prices/search`);
 
-      const response = await fetch(url, { headers: { 'Accept': 'application/json' } });
-      log(`Status: ${response.status} ${response.statusText}`);
+      let data;
+      try {
+        const res = await api.get('/prices/search', { params: { q, limit: 10 } });
+        data = res.data;
+        log(`Backend OK: ${data.total} resultados`);
+      } catch (backendErr) {
+        const status = backendErr.response?.status;
+        const body = JSON.stringify(backendErr.response?.data);
+        log(`Backend ERROR ${status}: ${body}`);
+        log(`--- Intentando ML directo desde celular ---`);
 
-      const text = await response.text();
-      log(`Body: ${text.slice(0, 500)}`);
-
-      if (!response.ok) {
-        log(`ERROR: HTTP ${response.status}`);
+        const url = `https://api.mercadolibre.com/sites/MLU/search?q=${encodeURIComponent(q)}&limit=5&sort=price_asc`;
+        log(`GET ${url.slice(0, 80)}...`);
+        const r = await fetch(url, { headers: { 'Accept': 'application/json' } });
+        const text = await r.text();
+        log(`ML directo status: ${r.status}`);
+        log(`ML body: ${text.slice(0, 300)}`);
         return;
       }
 
-      const json = JSON.parse(text);
-      log(`OK: ${json.paging?.total || 0} resultados`);
-
-      const items = (json.results || []).map(item => ({
-        id: item.id,
-        title: item.title,
-        price: item.price,
-        currency: item.currency_id,
-        condition: item.condition,
-        thumbnail: item.thumbnail,
-        url: item.permalink,
-        seller: item.seller?.nickname,
-        freeShipping: item.shipping?.free_shipping || false,
-      }));
-
-      const prices = items.map(i => i.price);
-      const stats = prices.length > 0 ? {
-        min: Math.min(...prices),
-        max: Math.max(...prices),
-        avg: Math.round(prices.reduce((a, b) => a + b, 0) / prices.length),
-      } : null;
-
-      setSearchResults({ query: q, items, stats, total: json.paging?.total || 0 });
+      setSearchResults(data);
     } catch (err) {
       log(`CATCH: ${err.message}`);
     } finally {
