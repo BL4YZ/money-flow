@@ -22,6 +22,9 @@ export default function SuggestionsScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState(null);
   const [searching, setSearching] = useState(false);
+  const [debugLog, setDebugLog] = useState([]);
+
+  const log = (msg) => setDebugLog(prev => [...prev, `${new Date().toISOString().slice(11,19)} ${msg}`]);
 
   const fetchSuggestions = async () => {
     setLoading(true);
@@ -41,14 +44,25 @@ export default function SuggestionsScreen() {
     if (!searchQuery.trim()) return;
     setSearching(true);
     setSearchResults(null);
+    setDebugLog([]);
     try {
       const q = searchQuery.trim();
-      const response = await fetch(
-        `https://api.mercadolibre.com/sites/MLU/search?q=${encodeURIComponent(q)}&limit=10&sort=price_asc`,
-        { headers: { 'Accept': 'application/json' } }
-      );
-      const json = await response.json();
-      if (!response.ok) throw new Error(json.message || `Error ${response.status}`);
+      const url = `https://api.mercadolibre.com/sites/MLU/search?q=${encodeURIComponent(q)}&limit=10&sort=price_asc`;
+      log(`GET ${url}`);
+
+      const response = await fetch(url, { headers: { 'Accept': 'application/json' } });
+      log(`Status: ${response.status} ${response.statusText}`);
+
+      const text = await response.text();
+      log(`Body: ${text.slice(0, 500)}`);
+
+      if (!response.ok) {
+        log(`ERROR: HTTP ${response.status}`);
+        return;
+      }
+
+      const json = JSON.parse(text);
+      log(`OK: ${json.paging?.total || 0} resultados`);
 
       const items = (json.results || []).map(item => ({
         id: item.id,
@@ -71,7 +85,7 @@ export default function SuggestionsScreen() {
 
       setSearchResults({ query: q, items, stats, total: json.paging?.total || 0 });
     } catch (err) {
-      Toast.show({ type: 'error', text1: 'Error al buscar precios', text2: err.message });
+      log(`CATCH: ${err.message}`);
     } finally {
       setSearching(false);
     }
@@ -193,6 +207,20 @@ export default function SuggestionsScreen() {
         )}
       </View>
 
+      {/* ── Debug panel ────────────────────────── */}
+      {debugLog.length > 0 && (
+        <View style={styles.section}>
+          <TouchableOpacity onPress={() => setDebugLog([])} style={{ alignSelf: 'flex-end', marginBottom: 4 }}>
+            <Text style={{ color: COLORS.danger, fontSize: 12 }}>Limpiar</Text>
+          </TouchableOpacity>
+          <View style={styles.debugCard}>
+            {debugLog.map((line, i) => (
+              <Text key={i} style={styles.debugLine} selectable>{line}</Text>
+            ))}
+          </View>
+        </View>
+      )}
+
       <View style={{ height: SPACING.xxl }} />
     </ScrollView>
   );
@@ -300,4 +328,10 @@ const styles = StyleSheet.create({
   freeBadge: { backgroundColor: COLORS.success + '22', borderRadius: RADIUS.sm, paddingHorizontal: 6, paddingVertical: 2 },
   freeBadgeText: { color: COLORS.success, fontSize: 11 },
   conditionText: { color: COLORS.textMuted, fontSize: 12 },
+  debugCard: { backgroundColor: '#0d1117', borderRadius: RADIUS.md, padding: SPACING.sm, borderWidth: 1, borderColor: '#30363d' },
+  debugLine: { color: '#58d68d', fontFamily: 'monospace', fontSize: 11, lineHeight: 18 },
+  comingSoonCard: { backgroundColor: COLORS.surface, borderRadius: RADIUS.lg, padding: SPACING.xl, alignItems: 'center', borderWidth: 1, borderColor: COLORS.border },
+  comingSoonEmoji: { fontSize: 32, marginBottom: SPACING.sm },
+  comingSoonTitle: { color: COLORS.text, fontSize: 18, fontWeight: '700', marginBottom: SPACING.xs },
+  comingSoonText: { color: COLORS.textSecondary, fontSize: 13, textAlign: 'center', lineHeight: 20 },
 });
