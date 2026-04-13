@@ -42,13 +42,36 @@ export default function SuggestionsScreen() {
     setSearching(true);
     setSearchResults(null);
     try {
-      const { data } = await api.get('/prices/search', {
-        params: { q: searchQuery.trim(), limit: 10 },
-      });
-      setSearchResults(data);
+      const q = searchQuery.trim();
+      const response = await fetch(
+        `https://api.mercadolibre.com/sites/MLU/search?q=${encodeURIComponent(q)}&limit=10&sort=price_asc`,
+        { headers: { 'Accept': 'application/json' } }
+      );
+      const json = await response.json();
+      if (!response.ok) throw new Error(json.message || `Error ${response.status}`);
+
+      const items = (json.results || []).map(item => ({
+        id: item.id,
+        title: item.title,
+        price: item.price,
+        currency: item.currency_id,
+        condition: item.condition,
+        thumbnail: item.thumbnail,
+        url: item.permalink,
+        seller: item.seller?.nickname,
+        freeShipping: item.shipping?.free_shipping || false,
+      }));
+
+      const prices = items.map(i => i.price);
+      const stats = prices.length > 0 ? {
+        min: Math.min(...prices),
+        max: Math.max(...prices),
+        avg: Math.round(prices.reduce((a, b) => a + b, 0) / prices.length),
+      } : null;
+
+      setSearchResults({ query: q, items, stats, total: json.paging?.total || 0 });
     } catch (err) {
-      const msg = err.response?.data?.error || 'Error al buscar precios';
-      Toast.show({ type: 'error', text1: msg });
+      Toast.show({ type: 'error', text1: 'Error al buscar precios', text2: err.message });
     } finally {
       setSearching(false);
     }
