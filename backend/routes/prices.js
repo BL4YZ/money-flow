@@ -1,5 +1,6 @@
 const express = require('express');
 const axios = require('axios');
+const crypto = require('crypto');
 const authMiddleware = require('../middleware/auth');
 
 const router = express.Router();
@@ -7,6 +8,16 @@ const router = express.Router();
 const SITE = process.env.MERCADOLIBRE_SITE || 'MLU';
 const ML_BASE = 'https://api.mercadolibre.com';
 const BACKEND_URL = process.env.BACKEND_URL || 'https://money-flow-co41.onrender.com';
+
+// PKCE helpers
+const pkceStore = new Map(); // state → codeVerifier
+
+function generateCodeVerifier() {
+  return crypto.randomBytes(32).toString('base64url');
+}
+function generateCodeChallenge(verifier) {
+  return crypto.createHash('sha256').update(verifier).digest('base64url');
+}
 
 // ─── Token de usuario (Authorization Code) ───────────────────────
 // Persiste en memoria; se renueva automáticamente con refresh_token.
@@ -41,33 +52,51 @@ async function getUserToken() {
 }
 
 // ─── GET /api/prices/auth  (sin authMiddleware — es para el dueño) ─
-// Redirige a ML OAuth para autorizar la app con tu cuenta ML.
 router.get('/auth', (req, res) => {
   const clientId = process.env.ML_CLIENT_ID;
   if (!clientId) return res.status(503).send('ML_CLIENT_ID no configurado');
 
+  const codeVerifier = generateCodeVerifier();
+  const codeChallenge = generateCodeChallenge(codeVerifier);
+  const state = crypto.randomBytes(16).toString('hex');
+  pkceStore.set(state, codeVerifier);
+
   const redirectUri = `${BACKEND_URL}/api/prices/callback`;
-  const url = `https://auth.mercadolibre.com.uy/authorization?response_type=code&client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}`;
-  res.redirect(url);
+  const params = new URLSearchParams({
+    response_type: 'code',
+    client_id: clientId,
+    redirect_uri: redirectUri,
+    code_challenge: codeChallenge,
+    code_challenge_method: 'S256',
+    state,
+  });
+
+  res.redirect(`https://auth.mercadolibre.com.uy/authorization?${params}`);
 });
 
 // ─── GET /api/prices/callback  (sin authMiddleware) ──────────────
 router.get('/callback', async (req, res) => {
-  const { code, error } = req.query;
+  const { code, state, error } = req.query;
 
   if (error) return res.status(400).send(`ML error: ${error}`);
   if (!code) return res.status(400).send('No code recibido');
 
+  const codeVerifier = pkceStore.get(state);
+  pkceStore.delete(state);
+
   try {
     const redirectUri = `${BACKEND_URL}/api/prices/callback`;
+    const tokenParams = {
+      grant_type: 'authorization_code',
+      client_id: process.env.ML_CLIENT_ID,
+      client_secret: process.env.ML_CLIENT_SECRET,
+      code,
+      redirect_uri: redirectUri,
+    };
+    if (codeVerifier) tokenParams.code_verifier = codeVerifier;
+
     const resp = await axios.post(`${ML_BASE}/oauth/token`, null, {
-      params: {
-        grant_type: 'authorization_code',
-        client_id: process.env.ML_CLIENT_ID,
-        client_secret: process.env.ML_CLIENT_SECRET,
-        code,
-        redirect_uri: redirectUri,
-      },
+      params: tokenParams,
       timeout: 8000,
     });
 
