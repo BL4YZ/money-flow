@@ -42,10 +42,37 @@ export default function SuggestionsScreen() {
     setSearching(true);
     setSearchResults(null);
     try {
-      const { data } = await api.get('/prices/search', { params: { q: searchQuery.trim() } });
-      setSearchResults(data);
+      // Llamada directa a MercadoLibre desde el dispositivo (evita bloqueo de IP de Render)
+      const site = 'MLU';
+      const response = await fetch(
+        `https://api.mercadolibre.com/sites/${site}/search?q=${encodeURIComponent(searchQuery.trim())}&limit=10&sort=price_asc`
+      );
+      const json = await response.json();
+
+      if (!response.ok) throw new Error(json.message || 'Error ML');
+
+      const items = (json.results || []).map(item => ({
+        id: item.id,
+        title: item.title,
+        price: item.price,
+        currency: item.currency_id,
+        condition: item.condition,
+        thumbnail: item.thumbnail,
+        url: item.permalink,
+        seller: item.seller?.nickname,
+        freeShipping: item.shipping?.free_shipping || false,
+      }));
+
+      const prices = items.map(i => i.price);
+      const stats = prices.length > 0 ? {
+        min: Math.min(...prices),
+        max: Math.max(...prices),
+        avg: Math.round(prices.reduce((a, b) => a + b, 0) / prices.length),
+      } : null;
+
+      setSearchResults({ query: searchQuery.trim(), items, stats, total: json.paging?.total || 0 });
     } catch (err) {
-      Toast.show({ type: 'error', text1: 'Error al buscar precios' });
+      Toast.show({ type: 'error', text1: 'Error al buscar precios', text2: err.message });
     } finally {
       setSearching(false);
     }
