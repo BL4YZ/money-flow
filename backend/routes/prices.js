@@ -67,7 +67,7 @@ router.get('/auth', (req, res) => {
     redirect_uri: redirectUri,
   });
 
-  res.redirect(`https://auth.mercadolibre.com.uy/authorization?${params}`);
+  res.redirect(`https://auth.mercadolibre.com/authorization?${params}`);
 });
 
 // ─── GET /api/prices/callback  (sin authMiddleware) ──────────────
