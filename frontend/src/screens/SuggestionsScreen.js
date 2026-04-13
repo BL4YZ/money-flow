@@ -42,39 +42,13 @@ export default function SuggestionsScreen() {
     setSearching(true);
     setSearchResults(null);
     try {
-      // Obtener token del backend y buscar directo desde el dispositivo
-      const { data: tokenData } = await api.get('/prices/token');
-      const site = 'MLU';
-      const response = await fetch(
-        `https://api.mercadolibre.com/sites/${site}/search?q=${encodeURIComponent(searchQuery.trim())}&limit=10&sort=price_asc`,
-        { headers: { 'Authorization': `Bearer ${tokenData.token}` } }
-      );
-      const json = await response.json();
-
-      if (!response.ok) throw new Error(json.message || 'Error ML');
-
-      const items = (json.results || []).map(item => ({
-        id: item.id,
-        title: item.title,
-        price: item.price,
-        currency: item.currency_id,
-        condition: item.condition,
-        thumbnail: item.thumbnail,
-        url: item.permalink,
-        seller: item.seller?.nickname,
-        freeShipping: item.shipping?.free_shipping || false,
-      }));
-
-      const prices = items.map(i => i.price);
-      const stats = prices.length > 0 ? {
-        min: Math.min(...prices),
-        max: Math.max(...prices),
-        avg: Math.round(prices.reduce((a, b) => a + b, 0) / prices.length),
-      } : null;
-
-      setSearchResults({ query: searchQuery.trim(), items, stats, total: json.paging?.total || 0 });
+      const { data } = await api.get('/prices/search', {
+        params: { q: searchQuery.trim(), limit: 10 },
+      });
+      setSearchResults(data);
     } catch (err) {
-      Toast.show({ type: 'error', text1: 'Error al buscar precios', text2: err.message });
+      const msg = err.response?.data?.error || 'Error al buscar precios';
+      Toast.show({ type: 'error', text1: msg });
     } finally {
       setSearching(false);
     }
@@ -153,32 +127,34 @@ export default function SuggestionsScreen() {
           <Ionicons name="search-outline" size={20} color={COLORS.secondary} />
           <Text style={[styles.sectionTitle, { color: COLORS.secondary }]}>Comparador de precios</Text>
         </View>
-        <Text style={styles.sectionDesc}>Buscá cualquier producto y comparamos precios en MercadoLibre Uruguay.</Text>
+        <Text style={styles.sectionDesc}>
+          Buscá cualquier producto y compará precios en MercadoLibre Uruguay.
+        </Text>
 
         <View style={styles.searchRow}>
           <TextInput
             style={styles.searchInput}
-            placeholder="Buscar producto..."
+            placeholder="Ej: notebook, zapatillas, arroz..."
             placeholderTextColor={COLORS.textMuted}
             value={searchQuery}
             onChangeText={setSearchQuery}
             onSubmitEditing={searchPrices}
             returnKeyType="search"
           />
-          <TouchableOpacity
-            style={[styles.searchBtn, searching && { opacity: 0.6 }]}
-            onPress={searchPrices}
-            disabled={searching}
-          >
+          <TouchableOpacity style={styles.searchBtn} onPress={searchPrices} disabled={searching}>
             {searching
               ? <ActivityIndicator size="small" color="#fff" />
-              : <Ionicons name="search" size={20} color="#fff" />
+              : <Ionicons name="search" size={22} color="#fff" />
             }
           </TouchableOpacity>
         </View>
 
         {searchResults && (
           <View style={styles.resultsCard}>
+            <Text style={styles.resultsTitle}>
+              {searchResults.total.toLocaleString()} resultados para "{searchResults.query}"
+            </Text>
+
             {searchResults.stats && (
               <View style={styles.statsRow}>
                 <PriceStat label="Mínimo" value={searchResults.stats.min} color={COLORS.success} />
@@ -186,10 +162,8 @@ export default function SuggestionsScreen() {
                 <PriceStat label="Máximo" value={searchResults.stats.max} color={COLORS.danger} />
               </View>
             )}
-            <Text style={styles.resultsTitle}>
-              {searchResults.items.length} resultados para "{searchResults.query}"
-            </Text>
-            {searchResults.items.slice(0, 8).map((item, i) => (
+
+            {searchResults.items.map((item, i) => (
               <PriceRow key={item.id} item={item} isFirst={i === 0} />
             ))}
           </View>

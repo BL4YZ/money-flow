@@ -56,8 +56,6 @@ router.get('/search', async (req, res) => {
   }
 
   try {
-    const token = await getMLToken();
-
     const response = await axios.get(`${ML_BASE}/sites/${SITE}/search`, {
       params: {
         q: q.trim(),
@@ -65,8 +63,8 @@ router.get('/search', async (req, res) => {
         sort: 'price_asc',
       },
       headers: {
-        'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (compatible; MoneyFlow/1.0)',
       },
       timeout: 8000,
     });
