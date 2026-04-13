@@ -4,6 +4,7 @@ import {
   ActivityIndicator, TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as WebBrowser from 'expo-web-browser';
 import Toast from 'react-native-toast-message';
 import api from '../api/client';
 import { COLORS, SPACING, RADIUS } from '../theme';
@@ -17,18 +18,7 @@ const PRIORITY_CONFIG = {
 export default function SuggestionsScreen() {
   const [suggestions, setSuggestions] = useState(null);
   const [loading, setLoading] = useState(false);
-
-  // Búsqueda de precios MercadoLibre
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState(null);
-  const [searching, setSearching] = useState(false);
-  const [debugLog, setDebugLog] = useState([]);
-
-  const log = (msg) => {
-    const line = `[ML] ${new Date().toISOString().slice(11,19)} ${msg}`;
-    console.log(line);
-    setDebugLog(prev => [...prev, line]);
-  };
 
   const fetchSuggestions = async () => {
     setLoading(true);
@@ -45,42 +35,12 @@ export default function SuggestionsScreen() {
   };
 
   const searchPrices = async () => {
-    if (!searchQuery.trim()) return;
-    setSearching(true);
-    setSearchResults(null);
-    setDebugLog([]);
-    try {
-      const q = searchQuery.trim();
-      log(`Buscando: "${q}"`);
-      log(`Backend: POST /api/prices/search`);
-
-      let data;
-      try {
-        const res = await api.get('/prices/search', { params: { q, limit: 10 } });
-        data = res.data;
-        log(`Backend OK: ${data.total} resultados`);
-      } catch (backendErr) {
-        const status = backendErr.response?.status;
-        const body = backendErr.response?.data;
-        log(`Backend ERROR ${status}: ${JSON.stringify(body)}`);
-        if (body?.detail) log(`ML detail: ${JSON.stringify(body.detail)}`);
-        log(`--- Intentando ML directo desde celular ---`);
-
-        const url = `https://api.mercadolibre.com/sites/MLU/search?q=${encodeURIComponent(q)}&limit=5&sort=price_asc`;
-        log(`GET ${url.slice(0, 80)}...`);
-        const r = await fetch(url, { headers: { 'Accept': 'application/json' } });
-        const text = await r.text();
-        log(`ML directo status: ${r.status}`);
-        log(`ML body: ${text.slice(0, 300)}`);
-        return;
-      }
-
-      setSearchResults(data);
-    } catch (err) {
-      log(`CATCH: ${err.message}`);
-    } finally {
-      setSearching(false);
-    }
+    const q = searchQuery.trim();
+    if (!q) return;
+    const url = `https://listado.mercadolibre.com.uy/${encodeURIComponent(q)}#D[A:${encodeURIComponent(q)}]`;
+    await WebBrowser.openBrowserAsync(url, {
+      presentationStyle: WebBrowser.WebBrowserPresentationStyle.FULL_SCREEN,
+    });
   };
 
   return (
@@ -116,7 +76,6 @@ export default function SuggestionsScreen() {
 
         {suggestions && (
           <>
-            {/* Insight principal */}
             {suggestions.insight && (
               <View style={styles.insightCard}>
                 <Ionicons name="eye-outline" size={18} color={COLORS.primary} />
@@ -124,7 +83,6 @@ export default function SuggestionsScreen() {
               </View>
             )}
 
-            {/* Potencial de ahorro */}
             {suggestions.monthlySavingPotential > 0 && (
               <View style={styles.savingCard}>
                 <Text style={styles.savingLabel}>Potencial de ahorro mensual</Text>
@@ -137,7 +95,6 @@ export default function SuggestionsScreen() {
               </View>
             )}
 
-            {/* Lista de sugerencias */}
             {suggestions.suggestions?.map((s, i) => (
               <SuggestionCard key={i} suggestion={s} index={i} />
             ))}
@@ -157,61 +114,31 @@ export default function SuggestionsScreen() {
           <Text style={[styles.sectionTitle, { color: COLORS.secondary }]}>Comparador de precios</Text>
         </View>
         <Text style={styles.sectionDesc}>
-          Buscá cualquier producto y compará precios en MercadoLibre Uruguay.
+          Buscá cualquier producto y comparamos precios en MercadoLibre Uruguay al instante.
         </Text>
 
         <View style={styles.searchRow}>
           <TextInput
             style={styles.searchInput}
-            placeholder="Ej: notebook, zapatillas, arroz..."
+            placeholder="Ej: leche, notebook, zapatillas..."
             placeholderTextColor={COLORS.textMuted}
             value={searchQuery}
             onChangeText={setSearchQuery}
             onSubmitEditing={searchPrices}
             returnKeyType="search"
           />
-          <TouchableOpacity style={styles.searchBtn} onPress={searchPrices} disabled={searching}>
-            {searching
-              ? <ActivityIndicator size="small" color="#fff" />
-              : <Ionicons name="search" size={22} color="#fff" />
-            }
+          <TouchableOpacity style={styles.searchBtn} onPress={searchPrices}>
+            <Ionicons name="search" size={22} color="#fff" />
           </TouchableOpacity>
         </View>
 
-        {searchResults && (
-          <View style={styles.resultsCard}>
-            <Text style={styles.resultsTitle}>
-              {searchResults.total.toLocaleString()} resultados para "{searchResults.query}"
-            </Text>
-
-            {searchResults.stats && (
-              <View style={styles.statsRow}>
-                <PriceStat label="Mínimo" value={searchResults.stats.min} color={COLORS.success} />
-                <PriceStat label="Promedio" value={searchResults.stats.avg} color={COLORS.warning} />
-                <PriceStat label="Máximo" value={searchResults.stats.max} color={COLORS.danger} />
-              </View>
-            )}
-
-            {searchResults.items.map((item, i) => (
-              <PriceRow key={item.id} item={item} isFirst={i === 0} />
-            ))}
-          </View>
-        )}
+        <View style={styles.infoCard}>
+          <Ionicons name="information-circle-outline" size={16} color={COLORS.textSecondary} />
+          <Text style={styles.infoText}>
+            Los resultados se abren en MercadoLibre Uruguay con precios ordenados de menor a mayor.
+          </Text>
+        </View>
       </View>
-
-      {/* ── Debug panel ────────────────────────── */}
-      {debugLog.length > 0 && (
-        <View style={styles.section}>
-          <TouchableOpacity onPress={() => setDebugLog([])} style={{ alignSelf: 'flex-end', marginBottom: 4 }}>
-            <Text style={{ color: COLORS.danger, fontSize: 12 }}>Limpiar</Text>
-          </TouchableOpacity>
-          <View style={styles.debugCard}>
-            {debugLog.map((line, i) => (
-              <Text key={i} style={styles.debugLine} selectable>{line}</Text>
-            ))}
-          </View>
-        </View>
-      )}
 
       <View style={{ height: SPACING.xxl }} />
     </ScrollView>
@@ -239,35 +166,6 @@ function SuggestionCard({ suggestion, index }) {
         )}
       </View>
       <Text style={styles.suggDesc}>{suggestion.description}</Text>
-    </View>
-  );
-}
-
-function PriceStat({ label, value, color }) {
-  return (
-    <View style={{ alignItems: 'center' }}>
-      <Text style={[styles.priceStatValue, { color }]}>${value?.toLocaleString()}</Text>
-      <Text style={styles.priceStatLabel}>{label}</Text>
-    </View>
-  );
-}
-
-function PriceRow({ item, isFirst }) {
-  return (
-    <View style={[styles.priceRow, isFirst && { borderColor: COLORS.success }]}>
-      {isFirst && (
-        <View style={styles.bestBadge}><Text style={styles.bestBadgeText}>Más barato</Text></View>
-      )}
-      <Text style={styles.priceItemTitle} numberOfLines={2}>{item.title}</Text>
-      <View style={styles.priceRowBottom}>
-        <Text style={styles.priceAmount}>${item.price?.toLocaleString()}</Text>
-        <View style={{ flexDirection: 'row', gap: SPACING.xs, alignItems: 'center' }}>
-          {item.freeShipping && (
-            <View style={styles.freeBadge}><Text style={styles.freeBadgeText}>Envío gratis</Text></View>
-          )}
-          <Text style={styles.conditionText}>{item.condition === 'new' ? 'Nuevo' : 'Usado'}</Text>
-        </View>
-      </View>
     </View>
   );
 }
@@ -303,27 +201,9 @@ const styles = StyleSheet.create({
   suggDesc: { color: COLORS.textSecondary, fontSize: 13, lineHeight: 20 },
   refreshBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACING.xs, paddingVertical: SPACING.sm },
   refreshText: { color: COLORS.primary, fontSize: 14 },
-  searchRow: { flexDirection: 'row', gap: SPACING.sm, marginBottom: SPACING.md },
+  searchRow: { flexDirection: 'row', gap: SPACING.sm, marginBottom: SPACING.sm },
   searchInput: { flex: 1, backgroundColor: COLORS.surface, borderRadius: RADIUS.md, paddingHorizontal: SPACING.md, paddingVertical: 12, color: COLORS.text, fontSize: 16, borderWidth: 1, borderColor: COLORS.border },
   searchBtn: { backgroundColor: COLORS.secondary, borderRadius: RADIUS.md, width: 48, justifyContent: 'center', alignItems: 'center' },
-  resultsCard: { backgroundColor: COLORS.surface, borderRadius: RADIUS.lg, padding: SPACING.md, borderWidth: 1, borderColor: COLORS.border },
-  resultsTitle: { color: COLORS.textSecondary, fontSize: 12, marginBottom: SPACING.md },
-  statsRow: { flexDirection: 'row', justifyContent: 'space-around', paddingVertical: SPACING.sm, marginBottom: SPACING.md, borderBottomWidth: 1, borderBottomColor: COLORS.border },
-  priceStatValue: { fontSize: 18, fontWeight: '700' },
-  priceStatLabel: { color: COLORS.textSecondary, fontSize: 12 },
-  priceRow: { paddingVertical: SPACING.sm, borderTopWidth: 1, borderTopColor: COLORS.border, borderLeftWidth: 0, borderRightWidth: 0, borderBottomWidth: 0, borderColor: COLORS.border },
-  bestBadge: { backgroundColor: COLORS.success + '22', borderRadius: RADIUS.sm, paddingHorizontal: 6, paddingVertical: 2, alignSelf: 'flex-start', marginBottom: 4 },
-  bestBadgeText: { color: COLORS.success, fontSize: 11, fontWeight: '600' },
-  priceItemTitle: { color: COLORS.text, fontSize: 13, lineHeight: 18, marginBottom: 4 },
-  priceRowBottom: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  priceAmount: { color: COLORS.text, fontSize: 16, fontWeight: '700' },
-  freeBadge: { backgroundColor: COLORS.success + '22', borderRadius: RADIUS.sm, paddingHorizontal: 6, paddingVertical: 2 },
-  freeBadgeText: { color: COLORS.success, fontSize: 11 },
-  conditionText: { color: COLORS.textMuted, fontSize: 12 },
-  debugCard: { backgroundColor: '#0d1117', borderRadius: RADIUS.md, padding: SPACING.sm, borderWidth: 1, borderColor: '#30363d' },
-  debugLine: { color: '#58d68d', fontFamily: 'monospace', fontSize: 11, lineHeight: 18 },
-  comingSoonCard: { backgroundColor: COLORS.surface, borderRadius: RADIUS.lg, padding: SPACING.xl, alignItems: 'center', borderWidth: 1, borderColor: COLORS.border },
-  comingSoonEmoji: { fontSize: 32, marginBottom: SPACING.sm },
-  comingSoonTitle: { color: COLORS.text, fontSize: 18, fontWeight: '700', marginBottom: SPACING.xs },
-  comingSoonText: { color: COLORS.textSecondary, fontSize: 13, textAlign: 'center', lineHeight: 20 },
+  infoCard: { flexDirection: 'row', gap: SPACING.xs, alignItems: 'flex-start', padding: SPACING.sm },
+  infoText: { color: COLORS.textSecondary, fontSize: 12, lineHeight: 18, flex: 1 },
 });
