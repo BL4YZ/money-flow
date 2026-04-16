@@ -34,6 +34,20 @@ const subscriptionsRoute = require('./routes/subscriptions');
 console.log('subscriptions OK');
 const goalsRoute = require('./routes/goals');
 console.log('goals OK');
+const budgetsRoute = require('./routes/budgets');
+console.log('budgets OK');
+const billsRoute = require('./routes/bills');
+console.log('bills OK');
+const shoppingRoute = require('./routes/shopping');
+console.log('shopping OK');
+const pushTokenRoute = require('./routes/pushToken');
+console.log('pushToken OK');
+
+const { startBillNotifier } = require('./services/billNotifier');
+startBillNotifier();
+
+const { initSchema } = require('./db');
+initSchema().catch(err => console.error('Schema init error:', err.message));
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -59,6 +73,17 @@ const authLimiter = rateLimit({
   message: { error: 'Demasiados intentos de login, esperá 15 minutos' },
 });
 
+// ── Request logger (dev only) ─────────────────────────────────
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    const ms = Date.now() - start;
+    const flag = res.statusCode >= 400 ? '❌' : '✓';
+    console.log(`${flag} ${res.statusCode} ${req.method} ${req.path} (${ms}ms)`);
+  });
+  next();
+});
+
 app.use('/api/auth', authLimiter, authRoute);
 app.use('/api/upload', uploadRoute);
 app.use('/api/transactions', transactionsRoute);
@@ -66,6 +91,10 @@ app.use('/api/suggestions', suggestionsRoute);
 app.use('/api/prices', pricesRoute);
 app.use('/api/subscriptions', subscriptionsRoute);
 app.use('/api/goals', goalsRoute);
+app.use('/api/budgets', budgetsRoute);
+app.use('/api/bills', billsRoute);
+app.use('/api/shopping', shoppingRoute);
+app.use('/api/push-token', pushTokenRoute);
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', version: '1.0.0' });
