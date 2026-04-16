@@ -32,16 +32,19 @@ router.post('/', upload.single('file'), async (req, res) => {
     // 1. Extraer texto del PDF/imagen
     const text = await extractTextFromPDF(req.file.buffer);
 
-    if (!text || text.trim().length < 50) {
+    if (!text || text.trim().length < 20) {
       return res.status(422).json({
         error: 'No se pudo extraer texto del archivo. Verificá que sea un estado de cuenta válido.',
       });
     }
 
+    console.log(`[upload] Texto extraído (${text.trim().length} chars):`, text.substring(0, 300).replace(/\n/g, ' | '));
+
     // 2. Parsear transacciones
     const parsedTransactions = parseTransactions(text);
 
     if (parsedTransactions.length === 0) {
+      console.log('[upload] Sin transacciones. Muestra del texto:', text.substring(0, 800));
       return res.status(422).json({
         error: 'No se encontraron transacciones. El formato del estado de cuenta puede no ser compatible.',
         extractedTextSample: text.substring(0, 500),

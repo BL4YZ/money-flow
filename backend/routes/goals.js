@@ -15,7 +15,8 @@ router.get('/', async (req, res) => {
     );
     res.json({ goals: result.rows });
   } catch (err) {
-    res.status(500).json({ error: 'Error al obtener metas' });
+    console.error('GET /goals error:', err.message);
+    res.status(500).json({ error: 'Error al obtener metas', detail: err.message });
   }
 });
 
@@ -40,7 +41,8 @@ router.post(
       );
       res.status(201).json({ goal: result.rows[0] });
     } catch (err) {
-      res.status(500).json({ error: 'Error al crear meta' });
+      console.error('POST /goals error:', err.message);
+      res.status(500).json({ error: 'Error al crear meta', detail: err.message });
     }
   }
 );

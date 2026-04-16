@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import * as SecureStore from 'expo-secure-store';
 import api from '../api/client';
+import { registerPushToken } from '../utils/notifications';
 
 const AuthContext = createContext(null);
 
@@ -16,6 +17,7 @@ export function AuthProvider({ children }) {
         if (token) {
           const { data } = await api.get('/auth/me');
           setUser(data.user);
+          registerPushToken(); // fire-and-forget
         }
       } catch (_) {
         await SecureStore.deleteItemAsync('auth_token');
@@ -29,6 +31,7 @@ export function AuthProvider({ children }) {
     const { data } = await api.post('/auth/login', { email, password });
     await SecureStore.setItemAsync('auth_token', data.token);
     setUser(data.user);
+    registerPushToken();
     return data.user;
   };
 
@@ -36,6 +39,7 @@ export function AuthProvider({ children }) {
     const { data } = await api.post('/auth/register', { name, email, password });
     await SecureStore.setItemAsync('auth_token', data.token);
     setUser(data.user);
+    registerPushToken();
     return data.user;
   };
 
