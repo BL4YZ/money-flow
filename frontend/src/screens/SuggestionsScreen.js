@@ -16,6 +16,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import Toast from "react-native-toast-message";
 import api from "../api/client";
+import { usePlan } from "../context/PlanContext";
 import { COLORS, SPACING, RADIUS, GRADIENT, SHADOWS } from "../theme";
 import { useLanguage } from "../context/LanguageContext";
 
@@ -27,6 +28,7 @@ const PRIORITY_CONFIG = {
 
 export default function SuggestionsScreen() {
   const { t } = useLanguage();
+  const { canUseAI, canComparePrices, showUpgrade } = usePlan();
   const [suggestions, setSuggestions] = useState(null);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -39,6 +41,7 @@ export default function SuggestionsScreen() {
   const generateBtn   = usePressScale(0.97);
 
   const fetchSuggestions = async () => {
+    if (!canUseAI) { showUpgrade('AI'); return; }
     setLoading(true);
     setSuggestions(null);
     try {
@@ -53,6 +56,7 @@ export default function SuggestionsScreen() {
   };
 
   const searchPrices = async () => {
+    if (!canComparePrices) { showUpgrade('prices'); return; }
     const q = searchQuery.trim();
     if (!q) return;
 
@@ -155,13 +159,15 @@ export default function SuggestionsScreen() {
             >
               <Animated.View style={generateBtn.style}>
                 <LinearGradient
-                  colors={GRADIENT.primary}
+                  colors={canUseAI ? GRADIENT.primary : ['#444', '#333']}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                   style={styles.generateBtn}
                 >
-                  <Ionicons name="sparkles-outline" size={18} color={COLORS.onPrimary} />
-                  <Text style={styles.generateBtnText}>{t('suggestions.analyze')}</Text>
+                  <Ionicons name={canUseAI ? 'sparkles-outline' : 'lock-closed-outline'} size={18} color={COLORS.onPrimary} />
+                  <Text style={styles.generateBtnText}>
+                    {canUseAI ? t('suggestions.analyze') : t('premium.lockedAI')}
+                  </Text>
                 </LinearGradient>
               </Animated.View>
             </TouchableOpacity>
@@ -248,14 +254,14 @@ export default function SuggestionsScreen() {
               activeOpacity={0.85}
             >
               <LinearGradient
-                colors={['#44ddc1', '#00b89c']}
+                colors={canComparePrices ? ['#44ddc1', '#00b89c'] : ['#444', '#333']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
                 style={styles.searchBtn}
               >
                 {searching
                   ? <ActivityIndicator size="small" color="#fff" />
-                  : <Ionicons name="search" size={20} color="#fff" />
+                  : <Ionicons name={canComparePrices ? 'search' : 'lock-closed'} size={20} color="#fff" />
                 }
               </LinearGradient>
             </TouchableOpacity>

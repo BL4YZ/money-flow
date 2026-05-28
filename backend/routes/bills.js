@@ -2,6 +2,7 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 const db = require('../db');
 const authMiddleware = require('../middleware/auth');
+const requirePremium = require('../middleware/requirePremium');
 const axios = require('axios');
 
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
@@ -22,9 +23,10 @@ router.get('/', async (req, res) => {
   }
 });
 
-// POST /api/bills
+// POST /api/bills  [premium only]
 router.post(
   '/',
+  requirePremium,
   [
     body('name').trim().notEmpty(),
     body('due_day').isInt({ min: 1, max: 31 }),
@@ -79,8 +81,8 @@ router.patch('/:id', async (req, res) => {
   }
 });
 
-// POST /api/bills/test-notify — DEV: send push to current user right now, ignoring reminder_days check
-router.post('/test-notify', async (req, res) => {
+// POST /api/bills/test-notify  [premium only]
+router.post('/test-notify', requirePremium, async (req, res) => {
   try {
     const { rows: bills } = await db.query(`
       SELECT b.*, u.push_token

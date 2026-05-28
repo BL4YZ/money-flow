@@ -2,6 +2,7 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 const db = require('../db');
 const authMiddleware = require('../middleware/auth');
+const requirePremium = require('../middleware/requirePremium');
 
 const router = express.Router();
 router.use(authMiddleware);
@@ -34,6 +35,21 @@ router.post(
 
     const { name, description, target_amount, current_amount, target_date } = req.body;
     try {
+      // Free plan: máximo 1 meta
+      const { rows: planRows } = await db.query(
+        'SELECT plan FROM users WHERE id = $1',
+        [req.userId]
+      );
+      if (planRows[0]?.plan !== 'premium') {
+        const { rows: existing } = await db.query(
+          'SELECT COUNT(*) FROM goals WHERE user_id = $1',
+          [req.userId]
+        );
+        if (parseInt(existing[0].count) >= 1) {
+          return res.status(403).json({ error: 'premium_required', feature: 'goals' });
+        }
+      }
+
       const result = await db.query(
         `INSERT INTO goals (user_id, name, description, target_amount, current_amount, target_date)
          VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,

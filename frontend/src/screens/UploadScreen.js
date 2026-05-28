@@ -9,12 +9,16 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
 import api from '../api/client';
+import { encryptFile } from '../utils/encryption';
+import { usePlan } from '../context/PlanContext';
 import { COLORS, SPACING, RADIUS, GRADIENT, SHADOWS } from '../theme';
 import { useLanguage } from '../context/LanguageContext';
 
 export default function UploadScreen() {
   const { t } = useLanguage();
+  const { canUpload, showUpgrade } = usePlan();
   const [uploading, setUploading] = useState(false);
+  const [uploadPhase, setUploadPhase] = useState('encrypting'); // 'encrypting' | 'uploading'
   const [progress] = useState(72);
   const [result, setResult] = useState(null);
   const [fileName, setFileName] = useState(null);
@@ -26,6 +30,10 @@ export default function UploadScreen() {
   const glowPulse    = usePulse({ min: 0.08, max: 0.22, duration: 2200 });
 
   const pickAndUpload = async () => {
+    if (!canUpload) {
+      showUpgrade('upload');
+      return;
+    }
     try {
       const picked = await DocumentPicker.getDocumentAsync({
         type: ['application/pdf', 'image/*'],
@@ -36,17 +44,20 @@ export default function UploadScreen() {
       const file = picked.assets[0];
       setFileName(file.name);
       setUploading(true);
+      setUploadPhase('encrypting');
       setResult(null);
 
-      const formData = new FormData();
-      formData.append('file', {
-        uri: file.uri,
-        name: file.name,
-        type: file.mimeType || 'application/pdf',
-      });
+      // Encrypt the file client-side before sending
+      const payload = await encryptFile(
+        file.uri,
+        file.mimeType || 'application/pdf',
+        file.name,
+      );
 
-      const { data } = await api.post('/upload', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
+      setUploadPhase('uploading');
+
+      const { data } = await api.post('/upload', payload, {
+        headers: { 'Content-Type': 'application/json' },
         timeout: 60000,
       });
 
@@ -108,7 +119,9 @@ export default function UploadScreen() {
                 <Text style={styles.progressFileName} numberOfLines={1}>{fileName}</Text>
                 <Text style={styles.processingTag}>{t('upload.processing')}</Text>
               </View>
-              <Text style={styles.progressHint}>{t('upload.extracting')}</Text>
+              <Text style={styles.progressHint}>
+                {uploadPhase === 'encrypting' ? t('upload.encrypting') : t('upload.extracting')}
+              </Text>
             </View>
           </View>
         )}
@@ -126,20 +139,20 @@ export default function UploadScreen() {
           <Animated.View style={dropPress.style}>
           {/* Glow exterior — animated pulse */}
           <Animated.View style={[styles.dropZoneGlow, glowPulse.style]} />
-          <View style={[styles.dropZone, uploading && styles.dropZoneUploading]}>
+          <View style={[styles.dropZone, uploading && styles.dropZoneUploading, !canUpload && styles.dropZoneLocked]}>
             <LinearGradient
-              colors={GRADIENT.primary}
+              colors={canUpload ? GRADIENT.primary : ['#555', '#333']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.uploadIconBg}
             >
               {uploading
                 ? <ActivityIndicator color={COLORS.onPrimary} size="large" />
-                : <Ionicons name="cloud-upload" size={32} color={COLORS.onPrimary} />
+                : <Ionicons name={canUpload ? 'cloud-upload' : 'lock-closed'} size={32} color={COLORS.onPrimary} />
               }
             </LinearGradient>
-            <Text style={styles.dropTitle}>{t('upload.dropTitle')}</Text>
-            <Text style={styles.dropHint}>{t('upload.dropHint')}</Text>
+            <Text style={styles.dropTitle}>{canUpload ? t('upload.dropTitle') : t('premium.lockedUpload')}</Text>
+            <Text style={styles.dropHint}>{canUpload ? t('upload.dropHint') : t('premium.upgradeNudgeUpload')}</Text>
             <View style={styles.formatRow}>
               <View style={styles.formatTag}>
                 <Ionicons name="document-outline" size={12} color={COLORS.onSurfaceVariant} />
@@ -293,6 +306,7 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
   },
   dropZoneUploading: { opacity: 0.7 },
+  dropZoneLocked: { opacity: 0.65, borderStyle: 'solid', borderColor: COLORS.outlineVariant + '60' },
   uploadIconBg: {
     width: 72,
     height: 72,

@@ -29,7 +29,6 @@
       "Bash(ipconfig)",
       "Bash(findstr \"IPv4\")",
       "Bash(npm install:*)",
-      "Bash(npx playwright:*)",
       "Bash('input[class*=\\\\\"buscador\\\\\"], input[class*=\\\\\"search\\\\\"], input[type=\\\\\"search\\\\\"]')",
       "Bash(node debug_scraper.js)",
       "Bash(node debug_scraper2.js)",
@@ -67,7 +66,10 @@
       "Bash(sed -i \"s/>Target</>{t\\('goals.target'\\)}</g\" GoalsScreen.js)",
       "Bash(sed -i \"s/>Goals</>{t\\('goals.goals'\\)}</g\" GoalsScreen.js)",
       "Bash(sed -i \"s/>Done</>{t\\('goals.done'\\)}</g\" GoalsScreen.js)",
-      "Bash(python3 -c \" import re, sys screens = ['GoalsScreen.js', 'SubscriptionsScreen.js', 'SuggestionsScreen.js', 'UploadScreen.js', 'DashboardScreen.js'] pattern = re.compile\\(r'>[A-Z][A-Za-z ]+<'\\) exclude = ['MoneyFlow','PDF','CSV','AUTO','HIGH','MEDIUM','LOW'] for f in screens: with open\\(f\\) as fp: for i,line in enumerate\\(fp,1\\): m = pattern.search\\(line\\) if m: text = m.group\\(\\)[1:-1].strip\\(\\) if text and not any\\(x in text for x in exclude\\) and 't\\(' not in line and '{t\\(' not in line: print\\(f'{f}:{i}: {text[:60]}'\\) \")"
+      "Bash(python3 -c \" import re, sys screens = ['GoalsScreen.js', 'SubscriptionsScreen.js', 'SuggestionsScreen.js', 'UploadScreen.js', 'DashboardScreen.js'] pattern = re.compile\\(r'>[A-Z][A-Za-z ]+<'\\) exclude = ['MoneyFlow','PDF','CSV','AUTO','HIGH','MEDIUM','LOW'] for f in screens: with open\\(f\\) as fp: for i,line in enumerate\\(fp,1\\): m = pattern.search\\(line\\) if m: text = m.group\\(\\)[1:-1].strip\\(\\) if text and not any\\(x in text for x in exclude\\) and 't\\(' not in line and '{t\\(' not in line: print\\(f'{f}:{i}: {text[:60]}'\\) \")",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); [print\\(k\\) for k in d.get\\('dependencies',{}\\).keys\\(\\)]\")",
+      "Bash(node -e \"const d=require\\('./frontend/package.json'\\); console.log\\(Object.keys\\(d.dependencies\\).join\\('\\\\n'\\)\\)\")",
+      "Bash(node -e \"const d=require\\('./frontend/package.json'\\); console.log\\('expo:', d.dependencies.expo\\); console.log\\('expo-file-system:', d.dependencies['expo-file-system']\\)\")"
     ]
   }
 }

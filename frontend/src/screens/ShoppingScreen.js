@@ -9,11 +9,15 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
 import api from '../api/client';
+import { usePlan } from '../context/PlanContext';
 import { COLORS, SPACING, RADIUS, SHADOWS, GRADIENT } from '../theme';
 import { useEntrance, useStaggerEntrance } from '../utils/animations';
 import { useLanguage } from '../context/LanguageContext';
 
 // Loading messages are set dynamically from t() in the component
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const POLL_INTERVAL = 1500; // ms entre cada consulta de progreso
 
 // ─── Item chip en la lista ────────────────────────────────────────
 function ItemChip({ item, index, onDelete }) {
@@ -141,6 +145,7 @@ function ItemResult({ result, index }) {
 // ─── Main screen ──────────────────────────────────────────────────
 export default function ShoppingScreen() {
   const { t } = useLanguage();
+  const { canShopping, showUpgrade } = usePlan();
   const [items, setItems] = useState([]);
   const [input, setInput] = useState('');
   const [adding, setAdding] = useState(false);
@@ -151,11 +156,12 @@ export default function ShoppingScreen() {
     t('shopping.loadingMsg4'), t('shopping.loadingMsg5'),
   ];
   const [loadingMsg, setLoadingMsg] = useState('');
+  const [progress, setProgress] = useState(null); // { completed, total }
   const loadingInterval = useRef(null);
+  const pollRef = useRef(null); // jobId activo; sirve para cancelar el polling
 
   const headerAnim = useEntrance({ fromY: -20 });
   const inputAnim  = useEntrance({ delay: 80 });
-  const resultsAnim = useEntrance({ delay: 60 });
 
   const loadItems = useCallback(async () => {
     try {
@@ -164,10 +170,23 @@ export default function ShoppingScreen() {
     } catch (_) {}
   }, []);
 
+  // Detiene el polling Y le avisa al backend que deje de scrapear (libera el proceso)
+  const cancelActiveJob = useCallback(() => {
+    const jobId = pollRef.current;
+    pollRef.current = null;
+    if (jobId) {
+      api.post(`/shopping/compare/${jobId}/cancel`).catch(() => {});
+    }
+  }, []);
+
   useFocusEffect(useCallback(() => {
     loadItems();
     setResults(null);
-  }, [loadItems]));
+    return () => {
+      // Al salir de la pantalla, cancelamos el polling y el scraping en el backend
+      cancelActiveJob();
+    };
+  }, [loadItems, cancelActiveJob]));
 
   const addItem = async () => {
     const name = input.trim();
@@ -194,12 +213,15 @@ export default function ShoppingScreen() {
   };
 
   const compare = async () => {
+    if (!canShopping) { showUpgrade('shopping'); return; }
     if (items.length === 0) {
       Toast.show({ type: 'error', text1: t('shopping.errorEmpty') });
       return;
     }
+    cancelActiveJob(); // por si quedó una comparación anterior corriendo
     setComparing(true);
     setResults(null);
+    setProgress({ completed: 0, total: items.length });
 
     let msgIdx = 0;
     setLoadingMsg(loadingMsgs[0]);
@@ -209,17 +231,50 @@ export default function ShoppingScreen() {
     }, 3500);
 
     try {
-      const { data } = await api.post('/shopping/compare', {}, { timeout: 120000 });
-      setResults(data);
+      // 1) Arrancamos el job en el backend (responde al instante)
+      const { data: start } = await api.post('/shopping/compare/start');
+      const jobId = start.jobId;
+      pollRef.current = jobId;
+
+      // 2) Consultamos el progreso cada POLL_INTERVAL y mostramos resultados parciales.
+      //    Toleramos fallos transitorios (red, reinicio del backend): no abortamos
+      //    al primer error, solo tras MAX_FAILS polls fallidos consecutivos.
+      const MAX_FAILS = 5;
+      let fails = 0;
+
+      while (pollRef.current === jobId) {
+        await sleep(POLL_INTERVAL);
+        if (pollRef.current !== jobId) return; // cancelado (salió de la pantalla / nueva búsqueda)
+
+        try {
+          const resp = await api.get(`/shopping/compare/status/${jobId}`, {
+            validateStatus: (s) => (s >= 200 && s < 300) || s === 304,
+          });
+          fails = 0;
+          if (resp.status === 304) continue; // sin cambios desde el último poll
+
+          const status = resp.data;
+          setProgress({ completed: status.completed, total: status.total });
+          setResults(status); // resultados parciales → la UI se va poblando
+
+          if (status.status === 'done' || status.status === 'error' || status.status === 'cancelled') break;
+        } catch (pollErr) {
+          fails++;
+          console.warn(`[compare] poll falló (${fails}/${MAX_FAILS}):`, pollErr.message);
+          if (fails >= MAX_FAILS) throw pollErr; // demasiados fallos seguidos
+        }
+      }
     } catch (err) {
       Toast.show({ type: 'error', text1: t('shopping.errorCompare'), text2: err.message });
     } finally {
       clearInterval(loadingInterval.current);
+      pollRef.current = null;
       setComparing(false);
     }
   };
 
   const clearList = async () => {
+    cancelActiveJob(); // cancelar comparación en curso (frontend + backend)
     for (const item of items) {
       try { await api.delete(`/shopping/items/${item.id}`); } catch (_) {}
     }
@@ -294,25 +349,40 @@ export default function ShoppingScreen() {
         {/* Compare button */}
         {items.length > 0 && !comparing && (
           <TouchableOpacity style={styles.compareBtn} onPress={compare} activeOpacity={0.85}>
-            <LinearGradient colors={GRADIENT.primary} style={styles.compareBtnGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
-              <Ionicons name="search" size={18} color={COLORS.onPrimary} />
-              <Text style={styles.compareBtnText}>{t('shopping.compare')}</Text>
+            <LinearGradient colors={canShopping ? GRADIENT.primary : ['#444', '#333']} style={styles.compareBtnGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+              <Ionicons name={canShopping ? 'search' : 'lock-closed-outline'} size={18} color={COLORS.onPrimary} />
+              <Text style={styles.compareBtnText}>{canShopping ? t('shopping.compare') : t('premium.lockedShopping')}</Text>
             </LinearGradient>
           </TouchableOpacity>
         )}
 
-        {/* Loading */}
+        {/* Progreso — SIEMPRE visible mientras busca (View plano, sin opacity animada) */}
         {comparing && (
           <View style={styles.loadingCard}>
             <ActivityIndicator size="large" color={COLORS.primary} />
             <Text style={styles.loadingText}>{loadingMsg}</Text>
-            <Text style={styles.loadingSubtext}>{t('shopping.loadingWait')}</Text>
+            <Text style={styles.loadingSubtext}>
+              {progress
+                ? t('shopping.progress', { completed: progress.completed, total: progress.total })
+                : t('shopping.loadingWait')}
+            </Text>
+            {progress && (
+              <View style={styles.progressTrack}>
+                <View
+                  style={[
+                    styles.progressFill,
+                    { width: `${Math.round((progress.completed / Math.max(progress.total, 1)) * 100)}%` },
+                  ]}
+                />
+              </View>
+            )}
           </View>
         )}
 
-        {/* Results */}
-        {results && !comparing && (
-          <Animated.View style={resultsAnim.style}>
+        {/* Results (parciales mientras busca, o finales) — View plano para evitar
+            que la animación de entrada deje el contenedor invisible (opacity 0) */}
+        {results && results.byStore.length > 0 && (
+          <View>
 
             {/* Optimal cart summary */}
             <View style={styles.optimalCard}>
@@ -357,14 +427,16 @@ export default function ShoppingScreen() {
               />
             ))}
 
-            {results.byStore.length === 0 && (
-              <View style={styles.emptyResults}>
-                <Ionicons name="alert-circle-outline" size={32} color={COLORS.onSurfaceVariant + '60'} />
-                <Text style={styles.emptyResultsText}>{t('shopping.noResults')}</Text>
-                <Text style={styles.emptyResultsSubtext}>{t('shopping.noResultsSub')}</Text>
-              </View>
-            )}
-          </Animated.View>
+          </View>
+        )}
+
+        {/* Sin resultados — solo al terminar la búsqueda */}
+        {!comparing && results && results.byStore.length === 0 && (
+          <View style={styles.emptyResults}>
+            <Ionicons name="alert-circle-outline" size={32} color={COLORS.onSurfaceVariant + '60'} />
+            <Text style={styles.emptyResultsText}>{t('shopping.noResults')}</Text>
+            <Text style={styles.emptyResultsSubtext}>{t('shopping.noResultsSub')}</Text>
+          </View>
         )}
 
         <View style={{ height: 100 }} />
@@ -438,6 +510,16 @@ const styles = StyleSheet.create({
   },
   loadingText: { color: COLORS.onSurface, fontSize: 15, fontWeight: '600' },
   loadingSubtext: { color: COLORS.onSurfaceVariant, fontSize: 12 },
+
+  // Barra de progreso (dentro de la tarjeta de carga)
+  progressTrack: {
+    width: '100%',
+    height: 5, borderRadius: 3,
+    backgroundColor: COLORS.outlineVariant,
+    overflow: 'hidden',
+    marginTop: SPACING.sm,
+  },
+  progressFill: { height: 5, borderRadius: 3, backgroundColor: COLORS.primary },
 
   // Optimal card
   optimalCard: { borderRadius: RADIUS.xl, overflow: 'hidden', marginBottom: SPACING.lg, ...SHADOWS.ambient },

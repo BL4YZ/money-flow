@@ -1,6 +1,7 @@
 const express = require("express");
 const axios = require("axios");
 const authMiddleware = require("../middleware/auth");
+const requirePremium = require("../middleware/requirePremium");
 const { scrapeAll } = require("../services/scraper");
 
 const router = express.Router();
@@ -56,7 +57,7 @@ router.get("/auth/debug", (req, res) => {
 router.use(authMiddleware);
 
 // GET /api/prices/search?q=leche&limit=10&store=disco
-router.get("/search", async (req, res) => {
+router.get("/search", requirePremium, async (req, res) => {
   const { q, limit = 15, store } = req.query;
 
   if (!q || q.trim().length < 2) {
@@ -101,7 +102,7 @@ router.get("/search", async (req, res) => {
         .flatMap((r) => r.value);
     }
 
-    // 3) Tiendas con scraping (Playwright)
+    // 3) Tiendas con scraping (HTTP + cheerio)
     if (isScrapedTarget) {
       const storeIds = store ? [store] : null;
       console.log(
