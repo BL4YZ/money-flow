@@ -57,6 +57,8 @@ async function initSchema() {
   try {
     await p.query(`
       ALTER TABLE users ADD COLUMN IF NOT EXISTS push_token VARCHAR(200);
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS plan VARCHAR(20) NOT NULL DEFAULT 'free';
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS plan_expires_at TIMESTAMPTZ;
 
       CREATE TABLE IF NOT EXISTS bills (
         id            SERIAL PRIMARY KEY,

@@ -42,6 +42,8 @@ const shoppingRoute = require('./routes/shopping');
 console.log('shopping OK');
 const pushTokenRoute = require('./routes/pushToken');
 console.log('pushToken OK');
+const webhooksRoute = require('./routes/webhooks');
+console.log('webhooks OK');
 
 const { startBillNotifier } = require('./services/billNotifier');
 startBillNotifier();
@@ -95,6 +97,14 @@ app.use('/api/budgets', budgetsRoute);
 app.use('/api/bills', billsRoute);
 app.use('/api/shopping', shoppingRoute);
 app.use('/api/push-token', pushTokenRoute);
+app.use('/api/webhooks', webhooksRoute);
+
+// DEV only — never in production
+if (process.env.NODE_ENV !== 'production') {
+  const devRoute = require('./routes/dev');
+  app.use('/api/dev', devRoute);
+  console.log('dev routes enabled (non-production)');
+}
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', version: '1.0.0' });

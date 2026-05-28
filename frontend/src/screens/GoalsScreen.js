@@ -10,8 +10,10 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
 import api from '../api/client';
+import { usePlan } from '../context/PlanContext';
 import { COLORS, SPACING, RADIUS, GRADIENT, SHADOWS } from '../theme';
 import { useLanguage } from '../context/LanguageContext';
+import RefreshBadge from '../components/RefreshBadge';
 
 const GOAL_ICONS = [
   { icon: 'home-outline', label: 'Home' },
@@ -62,6 +64,7 @@ function RingProgress({ progress, size = 64, stroke = 5, color = COLORS.primary 
 
 export default function GoalsScreen() {
   const { t } = useLanguage();
+  const { isPremium, showUpgrade } = usePlan();
   const [goals, setGoals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -192,6 +195,7 @@ export default function GoalsScreen() {
 
   return (
     <View style={styles.root}>
+      <RefreshBadge refreshing={refreshing} />
       {/* Header */}
       <View style={styles.topBar}>
         <View style={styles.topBarLeft}>
@@ -210,7 +214,8 @@ export default function GoalsScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={() => { setRefreshing(true); fetchGoals(); }}
-            tintColor={COLORS.primary}
+            tintColor="transparent"
+            colors={['transparent']}
           />
         }
       >
@@ -285,15 +290,20 @@ export default function GoalsScreen() {
         {/* Add new goal card */}
         <Animated.View style={addCardAnim.style}>
         <TouchableOpacity
-          onPress={() => setModalVisible(true)}
+          onPress={() => {
+            if (!isPremium && goals.length >= 1) { showUpgrade('goals'); return; }
+            setModalVisible(true);
+          }}
           activeOpacity={0.75}
           style={styles.addCard}
         >
           <View style={styles.addIconBg}>
-            <Ionicons name="add" size={24} color={COLORS.primary} />
+            <Ionicons name={!isPremium && goals.length >= 1 ? 'lock-closed' : 'add'} size={24} color={COLORS.primary} />
           </View>
           <Text style={styles.addCardTitle}>{t('goals.addNew')}</Text>
-          <Text style={styles.addCardHint}>{t('goals.addNewHint')}</Text>
+          <Text style={styles.addCardHint}>
+            {!isPremium && goals.length >= 1 ? t('premium.upgradeNudgeGoals') : t('goals.addNewHint')}
+          </Text>
         </TouchableOpacity>
         </Animated.View>
 
@@ -472,14 +482,14 @@ const CAT_ICONS = {
 // cut: 0-1 = proporción reducible. action = texto concreto a mostrar
 // streaming usa lógica especial (cancelar 1 servicio, no porcentaje)
 const CAT_STRATEGY = {
-  Restaurantes:    { cut: 0.25, action: 'Cook 1 extra meal at home per week' },
-  Comida:          { cut: 0.30, action: 'Meal prep for weekdays' },
-  Supermercado:    { cut: 0.12, action: 'Plan meals and stick to a list' },
-  Entretenimiento: { cut: 0.20, action: 'Mix paid and free activities' },
-  Ropa:            { cut: 0.40, action: 'Buy only essentials this month' },
-  Transporte:      { cut: 0.15, action: 'Use public transit more often' },
-  Deporte:         { cut: 0.25, action: 'Try free workout alternatives' },
-  Streaming:       { cut: 0.25, action: 'Downgrade plan or share with someone' },
+  Restaurantes:    { cut: 0.25, actionKey: 'goals.cutRestaurantes' },
+  Comida:          { cut: 0.30, actionKey: 'goals.cutComida' },
+  Supermercado:    { cut: 0.12, actionKey: 'goals.cutSupermercado' },
+  Entretenimiento: { cut: 0.20, actionKey: 'goals.cutEntretenimiento' },
+  Ropa:            { cut: 0.40, actionKey: 'goals.cutRopa' },
+  Transporte:      { cut: 0.15, actionKey: 'goals.cutTransporte' },
+  Deporte:         { cut: 0.25, actionKey: 'goals.cutDeporte' },
+  Streaming:       { cut: 0.25, actionKey: 'goals.cutStreaming' },
   // Fixed costs — not actionable
   Servicios:    null,
   Salud:        null,
@@ -523,7 +533,7 @@ function GoalCard({ goal, onDeposit, onDelete, index = 0, spendingByCategory = [
       const strategy = CAT_STRATEGY[c.category];
       const savings  = Math.round(spent * strategy.cut);
       const label    = `+$${savings.toLocaleString()}/mo`;
-      return { category: c.category, spent, action: strategy.action, savings, label };
+      return { category: c.category, spent, actionKey: strategy.actionKey, savings, label };
     })
     .filter(c => c.savings > 0);
 
@@ -667,7 +677,7 @@ function GoalCard({ goal, onDeposit, onDelete, index = 0, spendingByCategory = [
                   </View>
                   <View style={styles.planCutInfo}>
                     <Text style={styles.planCutCat}>{cut.category}</Text>
-                    <Text style={styles.planCutAction}>{cut.action}</Text>
+                    <Text style={styles.planCutAction}>{t(cut.actionKey)}</Text>
                   </View>
                   <Text style={styles.planCutSave}>{cut.label}</Text>
                 </View>

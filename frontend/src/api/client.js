@@ -2,7 +2,7 @@ import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 
 // LOCAL: backend corriendo en tu PC
-const BASE_URL = 'http://192.168.1.7:3000/api';
+const BASE_URL = 'http://192.168.1.3:3000/api';
 
 // PRODUCCIÓN: Render
 // const BASE_URL = 'https://money-flow-co41.onrender.com/api';

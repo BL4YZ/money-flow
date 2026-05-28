@@ -1,6 +1,5 @@
-const { chromium } = require("playwright");
-
-let browser = null;
+const axios = require("axios");
+const cheerio = require("cheerio");
 
 // Cache en memoria: { key: { data, expiresAt } }
 const cache = new Map();
@@ -17,266 +16,194 @@ function setCache(key, data) {
   cache.set(key, { data, expiresAt: Date.now() + CACHE_TTL });
 }
 
-async function getBrowser() {
-  if (!browser || !browser.isConnected()) {
-    browser = await chromium.launch({
-      headless: true,
-      args: [
-        "--no-sandbox",
-        "--disable-setuid-sandbox",
-        "--disable-dev-shm-usage",
-        "--disable-blink-features=AutomationControlled",
-      ],
+// ─── Headers para fetch HTTP directo ──────────────────────────────
+const HTTP_HEADERS = {
+  "User-Agent":
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+  Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+  "Accept-Language": "es-UY,es;q=0.9,en;q=0.8",
+};
+
+// Precio en formato uruguayo: punto = miles, coma = decimal.
+// "$ 1.234,50" → 1234.5 | "45,2" → 45.2 | "890" → 890
+function parsePrice(text) {
+  if (!text) return 0;
+  const s = text
+    .replace(/[^\d.,]/g, "")
+    .replace(/\./g, "")
+    .replace(",", ".");
+  return parseFloat(s) || 0;
+}
+
+// ─── Parsers cheerio (HTML → productos[]) ─────────────────────────
+
+// Cencosud (Disco, Géant, Devoto) — página /productos/keyword/{q}
+function parseCencosud($, store) {
+  const results = [];
+  $(".product-item").each((_, el) => {
+    const $el = $(el);
+    const $a = $el.find(".prod-desc h3 a").first();
+    const name = $a.text().trim();
+    if (!name) return;
+
+    const href = $a.attr("href") || "";
+    const url = href.startsWith("http") ? href : store.baseUrl + href;
+    const price = parsePrice($el.find(".desc-prices .val").first().text());
+    if (price <= 0) return;
+
+    const image = $el.find("figure img").attr("src") || null;
+
+    results.push({
+      store: store.name,
+      storeId: store.id,
+      storeColor: store.color,
+      name,
+      price,
+      image,
+      url,
+      available: true,
     });
-  }
-  return browser;
+  });
+  return results.slice(0, 12);
 }
 
-// ─── Extractor para tiendas Blazor (Disco, Géant, Devoto) ────────
-async function extractBlazor(page, store) {
-  return page.evaluate(
-    (storeInfo) => {
-      const results = [];
-      const items = document.querySelectorAll(".sr-list .product-item-suggest");
+// Fenicio (El Túnel, San Roque)
+function parseFenicio($, store) {
+  const results = [];
+  $(".info").each((_, el) => {
+    const $el = $(el);
+    const $name = $el.find("a.tit");
+    if (!$name.length) return;
 
-      items.forEach((item) => {
-        const nameEl = item.querySelector(".prod-desc h3 a");
-        const valEl = item.querySelector(".prod-price .price .val");
-        const imgEl = item.querySelector("figure img");
+    const name = $name.attr("title") || $name.find("h2").text().trim() || "";
+    const url = $name.attr("href") || "";
+    const price = parsePrice($el.find(".precios .monto").first().text());
+    if (!name || price <= 0) return;
 
-        if (!nameEl || !valEl) return;
-
-        const priceText = valEl.textContent.replace(/[^0-9]/g, "");
-        const price = parseFloat(priceText);
-        if (!price || price <= 0) return;
-
-        const href = nameEl.getAttribute("href") || "";
-        const url = href.startsWith("http") ? href : storeInfo.baseUrl + href;
-
-        results.push({
-          store: storeInfo.name,
-          storeId: storeInfo.id,
-          storeColor: storeInfo.color,
-          name: nameEl.textContent.trim(),
-          price,
-          image: imgEl?.src || null,
-          url,
-          available: true,
-        });
+    // Imagen: en el padre de .info, una img que no sea de descuentos
+    let image = null;
+    $el
+      .parent()
+      .find("img")
+      .each((_, img) => {
+        if (image) return;
+        const src = $(img).attr("src");
+        const insideInfo = $.contains($el.get(0), img);
+        if (!insideInfo && src && !src.includes("descuentos")) image = src;
       });
 
-      return results.slice(0, 12);
-    },
-    {
-      name: store.name,
-      id: store.id,
-      color: store.color,
-      baseUrl: store.baseUrl,
-    },
-  );
+    results.push({
+      store: store.name,
+      storeId: store.id,
+      storeColor: store.color,
+      name,
+      price,
+      image,
+      url,
+      available: true,
+    });
+  });
+  return results.slice(0, 12);
 }
 
-// ─── Extractor para tiendas Fenicio (El Tunel, San Roque, Natal) ─
-async function extractFenicio(page, store) {
-  return page.evaluate(
-    (storeInfo) => {
-      const items = document.querySelectorAll(".info");
-      const results = [];
+// Magento (Farmashop)
+function parseMagento($, store) {
+  const results = [];
+  $(".product-item").each((_, el) => {
+    const $el = $(el);
+    const name = $el.find("h2").first().text().trim();
 
-      items.forEach((item) => {
-        const nameEl = item.querySelector("a.tit");
-        if (!nameEl) return;
+    const url =
+      $el.find("a.product.photo").attr("href") ||
+      $el.find("a[href*='.html']").attr("href") ||
+      "";
 
-        const name = nameEl.title || nameEl.querySelector("h2")?.textContent?.trim() || "";
-        const url = nameEl.href || "";
-        const priceEl = item.querySelector(".precios .monto");
-        const price = parseFloat(priceEl?.textContent?.replace(/[^0-9]/g, "") || "0");
-        if (!name || price <= 0) return;
+    // Múltiples span.price; el último es el precio final (con descuento si lo hay)
+    const price = parsePrice($el.find("span.price").last().text());
+    if (!name || price <= 0) return;
 
-        // Imagen: está en el padre de .info, fuera del contenido de texto
-        const parent = item.parentElement;
-        let image = null;
-        if (parent) {
-          const imgs = Array.from(parent.querySelectorAll("img"));
-          const productImg = imgs.find(
-            (img) => !item.contains(img) && img.src && !img.src.includes("descuentos"),
-          );
-          image = productImg?.src || null;
-        }
+    const image = $el.find("img.product-image-photo").attr("src") || null;
 
-        results.push({
-          store: storeInfo.name,
-          storeId: storeInfo.id,
-          storeColor: storeInfo.color,
-          name,
-          price,
-          image,
-          url,
-          available: true,
-        });
-      });
-
-      return results.slice(0, 12);
-    },
-    { name: store.name, id: store.id, color: store.color },
-  );
+    results.push({
+      store: store.name,
+      storeId: store.id,
+      storeColor: store.color,
+      name,
+      price,
+      image,
+      url,
+      available: true,
+    });
+  });
+  return results.slice(0, 12);
 }
 
-// ─── Extractor para Farmashop (Magento) ──────────────────────────
-async function extractMagento(page, store) {
-  return page.evaluate(
-    (storeInfo) => {
-      const items = document.querySelectorAll(".product-item");
-      const results = [];
+// NopCommerce (Cosmeshop)
+function parseNopCommerce($, store) {
+  const results = [];
+  $(".product-item").each((_, el) => {
+    const $el = $(el);
+    const $name = $el.find("h2.product-title a");
+    const name = $name.text().trim();
 
-      items.forEach((item) => {
-        const nameEl = item.querySelector("h2");
-        const name = nameEl?.textContent?.trim() || "";
+    const rel = $name.attr("href") || "";
+    const url = rel.startsWith("http") ? rel : store.baseUrl + rel;
 
-        const urlEl =
-          item.querySelector("a.product.photo") ||
-          item.querySelector("a[href*='.html']");
-        const url = urlEl?.href || "";
+    const price = parsePrice($el.find("span.price.actual-price").first().text());
+    if (!name || price <= 0) return;
 
-        // Hay múltiples span.price; el último es el precio final (con descuento si lo hay)
-        const priceEls = item.querySelectorAll("span.price");
-        const priceEl = priceEls[priceEls.length - 1];
-        const priceText = priceEl?.textContent?.replace(/[^0-9]/g, "") || "0";
-        const price = parseFloat(priceText);
+    const $img = $el.find("img.product-image");
+    const image = $img.attr("src") || $img.attr("data-lazyloadsrc") || null;
 
-        if (!name || price <= 0) return;
-
-        const imgEl = item.querySelector("img.product-image-photo");
-        const image = imgEl?.src || null;
-
-        results.push({
-          store: storeInfo.name,
-          storeId: storeInfo.id,
-          storeColor: storeInfo.color,
-          name,
-          price,
-          image,
-          url,
-          available: true,
-        });
-      });
-
-      return results.slice(0, 12);
-    },
-    { name: store.name, id: store.id, color: store.color, baseUrl: store.baseUrl },
-  );
+    results.push({
+      store: store.name,
+      storeId: store.id,
+      storeColor: store.color,
+      name,
+      price,
+      image,
+      url,
+      available: true,
+    });
+  });
+  return results.slice(0, 12);
 }
 
-// ─── Extractor para Cosmeshop (NopCommerce) ──────────────────────
-async function extractNopCommerce(page, store) {
-  return page.evaluate(
-    (storeInfo) => {
-      const items = document.querySelectorAll(".product-item");
-      const results = [];
-
-      items.forEach((item) => {
-        const nameEl = item.querySelector("h2.product-title a");
-        const name = nameEl?.textContent?.trim() || "";
-
-        const relUrl = nameEl?.getAttribute("href") || "";
-        const url = relUrl.startsWith("http")
-          ? relUrl
-          : storeInfo.baseUrl + relUrl;
-
-        // "$U 389" → 389
-        const priceEl = item.querySelector("span.price.actual-price");
-        const priceText = priceEl?.textContent?.replace(/[^0-9]/g, "") || "0";
-        const price = parseFloat(priceText);
-
-        if (!name || price <= 0) return;
-
-        const imgEl = item.querySelector("img.product-image");
-        const image =
-          imgEl?.src || imgEl?.getAttribute("data-lazyloadsrc") || null;
-
-        results.push({
-          store: storeInfo.name,
-          storeId: storeInfo.id,
-          storeColor: storeInfo.color,
-          name,
-          price,
-          image,
-          url,
-          available: true,
-        });
-      });
-
-      return results.slice(0, 12);
-    },
-    { name: store.name, id: store.id, color: store.color, baseUrl: store.baseUrl },
-  );
-}
-
-// ─── Búsqueda con "Reintento Inteligente" (solo Blazor) ──────────
-async function performSearch(page, query, waitForSelector) {
-  const inputLocator = page.locator("#InputSearch");
-
-  await inputLocator.click();
-  await page.waitForTimeout(500);
-  await inputLocator.clear();
-
-  await inputLocator.pressSequentially(query, { delay: 150 });
-
-  try {
-    await page.waitForSelector(waitForSelector, { timeout: 6000 });
-  } catch (e) {
-    console.log(`[scraper] El menú no apareció. Intentando despertar el input...`);
-    await inputLocator.press("Backspace");
-    await page.waitForTimeout(500);
-    const ultimaLetra = query.slice(-1);
-    await inputLocator.pressSequentially(ultimaLetra, { delay: 300 });
-    await page.waitForSelector(waitForSelector, { timeout: 8000 });
-  }
-}
-
-// ─── Definición de tiendas ────────────────────────────────────────
+// ─── Definición de tiendas (todas HTTP + cheerio, sin navegador) ──
 const SCRAPE_STORES = [
-  // ── Blazor (Cencosud) ─────────────────────────────────────────
+  // ── Cencosud ───────────────────────────────────────────────────
   {
     id: "disco",
     name: "Disco",
     color: "#009B3A",
     baseUrl: "https://www.disco.com.uy",
-    homeUrl: "https://www.disco.com.uy",
-    waitFor: ".sr-list .product-item-suggest",
-    extract: extractBlazor,
-    type: "blazor",
+    searchUrl: (q) => `https://www.disco.com.uy/productos/keyword/${encodeURIComponent(q)}`,
+    parse: parseCencosud,
   },
   {
     id: "geant",
     name: "Géant",
     color: "#E63946",
     baseUrl: "https://www.geant.com.uy",
-    homeUrl: "https://www.geant.com.uy",
-    waitFor: ".sr-list .product-item-suggest",
-    extract: extractBlazor,
-    type: "blazor",
+    searchUrl: (q) => `https://www.geant.com.uy/productos/keyword/${encodeURIComponent(q)}`,
+    parse: parseCencosud,
   },
   {
     id: "devoto",
     name: "Devoto",
     color: "#F4A623",
     baseUrl: "https://www.devoto.com.uy",
-    homeUrl: "https://www.devoto.com.uy",
-    waitFor: ".sr-list .product-item-suggest",
-    extract: extractBlazor,
-    type: "blazor",
+    searchUrl: (q) => `https://www.devoto.com.uy/productos/keyword/${encodeURIComponent(q)}`,
+    parse: parseCencosud,
   },
-  // ── Fenicio (farmacias/perfumerías) ───────────────────────────
+  // ── Fenicio (farmacias/perfumerías) ────────────────────────────
   {
     id: "eltunel",
     name: "El Túnel",
     color: "#1A6FBF",
     baseUrl: "https://eltunel.com.uy",
     searchUrl: (q) => `https://eltunel.com.uy/catalogo?q=${encodeURIComponent(q)}`,
-    extract: extractFenicio,
-    type: "url",
-    waitMs: 7000,
+    parse: parseFenicio,
   },
   {
     id: "sanroque",
@@ -284,21 +211,9 @@ const SCRAPE_STORES = [
     color: "#1B5E20",
     baseUrl: "https://www.sanroque.com.uy",
     searchUrl: (q) => `https://www.sanroque.com.uy/catalogo?q=${encodeURIComponent(q)}`,
-    extract: extractFenicio,
-    type: "url",
-    waitMs: 7000,
+    parse: parseFenicio,
   },
-  {
-    id: "natal",
-    name: "Natal",
-    color: "#E91E63",
-    baseUrl: "https://www.natal.com.uy",
-    searchUrl: (q) => `https://www.natal.com.uy/catalogo?q=${encodeURIComponent(q)}`,
-    extract: extractFenicio,
-    type: "url",
-    waitMs: 7000,
-  },
-  // ── Farmashop (Magento) ───────────────────────────────────────
+  // ── Farmashop (Magento) ────────────────────────────────────────
   {
     id: "farmashop",
     name: "Farmashop",
@@ -306,11 +221,9 @@ const SCRAPE_STORES = [
     baseUrl: "https://tienda.farmashop.com.uy",
     searchUrl: (q) =>
       `https://tienda.farmashop.com.uy/catalogsearch/result/?q=${encodeURIComponent(q)}`,
-    extract: extractMagento,
-    type: "url",
-    waitMs: 5000,
+    parse: parseMagento,
   },
-  // ── Cosmeshop (NopCommerce) ───────────────────────────────────
+  // ── Cosmeshop (NopCommerce) ────────────────────────────────────
   {
     id: "cosmeshop",
     name: "Cosmeshop",
@@ -318,13 +231,13 @@ const SCRAPE_STORES = [
     baseUrl: "https://www.cosmeshop.com.uy",
     searchUrl: (q) =>
       `https://www.cosmeshop.com.uy/filterSearch?q=${encodeURIComponent(q)}`,
-    extract: extractNopCommerce,
-    type: "url",
-    waitMs: 5000,
+    parse: parseNopCommerce,
   },
+  // Natal: omitido — su HTML sirve los precios como placeholder "$1" (los carga
+  // JS aparte), así que por HTTP daría precios falsos.
 ];
 
-// ─── Scraper principal ────────────────────────────────────────────
+// ─── Scraper (axios + cheerio) ────────────────────────────────────
 async function scrapeStore(store, query) {
   const cacheKey = `${store.id}:${query.toLowerCase()}`;
   const cached = getCached(cacheKey);
@@ -333,65 +246,21 @@ async function scrapeStore(store, query) {
     return cached;
   }
 
-  const br = await getBrowser();
-  const ctx = await br.newContext({
-    userAgent:
-      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    locale: "es-UY",
-    viewport: { width: 1280, height: 800 },
-    extraHTTPHeaders: {
-      "Accept-Language": "es-UY,es;q=0.9,en;q=0.8",
-    },
-  });
-
-  const page = await ctx.newPage();
-
   try {
-    if (store.type === "url") {
-      // ── Tiendas con búsqueda por URL directa ─────────────────
-      const searchUrl = store.searchUrl(query);
-      console.log(`[scraper] ${store.name}: navegando a ${searchUrl}`);
-      await page.goto(searchUrl, { waitUntil: "domcontentloaded", timeout: 25000 });
-      await page.waitForTimeout(store.waitMs || 5000);
-
-      const results = await store.extract(page, store);
-      console.log(`[scraper] ${store.name}: ${results.length} productos`);
-      setCache(cacheKey, results);
-      return results;
-    } else {
-      // ── Tiendas Blazor (búsqueda por input) ──────────────────
-      console.log(`[scraper] ${store.name}: navegando a ${store.homeUrl}`);
-      await page.goto(store.homeUrl, {
-        waitUntil: "networkidle",
-        timeout: 30000,
-      });
-
-      await page.keyboard.press("Escape");
-      await page.waitForTimeout(500);
-      await page.waitForSelector("#InputSearch", { timeout: 10000 });
-      await page.waitForTimeout(2000);
-
-      try {
-        await performSearch(page, query, store.waitFor);
-      } catch {
-        console.log(
-          `[scraper] ${store.name}: no se encontraron resultados para "${query}"`,
-        );
-        return [];
-      }
-
-      await page.waitForTimeout(800);
-
-      const results = await store.extract(page, store);
-      console.log(`[scraper] ${store.name}: ${results.length} productos`);
-      setCache(cacheKey, results);
-      return results;
-    }
+    const url = store.searchUrl(query);
+    const r = await axios.get(url, {
+      headers: HTTP_HEADERS,
+      timeout: 12000,
+      maxRedirects: 5,
+    });
+    const $ = cheerio.load(r.data);
+    const results = store.parse($, store);
+    console.log(`[scraper] ${store.name}: ${results.length} productos`);
+    setCache(cacheKey, results);
+    return results;
   } catch (err) {
     console.error(`[scraper] ${store.name} error:`, err.message);
     return [];
-  } finally {
-    await ctx.close();
   }
 }
 
@@ -400,18 +269,15 @@ async function scrapeAll(query, storeIds = null) {
     ? SCRAPE_STORES.filter((s) => storeIds.includes(s.id))
     : SCRAPE_STORES;
 
-  // Scraping en paralelo (máx 3 a la vez para no sobrecargar CPU/Red)
-  const results = [];
-  for (let i = 0; i < stores.length; i += 3) {
-    const batch = stores.slice(i, i + 3);
-    const batchResults = await Promise.allSettled(
-      batch.map((store) => scrapeStore(store, query)),
-    );
-    batchResults.forEach((r) => {
-      if (r.status === "fulfilled") results.push(...r.value);
-    });
-  }
+  // Todas en paralelo: son fetch HTTP livianos, sin navegador ni límite de RAM.
+  const settled = await Promise.allSettled(
+    stores.map((store) => scrapeStore(store, query)),
+  );
 
+  const results = [];
+  settled.forEach((r) => {
+    if (r.status === "fulfilled") results.push(...r.value);
+  });
   return results;
 }
 

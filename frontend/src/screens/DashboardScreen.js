@@ -12,7 +12,9 @@ import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
 import api from '../api/client';
 import { useAuth } from '../context/AuthContext';
+import { usePlan } from '../context/PlanContext';
 import { useLanguage } from '../context/LanguageContext';
+import RefreshBadge from '../components/RefreshBadge';
 import { COLORS, SPACING, RADIUS, GRADIENT, SHADOWS } from '../theme';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -110,6 +112,7 @@ const EMPTY_FORM = {
 export default function DashboardScreen() {
   const { user, logout } = useAuth();
   const { t, lang, toggleLanguage } = useLanguage();
+  const { isPremium, isTrial, trialDays, showUpgrade } = usePlan();
   const [summary, setSummary] = useState(null);
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -411,6 +414,7 @@ export default function DashboardScreen() {
 
   return (
     <View style={styles.root}>
+      <RefreshBadge refreshing={refreshing} />
       {/* Top bar */}
       <View style={styles.topBar}>
         <View style={styles.topBarLeft}>
@@ -419,7 +423,34 @@ export default function DashboardScreen() {
           </View>
           <View>
             <Text style={styles.topBarTitle}>MoneyFlow</Text>
-            <Text style={styles.topBarSub}>Hey, {firstName}</Text>
+            <View style={styles.topBarSubRow}>
+              <Text style={styles.topBarSub}>Hey, {firstName}</Text>
+              <TouchableOpacity
+                onPress={!isPremium ? () => showUpgrade() : undefined}
+                activeOpacity={!isPremium ? 0.7 : 1}
+                style={[
+                  styles.planBadge,
+                  isPremium && !isTrial && styles.planBadgePremium,
+                  isTrial && styles.planBadgeTrial,
+                ]}
+              >
+                <Ionicons
+                  name={isTrial ? 'timer-outline' : isPremium ? 'diamond' : 'lock-closed'}
+                  size={9}
+                  color={isTrial ? COLORS.warning : isPremium ? COLORS.onPrimary : COLORS.onSurfaceVariant}
+                  style={{ marginRight: 2 }}
+                />
+                <Text style={[
+                  styles.planBadgeText,
+                  isPremium && !isTrial && { color: COLORS.onPrimary },
+                  isTrial && { color: COLORS.warning },
+                ]}>
+                  {isTrial
+                    ? `${trialDays}d`
+                    : isPremium ? t('premium.badge') : t('premium.freeBadge')}
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
         <View style={styles.topBarRight}>
@@ -441,7 +472,7 @@ export default function DashboardScreen() {
         style={styles.scroll}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="transparent" colors={['transparent']} />}
       >
         {/* Hero */}
         <Animated.View style={[styles.hero, heroAnim.style]}>
@@ -1039,7 +1070,32 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background + 'CC',
   },
   topBarLeft: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
+  topBarSubRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 1 },
   topBarRight: { flexDirection: 'row', alignItems: 'center', gap: SPACING.md },
+  planBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: RADIUS.full,
+    backgroundColor: COLORS.surfaceContainerHigh,
+    borderWidth: 1,
+    borderColor: COLORS.outlineVariant + '50',
+  },
+  planBadgePremium: {
+    backgroundColor: COLORS.primaryContainer,
+    borderColor: COLORS.primary + '40',
+  },
+  planBadgeTrial: {
+    backgroundColor: COLORS.warning + '18',
+    borderColor: COLORS.warning + '50',
+  },
+  planBadgeText: {
+    fontSize: 8,
+    fontWeight: '800',
+    color: COLORS.onSurfaceVariant,
+    letterSpacing: 0.8,
+  },
   avatar: {
     width: 36, height: 36, borderRadius: 18,
     backgroundColor: COLORS.surfaceContainerHigh,

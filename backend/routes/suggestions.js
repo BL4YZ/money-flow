@@ -2,6 +2,7 @@ const express = require('express');
 const Anthropic = require('@anthropic-ai/sdk');
 const db = require('../db');
 const authMiddleware = require('../middleware/auth');
+const requirePremium = require('../middleware/requirePremium');
 
 const router = express.Router();
 router.use(authMiddleware);
@@ -10,7 +11,7 @@ const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 // ─── POST /api/suggestions ────────────────────────────────────
 // Analiza los últimos 3 meses de gastos y devuelve sugerencias
-router.post('/', async (req, res) => {
+router.post('/', requirePremium, async (req, res) => {
   try {
     // 1. Obtener datos del usuario
     const userResult = await db.query(

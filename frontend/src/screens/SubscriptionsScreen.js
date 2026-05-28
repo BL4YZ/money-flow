@@ -10,8 +10,10 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
 import api from '../api/client';
+import { usePlan } from '../context/PlanContext';
 import { COLORS, SPACING, RADIUS, SHADOWS, GRADIENT } from '../theme';
 import { useLanguage } from '../context/LanguageContext';
+import RefreshBadge from '../components/RefreshBadge';
 
 // Map service names to icons and accent colors
 const SERVICE_META = {
@@ -46,6 +48,7 @@ const BILL_CAT_ICONS  = {
 
 export default function SubscriptionsScreen() {
   const { t } = useLanguage();
+  const { canAddBill, showUpgrade } = usePlan();
   const [subscriptions, setSubscriptions] = useState([]);
   const [totalMonthly, setTotalMonthly] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -234,6 +237,7 @@ export default function SubscriptionsScreen() {
 
   return (
     <View style={styles.root}>
+      <RefreshBadge refreshing={refreshing} />
       {/* Header */}
       <View style={styles.topBar}>
         <View style={styles.topBarLeft}>
@@ -254,7 +258,8 @@ export default function SubscriptionsScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={() => { setRefreshing(true); fetchSubs(); }}
-            tintColor={COLORS.primary}
+            tintColor="transparent"
+            colors={['transparent']}
           />
         }
       >
@@ -322,9 +327,12 @@ export default function SubscriptionsScreen() {
               )}
               <TouchableOpacity
                 style={styles.sectionAddBtn}
-                onPress={() => { setBillForm(EMPTY_BILL_FORM); setBillModalVisible(true); }}
+                onPress={() => {
+                  if (!canAddBill) { showUpgrade('bills'); return; }
+                  setBillForm(EMPTY_BILL_FORM); setBillModalVisible(true);
+                }}
               >
-                <Ionicons name="add" size={14} color={COLORS.primary} />
+                <Ionicons name={canAddBill ? 'add' : 'lock-closed'} size={14} color={COLORS.primary} />
                 <Text style={styles.sectionAddText}>{t('subs.addReminder')}</Text>
               </TouchableOpacity>
             </View>
@@ -333,7 +341,10 @@ export default function SubscriptionsScreen() {
           {bills.length === 0 ? (
             <TouchableOpacity
               style={styles.billsEmpty}
-              onPress={() => { setBillForm(EMPTY_BILL_FORM); setBillModalVisible(true); }}
+              onPress={() => {
+                if (!canAddBill) { showUpgrade('bills'); return; }
+                setBillForm(EMPTY_BILL_FORM); setBillModalVisible(true);
+              }}
             >
               <Ionicons name="notifications-outline" size={20} color={COLORS.onSurfaceVariant + '60'} />
               <Text style={styles.billsEmptyText}>{t('subs.noReminders')}</Text>
