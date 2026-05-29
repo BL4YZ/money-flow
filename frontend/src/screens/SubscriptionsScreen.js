@@ -63,6 +63,11 @@ export default function SubscriptionsScreen() {
   const [billForm, setBillForm] = useState(EMPTY_BILL_FORM);
   const [savingBill, setSavingBill] = useState(false);
 
+  // Próximos cobros + detección automática
+  const [upcoming, setUpcoming] = useState([]);
+  const [detected, setDetected] = useState([]);
+  const [dismissedDetect, setDismissedDetect] = useState([]);
+
   const panY = useRef(new Animated.Value(0)).current;
   const panResponder = useRef(
     PanResponder.create({
@@ -121,10 +126,49 @@ export default function SubscriptionsScreen() {
     } catch (_) {}
   }, []);
 
+  const fetchUpcoming = useCallback(async () => {
+    try {
+      const { data } = await api.get('/subscriptions/upcoming');
+      setUpcoming(data.upcoming || []);
+    } catch (_) {}
+  }, []);
+
+  const fetchDetected = useCallback(async () => {
+    try {
+      const { data } = await api.get('/subscriptions/detect');
+      setDetected(data.candidates || []);
+    } catch (_) {}
+  }, []);
+
   useEffect(() => {
     fetchSubs();
     fetchBills();
-  }, [fetchSubs, fetchBills]);
+    fetchUpcoming();
+    fetchDetected();
+  }, [fetchSubs, fetchBills, fetchUpcoming, fetchDetected]);
+
+  // Agregar una suscripción detectada automáticamente
+  const addDetected = async (candidate) => {
+    try {
+      // Inferir el día de cobro de la última fecha detectada
+      const billing_day = candidate.lastCharge
+        ? new Date(candidate.lastCharge + 'T00:00:00').getDate()
+        : undefined;
+      const { data } = await api.post('/subscriptions', {
+        name: candidate.suggestedName,
+        amount: candidate.amount,
+        frequency: candidate.frequency,
+        billing_day,
+      });
+      setSubscriptions(prev => [data.subscription, ...prev]);
+      setTotalMonthly(prev => prev + candidate.amount);
+      setDetected(prev => prev.filter(c => c.description !== candidate.description));
+      fetchUpcoming(); // refrescar timeline con el nuevo día de cobro
+      Toast.show({ type: 'success', text1: t('subs.successSubAdded') });
+    } catch (_) {
+      Toast.show({ type: 'error', text1: t('subs.errorSave') });
+    }
+  };
 
   const saveBill = async () => {
     if (!billForm.name.trim() || !billForm.due_day) {
@@ -223,6 +267,7 @@ export default function SubscriptionsScreen() {
 
   const activeSubs = subscriptions.filter(s => s.is_active);
   const inactiveSubs = subscriptions.filter(s => !s.is_active);
+  const visibleDetected = detected.filter(c => !dismissedDetect.includes(c.description));
   const totalYearly = totalMonthly * 12;
   const animatedMonthly = useCountUp(totalMonthly, { duration: 1100, delay: 200 });
   const animatedYearly  = useCountUp(totalYearly,  { duration: 1100, delay: 300 });
@@ -301,6 +346,72 @@ export default function SubscriptionsScreen() {
             </View>
             <Text style={styles.emptyTitle}>{t('subs.noSubsYet')}</Text>
             <Text style={styles.emptyHint}>{t('subs.emptyHint')}</Text>
+          </View>
+        )}
+
+        {/* ── Suscripciones detectadas automáticamente ────────── */}
+        {visibleDetected.length > 0 && (
+          <View style={styles.detectCard}>
+            <View style={styles.detectHeader}>
+              <Ionicons name="sparkles" size={16} color={COLORS.secondary} />
+              <Text style={styles.detectTitle}>Detectamos cobros recurrentes</Text>
+            </View>
+            <Text style={styles.detectSub}>
+              Encontramos estos pagos que se repiten en tus movimientos. ¿Agregarlos?
+            </Text>
+            {visibleDetected.map((c) => (
+              <View key={c.description} style={styles.detectRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.detectName} numberOfLines={1}>{c.suggestedName}</Text>
+                  <Text style={styles.detectMeta}>
+                    ${c.amount.toLocaleString('es-UY')}/mes · {c.occurrences} cobros
+                  </Text>
+                </View>
+                <TouchableOpacity style={styles.detectAddBtn} onPress={() => addDetected(c)}>
+                  <Ionicons name="add" size={16} color={COLORS.onPrimary} />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.detectDismiss}
+                  onPress={() => setDismissedDetect(prev => [...prev, c.description])}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Ionicons name="close" size={16} color={COLORS.onSurfaceVariant} />
+                </TouchableOpacity>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* ── Próximos cobros (30 días) ───────────────────────── */}
+        {upcoming.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Próximos cobros</Text>
+            <View style={styles.upcomingCard}>
+              {upcoming.map((u, i) => (
+                <View key={u.type + u.id} style={[styles.upcomingRow, i > 0 && styles.upcomingRowBorder]}>
+                  <View style={[styles.upcomingDateBox, u.daysUntil <= 3 && styles.upcomingDateBoxSoon]}>
+                    <Text style={[styles.upcomingDay, u.daysUntil <= 3 && { color: COLORS.warning }]}>
+                      {new Date(u.date + 'T00:00:00').getDate()}
+                    </Text>
+                    <Text style={styles.upcomingMonth}>
+                      {new Date(u.date + 'T00:00:00').toLocaleDateString('es-UY', { month: 'short' })}
+                    </Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.upcomingName} numberOfLines={1}>{u.name}</Text>
+                    <Text style={styles.upcomingWhen}>
+                      {u.daysUntil === 0 ? 'Hoy' : u.daysUntil === 1 ? 'Mañana' : `En ${u.daysUntil} días`}
+                      {u.type === 'bill' ? ' · Factura' : ''}
+                    </Text>
+                  </View>
+                  {u.amount > 0 && (
+                    <Text style={styles.upcomingAmount}>
+                      ${u.amount.toLocaleString('es-UY', { maximumFractionDigits: 0 })}
+                    </Text>
+                  )}
+                </View>
+              ))}
+            </View>
           </View>
         )}
 
@@ -674,6 +785,15 @@ function SubCard({ sub, onToggle, onDelete, index = 0 }) {
             </View>
           )}
         </View>
+        {/* Alerta de subida de precio */}
+        {sub.price_alert && (
+          <View style={styles.priceAlert}>
+            <Ionicons name="trending-up" size={12} color={COLORS.warning} />
+            <Text style={styles.priceAlertText}>
+              Subió ${sub.price_alert.diff.toLocaleString('es-UY')} — ahora ${sub.price_alert.new.toLocaleString('es-UY')}
+            </Text>
+          </View>
+        )}
       </View>
 
       {/* Controls */}
@@ -720,6 +840,56 @@ const styles = StyleSheet.create({
   topBarTitle: { fontSize: 18, fontWeight: '800', color: COLORS.onSurface, letterSpacing: -0.3 },
 
   content: { paddingHorizontal: SPACING.lg },
+
+  // Detección automática
+  detectCard: {
+    backgroundColor: COLORS.secondary + '10',
+    borderRadius: RADIUS.xl,
+    borderWidth: 1, borderColor: COLORS.secondary + '30',
+    padding: SPACING.md,
+    marginBottom: SPACING.lg,
+  },
+  detectHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
+  detectTitle: { fontSize: 14, fontWeight: '700', color: COLORS.onSurface },
+  detectSub: { fontSize: 12, color: COLORS.onSurfaceVariant, marginBottom: SPACING.md, lineHeight: 17 },
+  detectRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, paddingVertical: 8 },
+  detectName: { fontSize: 14, fontWeight: '600', color: COLORS.onSurface },
+  detectMeta: { fontSize: 12, color: COLORS.onSurfaceVariant, marginTop: 2 },
+  detectAddBtn: {
+    width: 32, height: 32, borderRadius: 16,
+    backgroundColor: COLORS.primary,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  detectDismiss: {
+    width: 32, height: 32, borderRadius: 16,
+    backgroundColor: COLORS.surfaceContainerHigh,
+    alignItems: 'center', justifyContent: 'center',
+  },
+
+  // Próximos cobros
+  upcomingCard: {
+    backgroundColor: COLORS.surfaceContainer,
+    borderRadius: RADIUS.xl,
+    borderWidth: 1, borderColor: COLORS.outlineVariant + '25',
+    overflow: 'hidden',
+  },
+  upcomingRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.md, padding: SPACING.md },
+  upcomingRowBorder: { borderTopWidth: 1, borderTopColor: COLORS.outlineVariant + '20' },
+  upcomingDateBox: {
+    width: 44, height: 44, borderRadius: RADIUS.md,
+    backgroundColor: COLORS.surfaceContainerHigh,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  upcomingDateBoxSoon: { backgroundColor: COLORS.warning + '20' },
+  upcomingDay: { fontSize: 16, fontWeight: '800', color: COLORS.onSurface },
+  upcomingMonth: { fontSize: 9, color: COLORS.onSurfaceVariant, textTransform: 'uppercase' },
+  upcomingName: { fontSize: 14, fontWeight: '600', color: COLORS.onSurface },
+  upcomingWhen: { fontSize: 11, color: COLORS.onSurfaceVariant, marginTop: 2 },
+  upcomingAmount: { fontSize: 15, fontWeight: '800', color: COLORS.onSurface },
+
+  // Alerta de precio
+  priceAlert: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
+  priceAlertText: { fontSize: 11, color: COLORS.warning, fontWeight: '600' },
 
   // Hero
   hero: { marginBottom: SPACING.xl },
