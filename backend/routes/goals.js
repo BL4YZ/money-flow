@@ -15,8 +15,12 @@ function calcProjection(deposits, currentAmount, targetAmount) {
 
   const sorted = [...deposits].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
   const first = new Date(sorted[0].created_at);
-  const last  = new Date(sorted[sorted.length - 1].created_at);
-  const monthsActive = Math.max((last - first) / (1000 * 60 * 60 * 24 * 30.44), 0.1);
+  const now   = new Date();
+
+  // Tiempo desde el primer depósito hasta hoy (mínimo 1 mes completo).
+  // Usar "first → now" evita dividir por 0 cuando todos los depósitos son del mismo día.
+  // El mínimo de 1 mes da una estimación conservadora (no infla el ritmo).
+  const monthsActive = Math.max((now - first) / (1000 * 60 * 60 * 24 * 30.44), 1);
 
   const totalDeposited = deposits.reduce((s, d) => s + parseFloat(d.amount), 0);
   const avgPerMonth = totalDeposited / monthsActive;
@@ -25,13 +29,18 @@ function calcProjection(deposits, currentAmount, targetAmount) {
 
   const remaining = parseFloat(targetAmount) - parseFloat(currentAmount);
   const monthsLeft = remaining / avgPerMonth;
+
+  // Si con el ritmo actual falta menos de 1 mes pero aún queda dinero, mostrar 1 mes
+  // para evitar proyecciones absurdas cuando hay pocos depósitos recientes.
+  const monthsLeftSafe = Math.max(monthsLeft, remaining > 0 ? 0.5 : 0);
+
   const projectedDate = new Date();
-  projectedDate.setDate(projectedDate.getDate() + Math.round(monthsLeft * 30.44));
+  projectedDate.setDate(projectedDate.getDate() + Math.round(monthsLeftSafe * 30.44));
 
   return {
     status: 'ok',
     avgPerMonth: Math.round(avgPerMonth),
-    monthsLeft: Math.round(monthsLeft * 10) / 10,
+    monthsLeft: Math.round(monthsLeftSafe * 10) / 10,
     projectedDate: projectedDate.toISOString().split('T')[0],
   };
 }
