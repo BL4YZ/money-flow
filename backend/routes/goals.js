@@ -81,11 +81,47 @@ function calcMilestones(currentAmount, targetAmount) {
 
 router.get('/', async (req, res) => {
   try {
-    const result = await db.query(
+    const { rows: goals } = await db.query(
       'SELECT * FROM goals WHERE user_id = $1 ORDER BY created_at DESC',
       [req.userId]
     );
-    res.json({ goals: result.rows });
+
+    // Adjuntar insights a cada meta para que la UI los muestre sin un segundo request
+    const { rows: spending } = await db.query(
+      `SELECT
+         AVG(monthly_total) AS avg_monthly,
+         MAX(CASE WHEN month = DATE_TRUNC('month', NOW()) THEN monthly_total END) AS current_month
+       FROM (
+         SELECT DATE_TRUNC('month', date) AS month, SUM(ABS(amount)) AS monthly_total
+         FROM transactions
+         WHERE user_id = $1 AND type = 'debit' AND date >= NOW() - INTERVAL '6 months'
+         GROUP BY 1
+       ) t`,
+      [req.userId]
+    );
+    const avgMonthly   = parseFloat(spending[0]?.avg_monthly   || 0);
+    const currentMonth = parseFloat(spending[0]?.current_month || 0);
+    const savingsSurplus = avgMonthly > 0 && currentMonth < avgMonthly
+      ? Math.round(avgMonthly - currentMonth) : 0;
+
+    const goalsWithInsights = await Promise.all(goals.map(async (goal) => {
+      const { rows: deposits } = await db.query(
+        'SELECT amount, created_at FROM goal_deposits WHERE goal_id = $1 ORDER BY created_at ASC',
+        [goal.id]
+      );
+      return {
+        ...goal,
+        insights: {
+          projection:   calcProjection(deposits, goal.current_amount, goal.target_amount),
+          monthlyQuota: calcMonthlyQuota(goal.current_amount, goal.target_amount, goal.target_date),
+          streak:       calcStreak(deposits),
+          milestones:   calcMilestones(goal.current_amount, goal.target_amount),
+          savingsSurplus,
+        },
+      };
+    }));
+
+    res.json({ goals: goalsWithInsights });
   } catch (err) {
     console.error('GET /goals error:', err.message);
     res.status(500).json({ error: 'Error al obtener metas', detail: err.message });
@@ -115,7 +151,17 @@ router.post('/', [
        VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
       [req.userId, name, description, target_amount, current_amount || 0, target_date || null]
     );
-    res.status(201).json({ goal: result.rows[0] });
+    const goal = result.rows[0];
+    res.status(201).json({
+      goal: {
+        ...goal,
+        insights: {
+          projection: { status: 'no_data' },
+          monthlyQuota: calcMonthlyQuota(goal.current_amount, goal.target_amount, goal.target_date),
+          streak: 0, milestones: calcMilestones(goal.current_amount, goal.target_amount), savingsSurplus: 0,
+        },
+      },
+    });
   } catch (err) {
     console.error('POST /goals error:', err.message);
     res.status(500).json({ error: 'Error al crear meta', detail: err.message });

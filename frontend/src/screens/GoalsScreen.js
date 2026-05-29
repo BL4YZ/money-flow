@@ -259,7 +259,6 @@ export default function GoalsScreen() {
                 key={goal.id}
                 index={index}
                 goal={goal}
-                spendingByCategory={spendingByCategory}
                 onDeposit={() => setDepositModal(goal.id)}
                 onDelete={() => deleteGoal(goal.id, goal.name)}
               />
@@ -498,270 +497,130 @@ const CAT_STRATEGY = {
   Otros:        null,
 };
 
-function GoalCard({ goal, onDeposit, onDelete, index = 0, spendingByCategory = [] }) {
-  const { t } = useLanguage();
+function GoalCard({ goal, onDeposit, onDelete, index = 0 }) {
   const stagger    = useStaggerEntrance(index, { baseDelay: 80, fromY: 20 });
   const depositBtn = usePressScale(0.93);
-  const [showPlan, setShowPlan] = useState(false);
-  const [insights, setInsights] = useState(null);
-  const [loadingInsights, setLoadingInsights] = useState(false);
-  const planOpacity    = useRef(new Animated.Value(0)).current;
-  const planTranslateY = useRef(new Animated.Value(-10)).current;
 
   const current  = parseFloat(goal.current_amount);
   const target   = parseFloat(goal.target_amount);
   const progress = Math.min(current / target, 1);
   const pct      = Math.round(progress * 100);
-  const remaining = target - current;
-  const daysLeft  = goal.target_date
-    ? Math.max(0, Math.ceil((new Date(goal.target_date) - new Date()) / 86400000))
-    : null;
-  const monthlyNeeded = daysLeft && daysLeft > 0
-    ? Math.ceil(remaining / (daysLeft / 30))
-    : null;
+  const remaining = Math.max(0, target - current);
+  const ringColor = goal.is_completed ? COLORS.secondary : COLORS.primary;
 
-  const fetchInsights = useCallback(async () => {
-    if (insights || loadingInsights || goal.is_completed) return;
-    setLoadingInsights(true);
-    try {
-      const { data } = await api.get(`/goals/${goal.id}/insights`);
-      setInsights(data);
-    } catch (_) {}
-    setLoadingInsights(false);
-  }, [goal.id, insights, loadingInsights, goal.is_completed]);
+  // Insights ya vienen incluidos en el objeto goal (del backend)
+  const ins = goal.insights;
+  const proj = ins?.projection;
+  const streak = ins?.streak || 0;
+  const quota  = ins?.monthlyQuota;
+  const surplus = ins?.savingsSurplus || 0;
 
-  // Build top-3 actionable spending cuts
-  const topCuts = spendingByCategory
-    .filter(c => CAT_STRATEGY[c.category] != null && parseFloat(c.total_spent) > 0)
-    .sort((a, b) => parseFloat(b.total_spent) - parseFloat(a.total_spent))
-    .slice(0, 3)
-    .map(c => {
-      const spent    = parseFloat(c.total_spent);
-      const strategy = CAT_STRATEGY[c.category];
-      const savings  = Math.round(spent * strategy.cut);
-      const label    = `+$${savings.toLocaleString()}/mo`;
-      return { category: c.category, spent, actionKey: strategy.actionKey, savings, label };
-    })
-    .filter(c => c.savings > 0);
-
-  const totalCuts        = topCuts.reduce((s, c) => s + c.savings, 0);
-  const monthsBase       = monthlyNeeded && monthlyNeeded > 0 ? Math.ceil(remaining / monthlyNeeded) : null;
-  const monthsWithCuts   = monthlyNeeded && totalCuts > 0
-    ? Math.ceil(remaining / (monthlyNeeded + totalCuts))
-    : null;
-  const monthsFaster     = monthsBase && monthsWithCuts ? monthsBase - monthsWithCuts : null;
-
-  const canShowPlan = !goal.is_completed && (monthlyNeeded || topCuts.length > 0);
-  const ringColor   = goal.is_completed ? COLORS.secondary : COLORS.primary;
-
-  const togglePlan = () => {
-    if (!showPlan) {
-      setShowPlan(true);
-      fetchInsights(); // carga lazy de proyección, streak y surplus
-      planOpacity.setValue(0);
-      planTranslateY.setValue(-10);
-      Animated.parallel([
-        Animated.timing(planOpacity, { toValue: 1, duration: 240, useNativeDriver: true }),
-        Animated.spring(planTranslateY, { toValue: 0, damping: 20, stiffness: 300, useNativeDriver: true }),
-      ]).start();
-    } else {
-      Animated.timing(planOpacity, { toValue: 0, duration: 160, useNativeDriver: true })
-        .start(() => setShowPlan(false));
+  // Texto principal de proyección — la línea más importante de la tarjeta
+  const projText = (() => {
+    if (goal.is_completed) return null;
+    if (proj?.status === 'ok') {
+      const m = proj.monthsLeft;
+      if (m < 1)   return 'Llegás en menos de 1 mes 🎉';
+      if (m === 1) return 'Llegás en ~1 mes';
+      return `Llegás en ~${m} meses`;
     }
-  };
+    if (quota) return `Necesitás $${quota.toLocaleString('es-UY')}/mes para llegar`;
+    return null;
+  })();
+
+  // Subtext: detalle adicional
+  const subText = (() => {
+    if (goal.is_completed || !projText) return null;
+    if (proj?.status === 'ok' && quota) {
+      return `Ahorrando $${quota.toLocaleString('es-UY')}/mes llegarías antes`;
+    }
+    if (proj?.status === 'ok') {
+      return `Ritmo actual: $${proj.avgPerMonth.toLocaleString('es-UY')}/mes`;
+    }
+    return 'Hacé tu primer depósito para ver la proyección';
+  })();
 
   return (
     <Animated.View style={[styles.goalCard, goal.is_completed && styles.goalCardCompleted, stagger.style]}>
-      <View style={styles.goalCardInner}>
-        {/* Ring + milestone dots */}
+      {/* Fila superior: ring + nombre + borrar */}
+      <View style={styles.goalCardTop}>
         <View style={styles.ringContainer}>
-          <RingProgress progress={progress} size={68} stroke={5} color={ringColor} />
+          <RingProgress progress={progress} size={60} stroke={5} color={ringColor} />
           <View style={styles.ringCenter}>
             <Text style={[styles.ringPctSmall, { color: ringColor }]}>{pct}%</Text>
-            {insights?.streak > 0 && (
-              <Text style={styles.streakBadge}>🔥{insights.streak}</Text>
-            )}
           </View>
         </View>
-        {/* Milestone markers */}
-        {!goal.is_completed && (
-          <View style={styles.milestonesCol}>
-            {[25, 50, 75].map(m => (
-              <View key={m} style={[styles.milestoneDot, pct >= m && styles.milestoneDotDone]}>
-                <Text style={[styles.milestoneTxt, pct >= m && styles.milestoneTxtDone]}>{m}%</Text>
-              </View>
-            ))}
-          </View>
-        )}
 
-        {/* Info */}
         <View style={styles.goalInfo}>
           <View style={styles.goalHeaderRow}>
-            <Text style={styles.goalName} numberOfLines={1}>{goal.name}</Text>
+            <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Text style={styles.goalName} numberOfLines={1}>{goal.name}</Text>
+              {streak >= 3 && (
+                <View style={styles.streakPill}>
+                  <Text style={styles.streakPillText}>🔥 {streak}d</Text>
+                </View>
+              )}
+            </View>
             <TouchableOpacity onPress={onDelete} hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}>
-              <Ionicons name="trash-outline" size={15} color={COLORS.onSurfaceVariant + '80'} />
+              <Ionicons name="trash-outline" size={15} color={COLORS.onSurfaceVariant + '60'} />
             </TouchableOpacity>
           </View>
 
+          {/* Montos */}
           <View style={styles.goalAmounts}>
             <Text style={styles.goalCurrent}>
               ${current.toLocaleString('es-UY', { maximumFractionDigits: 0 })}
             </Text>
-            <Text style={styles.goalSep}> / </Text>
+            <Text style={styles.goalSep}> de </Text>
             <Text style={styles.goalTarget}>
               ${target.toLocaleString('es-UY', { maximumFractionDigits: 0 })}
             </Text>
           </View>
-
-          {goal.is_completed ? (
-            <View style={styles.completedBadge}>
-              <Ionicons name="checkmark-circle" size={12} color={COLORS.secondary} />
-              <Text style={styles.completedText}>{t('goals.goalReached')}</Text>
-            </View>
-          ) : (
-            <View style={styles.goalFooter}>
-              <View>
-                {monthlyNeeded && (
-                  <Text style={styles.goalHint}>{t('goals.monthlyNeeded', { amount: monthlyNeeded.toLocaleString() })}</Text>
-                )}
-                {daysLeft !== null && (
-                  <Text style={styles.goalDays}>{t('goals.daysLeft', { n: daysLeft })}</Text>
-                )}
-              </View>
-              <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
-                {canShowPlan && (
-                  <TouchableOpacity onPress={togglePlan} style={styles.planBtn}>
-                    <Ionicons
-                      name={showPlan ? 'chevron-up' : 'trending-up-outline'}
-                      size={13}
-                      color={COLORS.secondary}
-                    />
-                    <Text style={styles.planBtnText}>{showPlan ? t('goals.planLess') : t('goals.planBtn')}</Text>
-                  </TouchableOpacity>
-                )}
-                <TouchableOpacity
-                  style={styles.depositBtn}
-                  onPress={onDeposit}
-                  activeOpacity={1}
-                  onPressIn={depositBtn.onPressIn}
-                  onPressOut={depositBtn.onPressOut}
-                >
-                  <Animated.View style={[{ flexDirection: 'row', alignItems: 'center', gap: 4 }, depositBtn.style]}>
-                    <Ionicons name="add" size={14} color={COLORS.onPrimary} />
-                    <Text style={styles.depositText}>{t('common.add')}</Text>
-                  </Animated.View>
-                </TouchableOpacity>
-              </View>
-            </View>
-          )}
         </View>
       </View>
 
-      {/* ── Expandable Savings Plan ─────────────────────────── */}
-      {showPlan && (
-        <Animated.View style={[styles.planSection, { opacity: planOpacity, transform: [{ translateY: planTranslateY }] }]}>
-          <View style={styles.planDivider} />
+      {/* Barra de progreso */}
+      <View style={styles.progressTrack}>
+        <View style={[styles.progressFill, { width: `${pct}%`, backgroundColor: ringColor }]} />
+      </View>
 
-          {/* Insights inteligentes: proyección + streak + surplus */}
-          {loadingInsights && (
-            <ActivityIndicator size="small" color={COLORS.primary} style={{ marginBottom: SPACING.md }} />
-          )}
-          {insights && insights.projection?.status === 'ok' && (
-            <View style={styles.insightRow}>
-              <Ionicons name="time-outline" size={14} color={COLORS.primary} />
-              <Text style={styles.insightText}>
-                Al ritmo actual llegás en{' '}
-                <Text style={styles.insightBold}>
-                  {insights.projection.monthsLeft < 1
-                    ? 'menos de 1 mes'
-                    : `~${insights.projection.monthsLeft} meses`}
-                </Text>
-                {' '}· ${insights.projection.avgPerMonth.toLocaleString('es-UY')}/mes promedio
+      {/* Proyección — la línea más importante */}
+      {goal.is_completed ? (
+        <View style={styles.completedBadge}>
+          <Ionicons name="checkmark-circle" size={14} color={COLORS.secondary} />
+          <Text style={styles.completedText}>¡Meta alcanzada! 🎉</Text>
+        </View>
+      ) : (
+        <View style={styles.goalBottom}>
+          <View style={{ flex: 1 }}>
+            {projText ? (
+              <>
+                <Text style={styles.projText}>{projText}</Text>
+                {subText && <Text style={styles.projSub}>{subText}</Text>}
+              </>
+            ) : (
+              <Text style={styles.projSub}>Hacé tu primer depósito para ver cuándo llegás</Text>
+            )}
+            {surplus > 0 && (
+              <Text style={styles.surplusNudge}>
+                💡 Ahorrás ${surplus.toLocaleString('es-UY')} extra este mes
               </Text>
-            </View>
-          )}
-          {insights?.streak > 1 && (
-            <View style={styles.insightRow}>
-              <Text style={{ fontSize: 14 }}>🔥</Text>
-              <Text style={styles.insightText}>
-                <Text style={styles.insightBold}>{insights.streak} días</Text> seguidos depositando
-              </Text>
-            </View>
-          )}
-          {insights?.savingsSurplus > 0 && (
-            <View style={[styles.insightRow, styles.surplusRow]}>
-              <Ionicons name="trending-down" size={14} color={COLORS.secondary} />
-              <Text style={[styles.insightText, { color: COLORS.secondary }]}>
-                Gastás{' '}
-                <Text style={styles.insightBold}>
-                  ${insights.savingsSurplus.toLocaleString('es-UY')}
-                </Text>{' '}
-                menos que tu promedio este mes — ¿lo ponemos en esta meta?
-              </Text>
-            </View>
-          )}
-          {insights && (
-            <View style={styles.planDivider} />
-          )}
+            )}
+          </View>
 
-          {/* Monthly / weekly / daily targets */}
-          {monthlyNeeded && (
-            <>
-              <Text style={styles.planLabel}>{t('goals.savingsTarget')}</Text>
-              <View style={styles.planChipsRow}>
-                <View style={styles.planChip}>
-                  <Text style={styles.planChipValue}>${monthlyNeeded.toLocaleString()}</Text>
-                  <Text style={styles.planChipUnit}>{t('goals.perMonth')}</Text>
-                </View>
-                <View style={styles.planChip}>
-                  <Text style={styles.planChipValue}>${Math.ceil(monthlyNeeded / 4.33).toLocaleString()}</Text>
-                  <Text style={styles.planChipUnit}>{t('goals.perWeek')}</Text>
-                </View>
-                <View style={styles.planChip}>
-                  <Text style={styles.planChipValue}>${Math.ceil(monthlyNeeded / 30).toLocaleString()}</Text>
-                  <Text style={styles.planChipUnit}>{t('goals.perDay')}</Text>
-                </View>
-              </View>
-            </>
-          )}
-
-          {/* Category cuts */}
-          {topCuts.length > 0 && (
-            <>
-              <Text style={[styles.planLabel, { marginTop: SPACING.md }]}>{t('goals.whereToCut')}</Text>
-              {topCuts.map(cut => (
-                <View key={cut.category} style={styles.planCutRow}>
-                  <View style={styles.planCutIconBox}>
-                    <Ionicons
-                      name={CAT_ICONS[cut.category] || 'ellipsis-horizontal-circle-outline'}
-                      size={14}
-                      color={COLORS.primary}
-                    />
-                  </View>
-                  <View style={styles.planCutInfo}>
-                    <Text style={styles.planCutCat}>{cut.category}</Text>
-                    <Text style={styles.planCutAction}>{t(cut.actionKey)}</Text>
-                  </View>
-                  <Text style={styles.planCutSave}>{cut.label}</Text>
-                </View>
-              ))}
-
-              {/* Impact callout */}
-              {monthsFaster && monthsFaster > 0 && (
-                <View style={styles.planImpact}>
-                  <Ionicons name="rocket-outline" size={14} color={COLORS.secondary} />
-                  <Text style={styles.planImpactText}>
-                    <Text style={styles.planImpactBold}>{t('goals.planImpactText', { n: monthsFaster })}</Text>
-                  </Text>
-                </View>
-              )}
-            </>
-          )}
-
-          {topCuts.length === 0 && !monthlyNeeded && (
-            <Text style={styles.planEmpty}>{t('goals.planEmpty')}</Text>
-          )}
-        </Animated.View>
+          <TouchableOpacity
+            style={styles.depositBtn}
+            onPress={onDeposit}
+            activeOpacity={1}
+            onPressIn={depositBtn.onPressIn}
+            onPressOut={depositBtn.onPressOut}
+          >
+            <Animated.View style={[{ flexDirection: 'row', alignItems: 'center', gap: 4 }, depositBtn.style]}>
+              <Ionicons name="add" size={14} color={COLORS.onPrimary} />
+              <Text style={styles.depositText}>Ahorrar</Text>
+            </Animated.View>
+          </TouchableOpacity>
+        </View>
       )}
     </Animated.View>
   );
@@ -848,145 +707,55 @@ const styles = StyleSheet.create({
   goalCardCompleted: {
     borderColor: COLORS.secondary + '40',
   },
-  goalCardInner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: SPACING.md,
-    gap: SPACING.md,
-  },
-  ringContainer: { width: 68, height: 68, justifyContent: 'center', alignItems: 'center', position: 'relative' },
+  // GoalCard - nuevo layout
+  goalCardTop: { flexDirection: 'row', alignItems: 'center', padding: SPACING.md, gap: SPACING.md },
+  ringContainer: { width: 60, height: 60, justifyContent: 'center', alignItems: 'center', position: 'relative' },
   ringCenter: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center' },
   ringPctSmall: { fontSize: 11, fontWeight: '800' },
 
   goalInfo: { flex: 1 },
-  goalHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
-  goalName: { fontSize: 15, fontWeight: '700', color: COLORS.onSurface, flex: 1, marginRight: SPACING.sm },
-  goalAmounts: { flexDirection: 'row', alignItems: 'baseline', marginBottom: 6 },
-  goalCurrent: { fontSize: 17, fontWeight: '800', color: COLORS.onSurface },
+  goalHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 },
+  goalName: { fontSize: 15, fontWeight: '700', color: COLORS.onSurface },
+  goalAmounts: { flexDirection: 'row', alignItems: 'baseline' },
+  goalCurrent: { fontSize: 18, fontWeight: '800', color: COLORS.onSurface },
   goalSep: { fontSize: 13, color: COLORS.onSurfaceVariant },
   goalTarget: { fontSize: 13, color: COLORS.onSurfaceVariant },
 
-  completedBadge: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  completedText: { fontSize: 11, fontWeight: '700', color: COLORS.secondary },
+  streakPill: {
+    backgroundColor: COLORS.secondary + '20',
+    borderRadius: RADIUS.full,
+    paddingHorizontal: 7, paddingVertical: 2,
+  },
+  streakPillText: { fontSize: 10, fontWeight: '700', color: COLORS.secondary },
 
-  goalFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  goalHint: { fontSize: 11, color: COLORS.primary },
-  goalDays: { fontSize: 11, color: COLORS.onSurfaceVariant, marginTop: 1 },
+  // Barra de progreso lineal
+  progressTrack: {
+    height: 6, borderRadius: 3,
+    backgroundColor: COLORS.outlineVariant + '40',
+    marginHorizontal: SPACING.md, marginBottom: SPACING.sm,
+    overflow: 'hidden',
+  },
+  progressFill: { height: 6, borderRadius: 3 },
+
+  // Fila inferior: proyección + botón
+  goalBottom: {
+    flexDirection: 'row', alignItems: 'center', gap: SPACING.sm,
+    paddingHorizontal: SPACING.md, paddingBottom: SPACING.md,
+  },
+  projText: { fontSize: 13, fontWeight: '700', color: COLORS.primary, marginBottom: 2 },
+  projSub: { fontSize: 11, color: COLORS.onSurfaceVariant },
+  surplusNudge: { fontSize: 11, color: COLORS.secondary, marginTop: 4, fontWeight: '600' },
+
+  completedBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: SPACING.md, paddingBottom: SPACING.md },
+  completedText: { fontSize: 13, fontWeight: '700', color: COLORS.secondary },
+
   depositBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
+    flexDirection: 'row', alignItems: 'center', gap: 4,
     backgroundColor: COLORS.primaryContainer,
     borderRadius: RADIUS.full,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: 14, paddingVertical: 8,
   },
-  depositText: { fontSize: 12, fontWeight: '700', color: COLORS.onPrimary },
-
-  // Plan button (next to deposit)
-  planBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: RADIUS.full,
-    borderWidth: 1,
-    borderColor: COLORS.secondary + '50',
-    backgroundColor: COLORS.secondary + '12',
-  },
-  planBtnText: { fontSize: 12, fontWeight: '700', color: COLORS.secondary },
-
-  // Savings plan section
-  planSection: {
-    paddingHorizontal: SPACING.md,
-    paddingBottom: SPACING.md,
-  },
-  planDivider: {
-    height: 1,
-    backgroundColor: COLORS.outlineVariant + '30',
-    marginBottom: SPACING.md,
-  },
-  planLabel: {
-    fontSize: 9,
-    fontWeight: '700',
-    color: COLORS.onSurfaceVariant,
-    letterSpacing: 1.8,
-    marginBottom: SPACING.sm,
-  },
-  planChipsRow: { flexDirection: 'row', gap: SPACING.sm, marginBottom: 2 },
-  planChip: {
-    flex: 1,
-    backgroundColor: COLORS.surfaceContainerHigh,
-    borderRadius: RADIUS.lg,
-    paddingVertical: SPACING.sm,
-    paddingHorizontal: SPACING.sm,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.outlineVariant + '20',
-  },
-  planChipValue: { fontSize: 14, fontWeight: '800', color: COLORS.primary },
-  planChipUnit: { fontSize: 10, color: COLORS.onSurfaceVariant, marginTop: 1 },
-
-  // Cut rows
-  planCutRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.sm,
-    paddingVertical: 7,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.outlineVariant + '15',
-  },
-  planCutIconBox: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
-    backgroundColor: COLORS.primaryContainer + '30',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  planCutInfo: { flex: 1 },
-  planCutCat: { fontSize: 13, fontWeight: '600', color: COLORS.onSurface },
-  planCutAction: { fontSize: 11, color: COLORS.onSurfaceVariant, marginTop: 2, lineHeight: 15 },
-  planCutSave: { fontSize: 12, color: COLORS.secondary, fontWeight: '800' },
-
-  // Impact callout
-  planImpact: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.sm,
-    marginTop: SPACING.md,
-    padding: SPACING.sm,
-    backgroundColor: COLORS.secondary + '12',
-    borderRadius: RADIUS.lg,
-    borderWidth: 1,
-    borderColor: COLORS.secondary + '25',
-  },
-  planImpactText: { flex: 1, fontSize: 12, color: COLORS.onSurface, lineHeight: 17 },
-  planImpactBold: { color: COLORS.secondary, fontWeight: '800' },
-  planEmpty: { fontSize: 12, color: COLORS.onSurfaceVariant, fontStyle: 'italic', textAlign: 'center', paddingVertical: SPACING.sm },
-
-  // Milestones
-  milestonesCol: { flexDirection: 'column', gap: 6, justifyContent: 'center', paddingLeft: 6 },
-  milestoneDot: {
-    paddingHorizontal: 6, paddingVertical: 2,
-    borderRadius: RADIUS.full,
-    backgroundColor: COLORS.outlineVariant + '30',
-    borderWidth: 1, borderColor: COLORS.outlineVariant + '50',
-  },
-  milestoneDotDone: { backgroundColor: COLORS.primary + '20', borderColor: COLORS.primary + '60' },
-  milestoneTxt: { fontSize: 9, fontWeight: '700', color: COLORS.onSurfaceVariant },
-  milestoneTxtDone: { color: COLORS.primary },
-  streakBadge: { fontSize: 9, fontWeight: '700', color: COLORS.secondary, marginTop: 2 },
-
-  // Insights en plan expandido
-  insightRow: {
-    flexDirection: 'row', alignItems: 'flex-start', gap: 8,
-    marginBottom: SPACING.sm,
-  },
-  insightText: { flex: 1, fontSize: 12, color: COLORS.onSurfaceVariant, lineHeight: 18 },
-  insightBold: { fontWeight: '700', color: COLORS.onSurface },
-  surplusRow: { backgroundColor: COLORS.secondary + '10', borderRadius: RADIUS.sm, padding: SPACING.sm },
+  depositText: { fontSize: 13, fontWeight: '700', color: COLORS.onPrimary },
 
   // Add card
   addCard: {
