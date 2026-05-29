@@ -92,11 +92,11 @@ function isRelevant(queryTokens, productName) {
 
 // ─── Scraping + comparación (reutilizable por /compare y el job) ──
 
-// Busca un ítem en todas las tiendas y devuelve el mejor match por tienda
-async function scrapeItem(item) {
+// Busca un ítem en todas las tiendas (filtrado por categoría si se indica)
+async function scrapeItem(item, category = null) {
   const queryTokens = tokenize(item.name);
   const searchQuery = buildSearchQuery(item.name);
-  const products = await scrapeAll(searchQuery);
+  const products = await scrapeAll(searchQuery, null, category);
 
   // Solo productos relevantes — si nada coincide, el ítem queda sin resultados
   // (mejor mostrar "no encontrado" que precios de productos equivocados)
@@ -223,7 +223,7 @@ async function runCompareJob(jobId, items) {
       if (job.cancelled) return; // el usuario salió / vació la lista
       const item = items[idx++];
       try {
-        const ir = await scrapeItem(item);
+        const ir = await scrapeItem(item, job.category || null);
         job.itemResults.push(ir);
       } catch (err) {
         console.error(`[compare job] ${item.name}:`, err.message);
@@ -361,10 +361,13 @@ router.post('/compare/start', requirePremium, async (req, res) => {
       return res.status(400).json({ error: 'La lista está vacía' });
     }
 
+    const category = req.body.category || null; // "supermercado" | "farmacia" | "belleza" | null
+
     const jobId = crypto.randomUUID();
     jobs.set(jobId, {
       userId: req.userId,
       status: 'running',
+      category,
       items,
       itemResults: [],
       completed: 0,
@@ -374,7 +377,7 @@ router.post('/compare/start', requirePremium, async (req, res) => {
 
     runCompareJob(jobId, items); // sin await — corre en segundo plano
 
-    res.json({ jobId, totalItems: items.length });
+    res.json({ jobId, totalItems: items.length, category });
   } catch (err) {
     console.error('[shopping/compare/start]', err.message);
     res.status(500).json({ error: err.message });
