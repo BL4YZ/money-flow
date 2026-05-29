@@ -13,6 +13,7 @@ import { usePlan } from '../context/PlanContext';
 import { COLORS, SPACING, RADIUS, SHADOWS, GRADIENT } from '../theme';
 import { useEntrance, useStaggerEntrance } from '../utils/animations';
 import { useLanguage } from '../context/LanguageContext';
+import { COMMON_PRODUCTS } from '../data/products';
 
 // Loading messages are set dynamically from t() in the component
 
@@ -157,8 +158,11 @@ export default function ShoppingScreen() {
   ];
   const [loadingMsg, setLoadingMsg] = useState('');
   const [progress, setProgress] = useState(null); // { completed, total }
+  const [suggestions, setSuggestions] = useState([]); // autocompletado
   const loadingInterval = useRef(null);
   const pollRef = useRef(null); // jobId activo; sirve para cancelar el polling
+  const suggestTimer = useRef(null); // debounce de sugerencias en vivo
+  const suggestSeq = useRef(0);      // descarta respuestas viejas
 
   const headerAnim = useEntrance({ fromY: -20 });
   const inputAnim  = useEntrance({ delay: 80 });
@@ -188,9 +192,50 @@ export default function ShoppingScreen() {
     };
   }, [loadItems, cancelActiveJob]));
 
-  const addItem = async () => {
-    const name = input.trim();
+  // ─── Autocompletado: lista local al instante + tienda con debounce ──
+  const norm = (s) =>
+    s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+
+  const localSuggestions = (q) => {
+    const nq = norm(q);
+    const matches = COMMON_PRODUCTS.filter((p) => norm(p).includes(nq));
+    // primero los que empiezan con la query, luego el resto
+    matches.sort((a, b) => norm(a).startsWith(nq) === norm(b).startsWith(nq) ? 0 : norm(a).startsWith(nq) ? -1 : 1);
+    return matches.slice(0, 6);
+  };
+
+  const mergeSuggestions = (local, live) => {
+    const seen = new Set(local.map(norm));
+    const extra = live.filter((s) => !seen.has(norm(s)));
+    return [...local, ...extra].slice(0, 8);
+  };
+
+  const onChangeInput = (text) => {
+    setInput(text);
+    const q = text.trim();
+    if (q.length < 2) { setSuggestions([]); return; }
+
+    // 1) local, instantáneo
+    const local = localSuggestions(q);
+    setSuggestions(local);
+
+    // 2) en vivo desde la tienda, con debounce (300ms)
+    clearTimeout(suggestTimer.current);
+    const seq = ++suggestSeq.current;
+    suggestTimer.current = setTimeout(async () => {
+      try {
+        const { data } = await api.get('/shopping/suggest', { params: { q } });
+        if (seq !== suggestSeq.current) return; // llegó una respuesta vieja
+        setSuggestions(mergeSuggestions(local, data.suggestions || []));
+      } catch (_) {}
+    }, 300);
+  };
+
+  const addItem = async (nameArg) => {
+    const name = (typeof nameArg === 'string' ? nameArg : input).trim();
     if (!name) return;
+    setSuggestions([]);
+    suggestSeq.current++; // invalida sugerencias en vuelo
     setAdding(true);
     try {
       const { data } = await api.post('/shopping/items', { name });
@@ -311,13 +356,13 @@ export default function ShoppingScreen() {
             placeholder={t('shopping.addPlaceholder')}
             placeholderTextColor={COLORS.onSurfaceVariant + '60'}
             value={input}
-            onChangeText={setInput}
-            onSubmitEditing={addItem}
+            onChangeText={onChangeInput}
+            onSubmitEditing={() => addItem()}
             returnKeyType="done"
           />
           <TouchableOpacity
             style={[styles.addBtn, (!input.trim() || adding) && styles.addBtnDisabled]}
-            onPress={addItem}
+            onPress={() => addItem()}
             disabled={!input.trim() || adding}
           >
             {adding
@@ -326,6 +371,24 @@ export default function ShoppingScreen() {
             }
           </TouchableOpacity>
         </Animated.View>
+
+        {/* Sugerencias de autocompletado */}
+        {suggestions.length > 0 && (
+          <View style={styles.suggestBox}>
+            {suggestions.map((s, i) => (
+              <TouchableOpacity
+                key={s + i}
+                style={[styles.suggestRow, i > 0 && styles.suggestRowBorder]}
+                onPress={() => addItem(s)}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="search-outline" size={15} color={COLORS.onSurfaceVariant} />
+                <Text style={styles.suggestText} numberOfLines={1}>{s}</Text>
+                <Ionicons name="add-circle-outline" size={17} color={COLORS.primary} />
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
 
         {/* Items chips */}
         {items.length > 0 && (
@@ -476,6 +539,26 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   addBtnDisabled: { opacity: 0.4 },
+
+  // Sugerencias (autocompletado)
+  suggestBox: {
+    backgroundColor: COLORS.surfaceContainer,
+    borderRadius: RADIUS.lg,
+    borderWidth: 1,
+    borderColor: COLORS.outlineVariant,
+    marginTop: -SPACING.xs,
+    marginBottom: SPACING.md,
+    overflow: 'hidden',
+  },
+  suggestRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 12,
+  },
+  suggestRowBorder: { borderTopWidth: 1, borderTopColor: COLORS.outlineVariant + '80' },
+  suggestText: { flex: 1, color: COLORS.onSurface, fontSize: 14, textTransform: 'capitalize' },
 
   // Chips
   chipsContainer: { marginBottom: SPACING.md },

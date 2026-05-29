@@ -1,62 +1,15 @@
 const express = require("express");
-const axios = require("axios");
 const authMiddleware = require("../middleware/auth");
 const requirePremium = require("../middleware/requirePremium");
 const { scrapeAll } = require("../services/scraper");
 
 const router = express.Router();
 
-// ─── Tiendas con API VTEX abierta ────────────────────────────────
-const VTEX_STORES = [
-  {
-    id: "eldorado",
-    name: "El Dorado",
-    color: "#E63946",
-    api: "https://www.eldorado.com.uy/api/catalog_system/pub/products/search",
-    baseUrl: "https://www.eldorado.com.uy",
-  },
-];
-
-const HEADERS = {
-  "User-Agent":
-    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15",
-  Accept: "application/json",
-  "Accept-Language": "es-UY,es;q=0.9",
-};
-
-function parseVtexProducts(data, store) {
-  return data
-    .map((p) => {
-      const item = p.items?.[0];
-      if (!item) return null;
-      const offer = item.sellers?.[0]?.commertialOffer;
-      if (!offer || !offer.Price) return null;
-      return {
-        store: store.name,
-        storeId: store.id,
-        storeColor: store.color,
-        name: p.productName,
-        price: offer.Price,
-        listPrice: offer.ListPrice,
-        image: item.images?.[0]?.imageUrl || null,
-        url: `${store.baseUrl}/${p.linkText}/p`,
-        available: offer.AvailableQuantity > 0,
-      };
-    })
-    .filter(Boolean);
-}
-
-// ─── Rutas públicas ───────────────────────────────────────────────
-router.get("/auth/debug", (req, res) => {
-  res.json({
-    message: "ML OAuth deshabilitado. Usando scraping de supermercados.",
-  });
-});
-
 // ─── Rutas protegidas ─────────────────────────────────────────────
 router.use(authMiddleware);
 
 // GET /api/prices/search?q=leche&limit=10&store=disco
+// Todas las tiendas (incluida El Dorado) las maneja el scraper unificado.
 router.get("/search", requirePremium, async (req, res) => {
   const { q, limit = 15, store } = req.query;
 
@@ -67,52 +20,8 @@ router.get("/search", requirePremium, async (req, res) => {
   const query = q.trim();
 
   try {
-    let vtexItems = [];
-    let scrapedItems = [];
-
-    // 1) Lógica de Enrutamiento
-    // Detectamos si el frontend pidió una tienda específica y si esa tienda usa API o Scraper
-    const isVtexTarget = store ? VTEX_STORES.some((s) => s.id === store) : true;
-    const isScrapedTarget = store ? !isVtexTarget : true;
-
-    // 2) Tiendas con API directa (VTEX)
-    if (isVtexTarget) {
-      const targetStores = store
-        ? VTEX_STORES.filter((s) => s.id === store)
-        : VTEX_STORES;
-
-      const vtexResults = await Promise.allSettled(
-        targetStores.map((s) =>
-          axios
-            .get(s.api, {
-              params: {
-                ft: query,
-                _from: 0,
-                _to: Math.min(parseInt(limit), 20) - 1,
-              },
-              headers: HEADERS,
-              timeout: 10000,
-            })
-            .then((r) => parseVtexProducts(r.data, s)),
-        ),
-      );
-
-      vtexItems = vtexResults
-        .filter((r) => r.status === "fulfilled")
-        .flatMap((r) => r.value);
-    }
-
-    // 3) Tiendas con scraping (HTTP + cheerio)
-    if (isScrapedTarget) {
-      const storeIds = store ? [store] : null;
-      console.log(
-        `[prices] buscando "${query}" en tienda: ${store || "todas"}`,
-      );
-      scrapedItems = await scrapeAll(query, storeIds);
-    }
-
-    // 4) Combinar resultados
-    let items = [...vtexItems, ...scrapedItems];
+    console.log(`[prices] buscando "${query}" en tienda: ${store || "todas"}`);
+    let items = await scrapeAll(query, store ? [store] : null);
 
     // ─── NUEVO: Sistema de Puntuación con Regla de Sustantivo ────────
     const normalizedQuery = query
