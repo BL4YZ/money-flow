@@ -313,6 +313,35 @@ function parseMagento($, store) {
   return results.slice(0, 12);
 }
 
+// Stadium (Fenicio custom — formato de precio con punto de miles "3.990")
+function parseStadium($, store) {
+  const results = [];
+  const seenUrls = new Set();
+  // #catalogoProductos contiene solo los resultados de búsqueda reales (no carruseles ni menú)
+  const scope = $("#catalogoProductos").length ? $("#catalogoProductos") : $("body");
+  scope.find("div.cnt").each((_, el) => {
+    const $el = $(el);
+    const $link = $el.find("a.img").first();
+    const name = $link.attr("title") || "";
+    const url = $link.attr("href") || "";
+    if (!name || !url || seenUrls.has(url)) return;
+    seenUrls.add(url);
+    // Precio formato uruguayo "3.990" → 3990 (punto = separador de miles)
+    const priceText = $el.find("strong.precio .monto").first().text().trim();
+    const price = parseFloat(priceText.replace(/\./g, "").replace(",", ".") || "0");
+    if (price <= 0) return;
+    const image =
+      $el.find("img[src*=fcdn], img[src*=stadium]").first().attr("src") ||
+      $el.find("img").first().attr("src") ||
+      null;
+    results.push({
+      store: store.name, storeId: store.id, storeColor: store.color,
+      name, price, image, url, available: true,
+    });
+  });
+  return results.slice(0, 12);
+}
+
 // NopCommerce (Cosmeshop)
 function parseNopCommerce($, store) {
   const results = [];
@@ -439,6 +468,13 @@ const SCRAPE_STORES = [
     baseUrl: "https://uy.hm.com",
     searchUrl: hmSearchUrl,
     parseJson: parseHM,
+  },
+  {
+    id: "stadium", name: "Stadium", color: "#1A1A1A",
+    categories: ["ropa"],
+    baseUrl: "https://www.stadium.com.uy",
+    searchUrl: (q) => `https://www.stadium.com.uy/productos?q=${encodeURIComponent(q)}`,
+    parse: parseStadium,
   },
   // Natal: omitido — sus precios son placeholder $1 en el HTML (los carga JS).
   // Para agregar una tienda nueva: copiar un objeto, setear categories: ["id"]
