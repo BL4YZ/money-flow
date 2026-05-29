@@ -1,5 +1,6 @@
 const express = require('express');
 const crypto = require('crypto');
+const axios = require('axios');
 const { body, validationResult } = require('express-validator');
 const db = require('../db');
 const authMiddleware = require('../middleware/auth');
@@ -46,11 +47,35 @@ function buildSearchQuery(raw) {
   return tokens.length > 0 ? tokens.join(' ') : normalize(raw);
 }
 
+// Sinónimos: un token de la búsqueda matchea si el producto usa otra palabra
+// equivalente. Claves normalizadas (sin tildes). Ampliable según haga falta.
+const SYNONYMS = {
+  gaseosa: ['refresco'], refresco: ['gaseosa'],
+  papa: ['papas'], papas: ['papa'],
+  palta: ['aguacate'], aguacate: ['palta'],
+  pancho: ['salchicha', 'salchichas'], salchicha: ['pancho', 'salchichas'],
+  bidon: ['botellon'], botellon: ['bidon'],
+  fideos: ['pasta', 'pastas'], pasta: ['fideos'],
+  detergente: ['lavavajilla', 'lavavajillas'],
+  panal: ['panales'], panales: ['panal'],
+  yerba: ['yerba mate'],
+  choclo: ['maiz'], maiz: ['choclo'],
+  durazno: ['duraznos', 'melocoton'],
+  arveja: ['arvejas', 'guisantes'],
+};
+
+// ¿El token (o alguno de sus sinónimos) está en el nombre del producto?
+function tokenInProduct(token, pNorm) {
+  if (pNorm.includes(token)) return true;
+  const syns = SYNONYMS[token];
+  return syns ? syns.some((s) => pNorm.includes(s)) : false;
+}
+
 // Score 0-1: proporción de tokens de la búsqueda presentes en el nombre del producto
 function scoreRelevance(queryTokens, productName) {
   if (queryTokens.length === 0) return 0;
   const pNorm = normalize(productName);
-  const matches = queryTokens.filter((t) => pNorm.includes(t)).length;
+  const matches = queryTokens.filter((t) => tokenInProduct(t, pNorm)).length;
   return matches / queryTokens.length;
 }
 
@@ -60,8 +85,8 @@ const RELEVANCE_THRESHOLD = 0.5;
 function isRelevant(queryTokens, productName) {
   if (queryTokens.length === 0) return true;
   const pNorm = normalize(productName);
-  // El primer token es el sustantivo principal y DEBE estar presente
-  if (!pNorm.includes(queryTokens[0])) return false;
+  // El primer token es el sustantivo principal y DEBE estar presente (o un sinónimo)
+  if (!tokenInProduct(queryTokens[0], pNorm)) return false;
   return scoreRelevance(queryTokens, productName) >= RELEVANCE_THRESHOLD;
 }
 
@@ -287,6 +312,37 @@ router.delete('/items/:id', async (req, res) => {
     res.json({ deleted: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── Autocompletado (sugerencias en vivo) ─────────────────────────
+// Términos de búsqueda desde el Intelligent Search de VTEX (El Dorado).
+// No es premium: es solo ayuda para escribir. Falla suave (el front usa
+// además su lista local).
+const SUGGEST_URL = (q) =>
+  `https://www.eldorado.com.uy/api/io/_v/api/intelligent-search/search_suggestions?query=${encodeURIComponent(q)}`;
+const suggestCache = new Map();
+
+router.get('/suggest', async (req, res) => {
+  const q = (req.query.q || '').trim().toLowerCase();
+  if (q.length < 2) return res.json({ suggestions: [] });
+
+  const cached = suggestCache.get(q);
+  if (cached && Date.now() < cached.exp) {
+    return res.json({ suggestions: cached.data });
+  }
+
+  try {
+    const r = await axios.get(SUGGEST_URL(q), {
+      headers: { 'User-Agent': 'Mozilla/5.0', Accept: 'application/json' },
+      timeout: 5000,
+    });
+    const terms = (r.data?.searches || []).map((s) => s.term).filter(Boolean);
+    const suggestions = [...new Set(terms)].slice(0, 8);
+    suggestCache.set(q, { data: suggestions, exp: Date.now() + 5 * 60 * 1000 });
+    res.json({ suggestions });
+  } catch (err) {
+    res.json({ suggestions: [] });
   }
 });
 
