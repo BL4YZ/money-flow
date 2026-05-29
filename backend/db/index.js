@@ -60,6 +60,9 @@ async function initSchema() {
       ALTER TABLE users ADD COLUMN IF NOT EXISTS plan VARCHAR(20) NOT NULL DEFAULT 'free';
       ALTER TABLE users ADD COLUMN IF NOT EXISTS plan_expires_at TIMESTAMPTZ;
 
+      -- Día del mes en que se cobra la suscripción (para próximos cobros)
+      ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS billing_day INTEGER;
+
       CREATE TABLE IF NOT EXISTS bills (
         id            SERIAL PRIMARY KEY,
         user_id       UUID NOT NULL,
