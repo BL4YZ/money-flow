@@ -1,17 +1,28 @@
 const express = require("express");
 const authMiddleware = require("../middleware/auth");
 const requirePremium = require("../middleware/requirePremium");
-const { scrapeAll } = require("../services/scraper");
+const { scrapeAll, SCRAPE_STORES, CATEGORIES } = require("../services/scraper");
 
 const router = express.Router();
 
 // ─── Rutas protegidas ─────────────────────────────────────────────
 router.use(authMiddleware);
 
-// GET /api/prices/search?q=leche&limit=10&store=disco
+// GET /api/prices/categories — lista de categorías con sus tiendas
+router.get("/categories", (req, res) => {
+  const cats = CATEGORIES.map((cat) => ({
+    ...cat,
+    stores: SCRAPE_STORES
+      .filter((s) => s.categories.includes(cat.id))
+      .map((s) => ({ id: s.id, name: s.name, color: s.color })),
+  }));
+  res.json({ categories: cats });
+});
+
+// GET /api/prices/search?q=leche&limit=10&store=disco&category=supermercado
 // Todas las tiendas (incluida El Dorado) las maneja el scraper unificado.
 router.get("/search", requirePremium, async (req, res) => {
-  const { q, limit = 15, store } = req.query;
+  const { q, limit = 15, store, category } = req.query;
 
   if (!q || q.trim().length < 2) {
     return res.status(400).json({ error: "Búsqueda demasiado corta" });
@@ -20,8 +31,8 @@ router.get("/search", requirePremium, async (req, res) => {
   const query = q.trim();
 
   try {
-    console.log(`[prices] buscando "${query}" en tienda: ${store || "todas"}`);
-    let items = await scrapeAll(query, store ? [store] : null);
+    console.log(`[prices] buscando "${query}" cat:${category||"todas"} tienda:${store||"todas"}`);
+    let items = await scrapeAll(query, store ? [store] : null, category || null);
 
     // ─── NUEVO: Sistema de Puntuación con Regla de Sustantivo ────────
     const normalizedQuery = query

@@ -159,6 +159,7 @@ export default function ShoppingScreen() {
   const [loadingMsg, setLoadingMsg] = useState('');
   const [progress, setProgress] = useState(null); // { completed, total }
   const [suggestions, setSuggestions] = useState([]); // autocompletado
+  const [category, setCategory] = useState(null); // filtro de categoría
   const loadingInterval = useRef(null);
   const pollRef = useRef(null); // jobId activo; sirve para cancelar el polling
   const suggestTimer = useRef(null); // debounce de sugerencias en vivo
@@ -277,7 +278,7 @@ export default function ShoppingScreen() {
 
     try {
       // 1) Arrancamos el job en el backend (responde al instante)
-      const { data: start } = await api.post('/shopping/compare/start');
+      const { data: start } = await api.post('/shopping/compare/start', { category: category || undefined });
       const jobId = start.jobId;
       pollRef.current = jobId;
 
@@ -406,6 +407,31 @@ export default function ShoppingScreen() {
             <TouchableOpacity style={styles.clearBtn} onPress={clearList}>
               <Text style={styles.clearBtnText}>{t('shopping.clearList')}</Text>
             </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Filtro de categoría (solo cuando hay ítems en la lista) */}
+        {items.length > 0 && !comparing && (
+          <View style={styles.categoryRow}>
+            {[
+              { id: null,           label: 'Todo',     icon: 'globe-outline' },
+              { id: 'supermercado', label: 'Super',    icon: 'cart-outline' },
+              { id: 'farmacia',     label: 'Farmacia', icon: 'medical-outline' },
+              { id: 'belleza',      label: 'Belleza',  icon: 'sparkles-outline' },
+            ].map((cat) => {
+              const active = category === cat.id;
+              return (
+                <TouchableOpacity
+                  key={String(cat.id)}
+                  style={[styles.catChip, active && styles.catChipActive]}
+                  onPress={() => setCategory(cat.id)}
+                  activeOpacity={0.75}
+                >
+                  <Ionicons name={cat.icon} size={13} color={active ? COLORS.onPrimary : COLORS.onSurfaceVariant} />
+                  <Text style={[styles.catChipLabel, active && styles.catChipLabelActive]}>{cat.label}</Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
         )}
 
@@ -539,6 +565,19 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   addBtnDisabled: { opacity: 0.4 },
+
+  // Chips de categoría (Shopping)
+  categoryRow: { flexDirection: 'row', gap: SPACING.sm, marginBottom: SPACING.md, flexWrap: 'wrap' },
+  catChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    backgroundColor: COLORS.surfaceContainer,
+    borderRadius: RADIUS.full,
+    paddingHorizontal: 12, paddingVertical: 7,
+    borderWidth: 1, borderColor: COLORS.outlineVariant,
+  },
+  catChipActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
+  catChipLabel: { fontSize: 12, fontWeight: '600', color: COLORS.onSurfaceVariant },
+  catChipLabelActive: { color: COLORS.onPrimary },
 
   // Sugerencias (autocompletado)
   suggestBox: {

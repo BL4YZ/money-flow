@@ -299,99 +299,96 @@ function parseNopCommerce($, store) {
   return results.slice(0, 12);
 }
 
-// ─── Definición de tiendas (todas HTTP + cheerio, sin navegador) ──
+// ─── Categorías disponibles ───────────────────────────────────────
+// Cada tienda declara a qué categorías pertenece. Una tienda puede estar
+// en más de una (ej: El Túnel vende tanto farmacia como belleza).
+// Agregar una tienda nueva = un objeto en SCRAPE_STORES con su categoría.
+const CATEGORIES = [
+  { id: "supermercado", label: "Supermercado", icon: "cart-outline" },
+  { id: "farmacia",     label: "Farmacia",     icon: "medical-outline" },
+  { id: "belleza",      label: "Belleza",       icon: "sparkles-outline" },
+];
+
+// ─── Definición de tiendas ────────────────────────────────────────
 const SCRAPE_STORES = [
-  // ── El Dorado (API VTEX, JSON directo — la fuente más rápida) ──
+  // ── Supermercados ─────────────────────────────────────────────
   {
-    id: "eldorado",
-    name: "El Dorado",
-    color: "#FFC400",
+    id: "eldorado", name: "El Dorado", color: "#FFC400",
+    categories: ["supermercado"],
     baseUrl: "https://www.eldorado.com.uy",
     searchUrl: (q) =>
       `https://www.eldorado.com.uy/api/io/_v/api/intelligent-search/product_search/?query=${encodeURIComponent(q)}`,
     parseJson: parseVtex,
   },
-  // ── Tata (GraphQL Faststore, JSON directo) ─────────────────────
   {
-    id: "tata",
-    name: "Tata",
-    color: "#E4002B",
+    id: "tata", name: "Tata", color: "#E4002B",
+    categories: ["supermercado"],
     baseUrl: "https://www.tata.com.uy",
     searchUrl: tataSearchUrl,
     parseJson: parseTata,
   },
-  // ── Tienda Inglesa (GeneXus, GET + parse HTML embebido) ─────────
   {
-    id: "tiendainglesa",
-    name: "Tienda Inglesa",
-    color: "#006DB7",
+    id: "tiendainglesa", name: "Tienda Inglesa", color: "#006DB7",
+    categories: ["supermercado"],
     baseUrl: "https://www.tiendainglesa.com.uy",
-    scrape: scrapeTiendaInglesa, // función propia, no usa parseJson ni parse
+    scrape: scrapeTiendaInglesa,
   },
-  // ── Cencosud ───────────────────────────────────────────────────
   {
-    id: "disco",
-    name: "Disco",
-    color: "#009B3A",
+    id: "disco", name: "Disco", color: "#009B3A",
+    categories: ["supermercado"],
     baseUrl: "https://www.disco.com.uy",
     searchUrl: (q) => `https://www.disco.com.uy/productos/keyword/${encodeURIComponent(q)}`,
     parse: parseCencosud,
   },
   {
-    id: "geant",
-    name: "Géant",
-    color: "#E63946",
+    id: "geant", name: "Géant", color: "#E63946",
+    categories: ["supermercado"],
     baseUrl: "https://www.geant.com.uy",
     searchUrl: (q) => `https://www.geant.com.uy/productos/keyword/${encodeURIComponent(q)}`,
     parse: parseCencosud,
   },
   {
-    id: "devoto",
-    name: "Devoto",
-    color: "#F4A623",
+    id: "devoto", name: "Devoto", color: "#F4A623",
+    categories: ["supermercado"],
     baseUrl: "https://www.devoto.com.uy",
     searchUrl: (q) => `https://www.devoto.com.uy/productos/keyword/${encodeURIComponent(q)}`,
     parse: parseCencosud,
   },
-  // ── Fenicio (farmacias/perfumerías) ────────────────────────────
+  // ── Farmacia / Belleza ─────────────────────────────────────────
+  // El Túnel y San Roque venden tanto farmacia como belleza/perfumería.
   {
-    id: "eltunel",
-    name: "El Túnel",
-    color: "#1A6FBF",
+    id: "eltunel", name: "El Túnel", color: "#1A6FBF",
+    categories: ["farmacia", "belleza"],
     baseUrl: "https://eltunel.com.uy",
     searchUrl: (q) => `https://eltunel.com.uy/catalogo?q=${encodeURIComponent(q)}`,
     parse: parseFenicio,
   },
   {
-    id: "sanroque",
-    name: "San Roque",
-    color: "#1B5E20",
+    id: "sanroque", name: "San Roque", color: "#1B5E20",
+    categories: ["farmacia", "belleza"],
     baseUrl: "https://www.sanroque.com.uy",
     searchUrl: (q) => `https://www.sanroque.com.uy/catalogo?q=${encodeURIComponent(q)}`,
     parse: parseFenicio,
   },
-  // ── Farmashop (Magento) ────────────────────────────────────────
   {
-    id: "farmashop",
-    name: "Farmashop",
-    color: "#F57C00",
+    id: "farmashop", name: "Farmashop", color: "#F57C00",
+    categories: ["farmacia"],
     baseUrl: "https://tienda.farmashop.com.uy",
     searchUrl: (q) =>
       `https://tienda.farmashop.com.uy/catalogsearch/result/?q=${encodeURIComponent(q)}`,
     parse: parseMagento,
   },
-  // ── Cosmeshop (NopCommerce) ────────────────────────────────────
   {
-    id: "cosmeshop",
-    name: "Cosmeshop",
-    color: "#9C27B0",
+    id: "cosmeshop", name: "Cosmeshop", color: "#9C27B0",
+    categories: ["belleza"],
     baseUrl: "https://www.cosmeshop.com.uy",
     searchUrl: (q) =>
       `https://www.cosmeshop.com.uy/filterSearch?q=${encodeURIComponent(q)}`,
     parse: parseNopCommerce,
   },
-  // Natal: omitido — su HTML sirve los precios como placeholder "$1" (los carga
-  // JS aparte), así que por HTTP daría precios falsos.
+  // Natal: omitido — sus precios son placeholder $1 en el HTML (los carga JS).
+  // Para agregar una tienda nueva: copiar un objeto, setear categories: ["id"]
+  // y el parser correspondiente. El resto del sistema lo toma automáticamente.
 ];
 
 // ─── Scraper (axios + cheerio) ────────────────────────────────────
@@ -426,10 +423,10 @@ async function scrapeStore(store, query) {
   }
 }
 
-async function scrapeAll(query, storeIds = null) {
-  const stores = storeIds
-    ? SCRAPE_STORES.filter((s) => storeIds.includes(s.id))
-    : SCRAPE_STORES;
+async function scrapeAll(query, storeIds = null, category = null) {
+  let stores = SCRAPE_STORES;
+  if (storeIds)  stores = stores.filter((s) => storeIds.includes(s.id));
+  if (category)  stores = stores.filter((s) => s.categories.includes(category));
 
   // Todas en paralelo: son fetch HTTP livianos, sin navegador ni límite de RAM.
   const settled = await Promise.allSettled(
@@ -443,4 +440,4 @@ async function scrapeAll(query, storeIds = null) {
   return results;
 }
 
-module.exports = { scrapeAll, scrapeStore, SCRAPE_STORES };
+module.exports = { scrapeAll, scrapeStore, SCRAPE_STORES, CATEGORIES };

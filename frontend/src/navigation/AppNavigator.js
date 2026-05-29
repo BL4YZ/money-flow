@@ -18,6 +18,7 @@ import SubscriptionsScreen from '../screens/SubscriptionsScreen';
 import GoalsScreen from '../screens/GoalsScreen';
 import SuggestionsScreen from '../screens/SuggestionsScreen';
 import ShoppingScreen from '../screens/ShoppingScreen';
+import SearchScreen from '../screens/SearchScreen';
 import PaywallScreen from '../screens/PaywallScreen';
 
 const Stack = createNativeStackNavigator();
@@ -49,10 +50,10 @@ const TABS = [
     icon: (focused) => focused ? 'repeat' : 'repeat-outline',
   },
   {
-    name: 'Sugerencias',
-    label: 'Advice',
-    component: SuggestionsScreen,
-    icon: (focused) => focused ? 'sparkles' : 'sparkles-outline',
+    name: 'Buscar',
+    label: 'Search',
+    component: SearchScreen,
+    icon: (focused) => focused ? 'search' : 'search-outline',
   },
   {
     name: 'Compras',
@@ -158,6 +159,7 @@ export default function AppNavigator() {
           {user ? (
             <>
               <Stack.Screen name="Main" component={MainTabs} />
+              <Stack.Screen name="Sugerencias" component={SuggestionsScreen} />
               <Stack.Screen
                 name="Paywall"
                 component={PaywallScreen}
