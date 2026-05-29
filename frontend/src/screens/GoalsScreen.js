@@ -137,7 +137,9 @@ export default function GoalsScreen() {
   };
 
   const addDeposit = async () => {
-    const amount = parseFloat(depositAmount);
+    // Normalizar formato UY: "3.000" (punto = miles) → 3000
+    const normalized = depositAmount.trim().replace(/\./g, '').replace(',', '.');
+    const amount = parseFloat(normalized);
     if (!amount || amount <= 0) return Toast.show({ type: 'error', text1: t('goals.errorAmount') });
 
     try {

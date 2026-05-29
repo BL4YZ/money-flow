@@ -230,6 +230,13 @@ router.post('/:id/deposits', [
       [goal.id, req.userId, amount, note || null]
     );
 
+    // Crear transacción de egreso para que descuente del ingreso disponible y del dashboard
+    await db.query(
+      `INSERT INTO transactions (user_id, date, description, amount, type, category, source, goal_id)
+       VALUES ($1, CURRENT_DATE, $2, $3, 'debit', 'Ahorro', 'manual', $4)`,
+      [req.userId, `Ahorro: ${goal.name}`, parseFloat(amount), goal.id]
+    );
+
     // Actualizar current_amount en la meta
     const newAmount = parseFloat(goal.current_amount) + parseFloat(amount);
     const isCompleted = newAmount >= parseFloat(goal.target_amount);
