@@ -119,6 +119,51 @@ async function scrapeTiendaInglesa(store, query, cacheKey) {
   }
 }
 
+// ─── Parser H&M UY (Faststore + persisted queries) ───────────────
+// ClientManyProductsQuery devuelve name, offers.lowPrice, image[], slug.
+// operationHash extraído del bundle JS (cambia solo con deployments de H&M).
+const HM_OP   = "ClientManyProductsQuery";
+const HM_HASH = "4f5957f4f69009ee8ccf8772e603bd5cda5b333f";
+
+function hmSearchUrl(q) {
+  const variables = {
+    first: 18,
+    after: "0",
+    sort: "score_desc",
+    term: q,
+    selectedFacets: [
+      { key: "fuzzy",    value: "0" },
+      { key: "operator", value: "and" },
+      { key: "channel",  value: JSON.stringify({ salesChannel: 1, regionId: "" }) },
+      { key: "locale",   value: "es-UY" },
+    ],
+    sponsoredCount: 0,
+  };
+  return `https://uy.hm.com/api/graphql?operationName=${HM_OP}&operationHash=${HM_HASH}&variables=${encodeURIComponent(JSON.stringify(variables))}`;
+}
+
+function parseHM(data, store) {
+  const edges = data?.data?.search?.products?.edges || [];
+  return edges
+    .map(({ node }) => {
+      const price = node.offers?.lowPrice;
+      if (!node.name || !price || price <= 0) return null;
+      return {
+        store: store.name,
+        storeId: store.id,
+        storeColor: store.color,
+        name: node.isVariantOf?.name || node.name,
+        price,
+        listPrice: node.offers?.offers?.[0]?.listPrice || null,
+        image: node.image?.[0]?.url || null,
+        url: `${store.baseUrl}/${node.slug}/p`,
+        available: /InStock/i.test(node.offers?.offers?.[0]?.availability || ""),
+      };
+    })
+    .filter(Boolean)
+    .slice(0, 12);
+}
+
 // ─── Parser Tata (GraphQL Faststore, JSON) ───────────────────────
 // Su API /api/graphql usa operationName + variables (sin persisted hash),
 // así que se llama directo. El regionId/salesChannel fijan la región de precios.
@@ -307,6 +352,7 @@ const CATEGORIES = [
   { id: "supermercado", label: "Supermercado", icon: "cart-outline" },
   { id: "farmacia",     label: "Farmacia",     icon: "medical-outline" },
   { id: "belleza",      label: "Belleza",       icon: "sparkles-outline" },
+  { id: "ropa",         label: "Ropa",          icon: "shirt-outline" },
 ];
 
 // ─── Definición de tiendas ────────────────────────────────────────
@@ -385,6 +431,14 @@ const SCRAPE_STORES = [
     searchUrl: (q) =>
       `https://www.cosmeshop.com.uy/filterSearch?q=${encodeURIComponent(q)}`,
     parse: parseNopCommerce,
+  },
+  // ── Ropa ───────────────────────────────────────────────────────
+  {
+    id: "hm", name: "H&M", color: "#E50010",
+    categories: ["ropa"],
+    baseUrl: "https://uy.hm.com",
+    searchUrl: hmSearchUrl,
+    parseJson: parseHM,
   },
   // Natal: omitido — sus precios son placeholder $1 en el HTML (los carga JS).
   // Para agregar una tienda nueva: copiar un objeto, setear categories: ["id"]
