@@ -72,6 +72,19 @@ async function initSchema() {
         created_at    TIMESTAMP DEFAULT NOW()
       );
 
+      -- Historial de depósitos por meta (para proyección, cuota y streak)
+      CREATE TABLE IF NOT EXISTS goal_deposits (
+        id         SERIAL PRIMARY KEY,
+        goal_id    UUID NOT NULL,
+        user_id    UUID NOT NULL,
+        amount     NUMERIC(12,2) NOT NULL CHECK (amount > 0),
+        note       VARCHAR(200),
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      -- Vinculación de transacciones a metas (para auto-acreditar)
+      ALTER TABLE transactions ADD COLUMN IF NOT EXISTS goal_id UUID;
+
       CREATE TABLE IF NOT EXISTS budgets (
         id           SERIAL PRIMARY KEY,
         user_id      UUID NOT NULL,

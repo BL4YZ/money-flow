@@ -140,18 +140,13 @@ export default function GoalsScreen() {
     const amount = parseFloat(depositAmount);
     if (!amount || amount <= 0) return Toast.show({ type: 'error', text1: t('goals.errorAmount') });
 
-    const goal = goals.find(g => g.id === depositModal);
-    const newAmount = parseFloat(goal.current_amount) + amount;
-
     try {
-      const { data } = await api.patch(`/goals/${depositModal}`, {
-        current_amount: newAmount,
-        is_completed: newAmount >= parseFloat(goal.target_amount),
-      });
+      // Usa el nuevo endpoint que registra historial + actualiza current_amount
+      const { data } = await api.post(`/goals/${depositModal}/deposits`, { amount });
       setGoals(prev => prev.map(g => g.id === depositModal ? data.goal : g));
       setDepositModal(null);
       setDepositAmount('');
-      if (newAmount >= parseFloat(goal.target_amount)) {
+      if (data.completed) {
         Toast.show({ type: 'success', text1: t('goals.successGoalReached') });
       } else {
         Toast.show({ type: 'success', text1: t('goals.successDeposit', { amount: amount.toLocaleString() }) });
@@ -508,6 +503,8 @@ function GoalCard({ goal, onDeposit, onDelete, index = 0, spendingByCategory = [
   const stagger    = useStaggerEntrance(index, { baseDelay: 80, fromY: 20 });
   const depositBtn = usePressScale(0.93);
   const [showPlan, setShowPlan] = useState(false);
+  const [insights, setInsights] = useState(null);
+  const [loadingInsights, setLoadingInsights] = useState(false);
   const planOpacity    = useRef(new Animated.Value(0)).current;
   const planTranslateY = useRef(new Animated.Value(-10)).current;
 
@@ -522,6 +519,16 @@ function GoalCard({ goal, onDeposit, onDelete, index = 0, spendingByCategory = [
   const monthlyNeeded = daysLeft && daysLeft > 0
     ? Math.ceil(remaining / (daysLeft / 30))
     : null;
+
+  const fetchInsights = useCallback(async () => {
+    if (insights || loadingInsights || goal.is_completed) return;
+    setLoadingInsights(true);
+    try {
+      const { data } = await api.get(`/goals/${goal.id}/insights`);
+      setInsights(data);
+    } catch (_) {}
+    setLoadingInsights(false);
+  }, [goal.id, insights, loadingInsights, goal.is_completed]);
 
   // Build top-3 actionable spending cuts
   const topCuts = spendingByCategory
@@ -550,6 +557,7 @@ function GoalCard({ goal, onDeposit, onDelete, index = 0, spendingByCategory = [
   const togglePlan = () => {
     if (!showPlan) {
       setShowPlan(true);
+      fetchInsights(); // carga lazy de proyección, streak y surplus
       planOpacity.setValue(0);
       planTranslateY.setValue(-10);
       Animated.parallel([
@@ -565,13 +573,26 @@ function GoalCard({ goal, onDeposit, onDelete, index = 0, spendingByCategory = [
   return (
     <Animated.View style={[styles.goalCard, goal.is_completed && styles.goalCardCompleted, stagger.style]}>
       <View style={styles.goalCardInner}>
-        {/* Ring */}
+        {/* Ring + milestone dots */}
         <View style={styles.ringContainer}>
           <RingProgress progress={progress} size={68} stroke={5} color={ringColor} />
           <View style={styles.ringCenter}>
             <Text style={[styles.ringPctSmall, { color: ringColor }]}>{pct}%</Text>
+            {insights?.streak > 0 && (
+              <Text style={styles.streakBadge}>🔥{insights.streak}</Text>
+            )}
           </View>
         </View>
+        {/* Milestone markers */}
+        {!goal.is_completed && (
+          <View style={styles.milestonesCol}>
+            {[25, 50, 75].map(m => (
+              <View key={m} style={[styles.milestoneDot, pct >= m && styles.milestoneDotDone]}>
+                <Text style={[styles.milestoneTxt, pct >= m && styles.milestoneTxtDone]}>{m}%</Text>
+              </View>
+            ))}
+          </View>
+        )}
 
         {/* Info */}
         <View style={styles.goalInfo}>
@@ -640,6 +661,48 @@ function GoalCard({ goal, onDeposit, onDelete, index = 0, spendingByCategory = [
       {showPlan && (
         <Animated.View style={[styles.planSection, { opacity: planOpacity, transform: [{ translateY: planTranslateY }] }]}>
           <View style={styles.planDivider} />
+
+          {/* Insights inteligentes: proyección + streak + surplus */}
+          {loadingInsights && (
+            <ActivityIndicator size="small" color={COLORS.primary} style={{ marginBottom: SPACING.md }} />
+          )}
+          {insights && insights.projection?.status === 'ok' && (
+            <View style={styles.insightRow}>
+              <Ionicons name="time-outline" size={14} color={COLORS.primary} />
+              <Text style={styles.insightText}>
+                Al ritmo actual llegás en{' '}
+                <Text style={styles.insightBold}>
+                  {insights.projection.monthsLeft < 1
+                    ? 'menos de 1 mes'
+                    : `~${insights.projection.monthsLeft} meses`}
+                </Text>
+                {' '}· ${insights.projection.avgPerMonth.toLocaleString('es-UY')}/mes promedio
+              </Text>
+            </View>
+          )}
+          {insights?.streak > 1 && (
+            <View style={styles.insightRow}>
+              <Text style={{ fontSize: 14 }}>🔥</Text>
+              <Text style={styles.insightText}>
+                <Text style={styles.insightBold}>{insights.streak} días</Text> seguidos depositando
+              </Text>
+            </View>
+          )}
+          {insights?.savingsSurplus > 0 && (
+            <View style={[styles.insightRow, styles.surplusRow]}>
+              <Ionicons name="trending-down" size={14} color={COLORS.secondary} />
+              <Text style={[styles.insightText, { color: COLORS.secondary }]}>
+                Gastás{' '}
+                <Text style={styles.insightBold}>
+                  ${insights.savingsSurplus.toLocaleString('es-UY')}
+                </Text>{' '}
+                menos que tu promedio este mes — ¿lo ponemos en esta meta?
+              </Text>
+            </View>
+          )}
+          {insights && (
+            <View style={styles.planDivider} />
+          )}
 
           {/* Monthly / weekly / daily targets */}
           {monthlyNeeded && (
@@ -902,6 +965,28 @@ const styles = StyleSheet.create({
   planImpactText: { flex: 1, fontSize: 12, color: COLORS.onSurface, lineHeight: 17 },
   planImpactBold: { color: COLORS.secondary, fontWeight: '800' },
   planEmpty: { fontSize: 12, color: COLORS.onSurfaceVariant, fontStyle: 'italic', textAlign: 'center', paddingVertical: SPACING.sm },
+
+  // Milestones
+  milestonesCol: { flexDirection: 'column', gap: 6, justifyContent: 'center', paddingLeft: 6 },
+  milestoneDot: {
+    paddingHorizontal: 6, paddingVertical: 2,
+    borderRadius: RADIUS.full,
+    backgroundColor: COLORS.outlineVariant + '30',
+    borderWidth: 1, borderColor: COLORS.outlineVariant + '50',
+  },
+  milestoneDotDone: { backgroundColor: COLORS.primary + '20', borderColor: COLORS.primary + '60' },
+  milestoneTxt: { fontSize: 9, fontWeight: '700', color: COLORS.onSurfaceVariant },
+  milestoneTxtDone: { color: COLORS.primary },
+  streakBadge: { fontSize: 9, fontWeight: '700', color: COLORS.secondary, marginTop: 2 },
+
+  // Insights en plan expandido
+  insightRow: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 8,
+    marginBottom: SPACING.sm,
+  },
+  insightText: { flex: 1, fontSize: 12, color: COLORS.onSurfaceVariant, lineHeight: 18 },
+  insightBold: { fontWeight: '700', color: COLORS.onSurface },
+  surplusRow: { backgroundColor: COLORS.secondary + '10', borderRadius: RADIUS.sm, padding: SPACING.sm },
 
   // Add card
   addCard: {
