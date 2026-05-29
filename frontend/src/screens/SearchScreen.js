@@ -17,6 +17,7 @@ const CATEGORIES = [
   { id: 'supermercado', label: 'Super',         icon: 'cart-outline' },
   { id: 'farmacia',     label: 'Farmacia',      icon: 'medical-outline' },
   { id: 'belleza',      label: 'Belleza',       icon: 'sparkles-outline' },
+  { id: 'ropa',         label: 'Ropa',          icon: 'shirt-outline' },
 ];
 
 function ResultCard({ item, index }) {
