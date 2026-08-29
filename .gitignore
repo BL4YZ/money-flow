@@ -15,3 +15,8 @@ web-build/
 # OS
 .DS_Store
 Thumbs.db
+
+# Claude Code local state — settings.local.json can accumulate captured
+# command text (including secrets pasted into ad-hoc curl/test commands
+# during a session) and must never be committed.
+.claude/
