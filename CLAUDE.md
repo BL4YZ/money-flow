@@ -1,0 +1,112 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+**Maintenance rule: keep this file current.** Whenever you make a structural change — a new route, a new table, a changed auth/premium rule, a new external integration, a deployment change — update the relevant section of this file in the same session, before ending your turn. This file exists so future sessions don't have to re-read the whole codebase; letting it drift defeats that purpose.
+
+## What this is
+
+MoneyFlow is a personal-finance mobile app for the Uruguayan market (Spanish/es-UY, currency UYU). Users upload bank statement PDFs (OCR-parsed), track spending by category, detect and manage recurring subscriptions, set savings goals, compare supermarket prices across Uruguayan retailers, and get AI-generated savings suggestions. Monetized via a free/premium split (RevenueCat for real purchases — not yet fully wired, see "Premium plan system" below).
+
+Two independent apps in one repo, deployed separately:
+- `backend/` — Node/Express REST API, deployed to **Render** (production: `https://money-flow-co41.onrender.com`). Postgres via Supabase.
+- `frontend/` — React Native / Expo (SDK 54) mobile app.
+
+## Commands
+
+**Backend** (`cd backend`):
+- `npm run dev` — start with nodemon (auto-restart)
+- `npm start` — start with `node --dns-result-order=ipv4first server.js` (the IPv4 flag matters — see "Database connection" below)
+- `node scripts/verify-security-fixes.js [baseUrl]` — E2E smoke test (registers a disposable user, tests webhook auth, premium gating, hybrid-encryption upload, IDOR, then cleans up everything it created including tables with no FK cascade). Defaults to `http://localhost:3000`; pass a URL to point at Render instead. Requires `DATABASE_URL` to be reachable.
+- No lint/typecheck/test-suite scripts exist in this backend. There is no Jest/Mocha config — the verify script above is the only automated check.
+
+**Frontend** (`cd frontend`):
+- `npm start` — Expo dev server (Metro). Use `npm start -- --clear` after touching native-module-adjacent code (expo-crypto, expo-file-system) or after changing dependency versions — stale Metro cache is a common source of confusing "module not found" errors.
+- `npm run android` / `npm run ios` / `npm run web` — same, targeting a specific platform directly.
+- Keep Expo package versions aligned with the SDK: run `npx expo install --check` before adding/upgrading any `expo-*` package, and `npx expo install <pkg>` (not plain `npm install`) to install one at the SDK-compatible version. A mismatch here fails silently until a native module lookup throws at runtime deep in some screen (e.g. `expo-crypto` was previously pinned to `55.0.14` on an SDK 54 project — should have been `~15.0.9` — which crashed with "cannot find native module ExpoCryptoAES" only when the upload screen's encryption path first ran expo-crypto's code).
+- `react-native-purchases` (RevenueCat) requires a native module not present in Expo Go — expect it to fall back to the mock in `services/purchases.js` unless running a custom dev client / production build.
+
+## Architecture
+
+### Backend request flow
+
+`server.js` wires up: CORS (allowlist, see Security below) → JSON/urlencoded body parsing (15mb limit) → global rate limiter (100 req/15min/IP) → per-route mounting under `/api/*`. Every route file (`routes/*.js`) does `router.use(authMiddleware)` near the top except `routes/webhooks.js` (RevenueCat calls it, no user session exists) — auth is JWT bearer, verified in `middleware/auth.js`, decoding to `req.userId`. There is no session/cookie auth anywhere.
+
+**Authorization model — read this before adding any query.** There is no database-level authorization. Row Level Security is `ENABLE`d on `transactions`, `subscriptions`, and `goals` in `db/schema.sql`, but **no RLS policies are defined for them**, and the backend connects via `DATABASE_URL`'s pooler role, which bypasses RLS entirely (it's not going through Supabase's PostgREST/anon-key layer where RLS would normally apply). RLS is therefore decorative and enforces nothing on this connection. **The only real authorization boundary is `WHERE user_id = $1` (or an equivalent ownership subquery) hand-written in every query.** Every new query that touches a per-user resource must include this filter explicitly — there is no safety net if you forget it.
+
+Premium gating is a second, separate middleware: `middleware/requirePremium.js`, which re-queries `users.plan`/`plan_expires_at` per-request (not cached) and returns `403 {error: 'premium_required'}` if not active premium.
+
+### Data model
+
+Tables in `db/schema.sql` (users, transactions, subscriptions, goals) have proper `REFERENCES users(id) ON DELETE CASCADE`. Tables created ad-hoc in `db/index.js`'s `initSchema()` (`bills`, `goal_deposits`, `budgets`, `shopping_lists`, `shopping_items`) do **not** have FK constraints back to `users` at all — deleting a user leaves orphaned rows in those tables. Any code that deletes a user (there is currently no account-deletion endpoint) must manually clean up `bills`, `goal_deposits`, `budgets`, `shopping_lists`/`shopping_items` — see the cleanup block in `scripts/verify-security-fixes.js` for the exact query set.
+
+`initSchema()` runs on every server boot (`ALTER TABLE ... ADD COLUMN IF NOT EXISTS`, `CREATE TABLE IF NOT EXISTS`) — it's the migration mechanism. There is no separate migration tool/history; schema changes are made by editing `initSchema()` (idempotent DDL) or `schema.sql` (initial bootstrap, run manually once in Supabase's SQL editor) and letting the next boot apply it.
+
+`shopping_items.list_id` and `goal_deposits.goal_id` are the only "second-hop" ownership cases — a query filtering by `list_id`/`goal_id` alone is not enough; it must also verify that list/goal belongs to `req.userId` (see `routes/shopping.js`'s `DELETE /items/:id` for the correct pattern: `list_id IN (SELECT id FROM shopping_lists WHERE user_id = $2)`).
+
+### Upload pipeline (hybrid encryption + OCR)
+
+This is the most non-obvious subsystem — read fully before touching `routes/upload.js`, `services/uploadKeys.js`, or `frontend/src/utils/encryption.js`.
+
+1. Client (`frontend/src/utils/encryption.js`) generates a random AES-256 key + IV using `expo-crypto.getRandomBytesAsync` (a real CSPRNG) — **not** `crypto-js`'s or `node-forge`'s own random functions, both of which silently fall back to weak entropy (or throw) in bare React Native with no `global.crypto` polyfill.
+2. It encrypts the file (AES-256-CBC via `crypto-js`) and separately encrypts the AES key itself with the server's RSA-2048 public key (RSA-OAEP/SHA-256 via `node-forge`), fetched once per session from `GET /api/upload/public-key`.
+3. It POSTs `{ encryptedData, encryptedKey, iv, mimeType, filename }` to `POST /api/upload`.
+4. Server (`services/uploadKeys.js`) holds the RSA private key (env var `UPLOAD_RSA_PRIVATE_KEY_B64`, base64-encoded PKCS1 PEM) and is the only thing that can recover the AES key (`crypto.privateDecrypt` with OAEP padding). This means a logged/leaked request body alone is not decryptable — a deliberate improvement over the previous scheme, which sent the raw AES key in the same request as the ciphertext (defeating the point of encrypting at all). **Do not revert to sending a raw/hex AES key in the request** — the server explicitly rejects that old payload shape (`{ key, iv }` without `encryptedKey`) with `400 Payload cifrado requerido`.
+5. After decryption, `services/ocrParser.js` extracts text via `pdf-parse@1.1.4` (deliberately pinned old — see Known Issues) and `parseTransactions()` tries three bank-statement-format parsers in order (BROU, Santander, generic) until one yields >2 matches.
+6. Parsed transactions are inserted (`ON CONFLICT DO NOTHING` dedup by date+description+amount) and run through `subscriptionDetector.js` to auto-create subscription rows.
+
+### Premium plan system
+
+Two independent signals decide `isPremium`, reconciled client-side in `frontend/src/context/PlanContext.js`:
+- **DB-driven**: `users.plan` / `users.plan_expires_at`, set by (a) `POST /api/webhooks/revenuecat` (real purchases, see below) or (b) `POST /api/dev/simulate-premium` (dev-only, see Security).
+- **RevenueCat-driven**: `react-native-purchases` SDK's `CustomerInfo`, checked directly on-device. Takes priority over the DB value once loaded (`rcPremium !== null ? rcPremium : dbPremium`).
+
+**Current real-world state: RevenueCat is not actually configured.** `frontend/src/services/purchases.js` has literal placeholder API keys (`RC_API_KEY_IOS = 'REPLACE_WITH_REVENUECAT_IOS_KEY'`) — the SDK init is skipped whenever the key still starts with `REPLACE_WITH`, so `isAvailable()` effectively stays mock-mode in practice until real keys are dropped in. Until then, premium status is driven entirely by the DB path (webhook + dev routes). Don't assume RevenueCat purchases work end-to-end without checking this file first.
+
+Feature flags derived from `isPremium` live in `PlanContext.buildFlags()` — add new gated features there, not ad-hoc checks scattered through screens.
+
+### External integrations
+
+- **Supabase**: used purely as managed Postgres (via `pg.Pool` + `DATABASE_URL`, pooler mode, port 6543). Not using Supabase Auth, Storage, or the JS client — `SUPABASE_URL`/`SUPABASE_ANON_KEY` in `.env` are currently unused by the backend code.
+- **RevenueCat**: webhook (`routes/webhooks.js`) + client SDK (see above, not yet live).
+- **Anthropic API** (`routes/suggestions.js`): `claude-haiku-4-5-20251001`, premium-only, analyzes 3 months of spending + subscriptions + goals, asked to return strict JSON. `formatSpendingForClaude` builds the prompt context from the user's own data only.
+- **Grocery/retail scraper** (`services/scraper.js`, used by `routes/prices.js` and `routes/shopping.js`): scrapes Uruguayan retailers (Disco/Devoto/Géant via one mechanism, Tienda Inglesa via HTML scraping, El Dorado via its VTEX JSON API) for price comparison. In-memory cache, 30min TTL. `routes/shopping.js`'s `/compare/start` + `/compare/status/:jobId` is an async job pattern (in-memory `jobs` Map, not persisted — job state is lost on server restart) to avoid blocking on slow scrapes; `/compare` (no `/start`) is the older synchronous version kept for backward compat.
+- **Expo Push**: `services/billNotifier.js` runs a daily cron (09:00 America/Montevideo, via `node-cron`) sending bill-due reminders through Expo's push API. `routes/pushToken.js` registers the device token.
+
+### Frontend structure
+
+`AppNavigator.js` is the single source of truth for screen wiring: a stack (`Login` vs `Main`+`Sugerencias`+`Paywall`, switched on `useAuth().user`) wrapping a custom-drawn floating bottom tab bar (not the default `@react-navigation/bottom-tabs` chrome — see `FloatingTabBar`/`FloatingTabItem`). `AuthContext` owns the JWT lifecycle (`expo-secure-store`, **not** AsyncStorage — keep it that way, this is deliberate for token security) and fires `registerPushToken()` + `initPurchases()` on login/register/resume. `PlanContext` (above) must be inside `NavigationContainer` since some of its consumers navigate to `Paywall`.
+
+`src/api/client.js`'s `BASE_URL` is a hardcoded string toggled by commenting/uncommenting between a local LAN IP and the Render production URL — there is no env-based switching. **Check which one is active before assuming why auth/network calls fail in dev.**
+
+## Security posture (as of the last audit/fix pass)
+
+- JWT: HS256, symmetric secret (`JWT_SECRET`), 7-day expiry by default. `jsonwebtoken`'s default `verify()` restricts accepted algorithms to HS* when given a plain string secret, so no `alg:none`/algorithm-confusion risk.
+- `POST /api/webhooks/revenuecat` **fails closed**: returns `503` if `REVENUECAT_WEBHOOK_SECRET` isn't set (never silently accepts unauthenticated requests), `401` via timing-safe comparison on mismatch. This must be set in **every** environment (local `.env`, Render, and Railway if that's ever fixed) — there is no "it's fine in dev" exemption baked into the code.
+- `routes/dev.js` (simulate-premium/simulate-free) mounts only when `NODE_ENV === 'development'` (allowlist, not `!== 'production'` blocklist) — deliberately fails safe if the env var is ever missing/misspelled in a real deployment.
+- CORS is an explicit origin allowlist (`ALLOWED_ORIGINS` env, comma-separated). Requests with no `Origin` header (native app, curl, server-to-server webhooks) always pass — this is a mobile app authenticated via Bearer token, not cookies, so CORS isn't a CSRF boundary here, just a hardening measure against browser-based abuse of public endpoints.
+- Upload encryption: see "Upload pipeline" above — real hybrid RSA+AES, not theater.
+- Body size limit: 15mb (was 50mb — lowered as a DoS-surface reduction; if a legitimate use case needs bigger payloads, raise deliberately, don't just revert).
+- Known **unresolved** finding: `services/ocrParser.js` depends on `pdf-parse@1.1.4`, which bundles a pdf.js from ~2016. It fails ("bad XRef entry" / "Invalid PDF structure") on PDFs produced by modern generators (confirmed with both a hand-built minimal PDF and `pdfkit` output) — reproducible independent of anything upload-encryption-related. Untested whether real bank-issued statement PDFs trigger this; if users report upload parsing failures, check this first before assuming it's an encryption regression.
+
+## Deployment
+
+- **Render** (`https://money-flow-co41.onrender.com`) is the real, live production backend. Root Directory = `backend`, Build Command = `npm install`, Start Command from `package.json`'s `start` script. Required env vars: `DATABASE_URL`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `NODE_ENV=production`, `REVENUECAT_WEBHOOK_SECRET`, `UPLOAD_RSA_PRIVATE_KEY_B64`, `ANTHROPIC_API_KEY`, `MERCADOLIBRE_SITE`, `ALLOWED_ORIGINS` (optional). Auto-deploys on push to `main`.
+- **Railway** (project "satisfied-encouragement") is also connected to this repo's `main` branch but has had **every single build fail for 4+ months** — it was never configured with a Root Directory, so its build system (Railpack) scans the monorepo root, finds no recognizable app, and aborts before even reaching `npm install`. As of the last check it's unused/abandoned; don't assume it serves anything. If it's ever revived, it needs the same Root Directory (`backend`) + env vars as Render.
+- The DB (Supabase free tier) auto-pauses after inactivity — a `db/index.js` connection error like `(ENOTFOUND) tenant/user ... not found` with DNS resolving fine usually means the project is paused (resume it from the Supabase dashboard) or the pooler host/region in `DATABASE_URL` is stale (re-copy it from Supabase → Project Settings → Database → Connection Pooling).
+
+## Environment variables (backend `.env`)
+
+| Var | Purpose |
+|---|---|
+| `DATABASE_URL` | Supabase Postgres, pooler mode (port 6543), format `postgresql://postgres.<ref>:<pw>@<pooler-host>:6543/postgres` |
+| `JWT_SECRET` / `JWT_EXPIRES_IN` | Auth token signing |
+| `REVENUECAT_WEBHOOK_SECRET` | Required everywhere — webhook fails closed without it |
+| `UPLOAD_RSA_PRIVATE_KEY_B64` | Base64 PKCS1 PEM, backs the hybrid-encryption upload flow |
+| `ALLOWED_ORIGINS` | CORS allowlist, comma-separated; empty is fine (native app sends no Origin) |
+| `ANTHROPIC_API_KEY` | Powers `/api/suggestions` |
+| `SUPABASE_URL` / `SUPABASE_ANON_KEY` | Present but currently unused by backend code (no Supabase client/Auth/Storage usage) |
+| `MERCADOLIBRE_SITE` | Used by scraper/price-comparison config |
+| `NODE_ENV` | Must be exactly `production` in prod (gates dev routes) or `development` locally |
+
+`backend/.env.example` documents generation commands for the secrets above — always regenerate example placeholders there when adding a new required var, so a fresh clone doesn't silently fall back to an insecure default.
