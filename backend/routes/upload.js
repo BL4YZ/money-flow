@@ -6,24 +6,41 @@ const requirePremium = require('../middleware/requirePremium');
 const { extractTextFromPDF, parseTransactions } = require('../services/ocrParser');
 const { detectSubscriptions } = require('../services/subscriptionDetector');
 const { categorize } = require('../services/categorizer');
+const { getPublicKeyPem, decryptAesKey } = require('../services/uploadKeys');
 
 const router = express.Router();
 router.use(authMiddleware);
 
+// ─── GET /api/upload/public-key ────────────────────────────────
+// RSA-2048 public key used by the client to encrypt the AES key before
+// sending it (hybrid encryption). This is public data by design — safe
+// to expose to any authenticated client.
+router.get('/public-key', (req, res) => {
+  try {
+    res.json({ publicKey: getPublicKeyPem() });
+  } catch (err) {
+    console.error('[upload] public-key error:', err.message);
+    res.status(500).json({ error: 'Servicio de cifrado no disponible' });
+  }
+});
+
 // ─── POST /api/upload ─────────────────────────────────────────
-// Accepts an AES-256-CBC encrypted JSON payload from the client.
-// The file never leaves the device in plaintext — decryption happens
+// Hybrid encryption: the client encrypts the file with a fresh AES-256
+// key (AES-256-CBC), then encrypts that key with the server's RSA public
+// key (OAEP/SHA-256) so the AES key travels protected even if the request
+// body itself is ever logged or intercepted somewhere along the way —
+// only this server's private key can recover it. Decryption happens
 // in-process and the key is discarded immediately after use.
 router.post('/', requirePremium, async (req, res) => {
-  const { encryptedData, key, iv, mimeType, filename } = req.body || {};
+  const { encryptedData, encryptedKey, iv, mimeType, filename } = req.body || {};
 
-  if (!encryptedData || !key || !iv) {
+  if (!encryptedData || !encryptedKey || !iv) {
     return res.status(400).json({ error: 'Payload cifrado requerido' });
   }
 
   try {
-    // 1. Decrypt: AES-256-CBC → base64 string of original file
-    const keyBuffer = Buffer.from(key, 'hex');
+    // 1. Recover the AES key (RSA-OAEP) then decrypt: AES-256-CBC → base64 string of original file
+    const keyBuffer = decryptAesKey(encryptedKey);
     const ivBuffer  = Buffer.from(iv, 'hex');
 
     // encryptedData is a Base64-encoded OpenSSL-compatible ciphertext (CryptoJS format)
@@ -116,8 +133,9 @@ router.post('/', requirePremium, async (req, res) => {
 
   } catch (err) {
     console.error('Upload error:', err);
-    // Wrong key/IV → decipher throws "bad decrypt"
-    if (err.message.includes('bad decrypt') || err.message.includes('wrong final block length')) {
+    // Wrong key/IV, or corrupted/mismatched RSA-encrypted key → decrypt throws
+    const decryptErrors = ['bad decrypt', 'wrong final block length', 'oaep', 'decoding error'];
+    if (decryptErrors.some(m => err.message.toLowerCase().includes(m))) {
       return res.status(400).json({ error: 'Error al descifrar el archivo' });
     }
     res.status(500).json({ error: 'Error procesando el archivo: ' + err.message });

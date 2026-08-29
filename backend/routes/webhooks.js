@@ -7,7 +7,23 @@ const router = express.Router();
 // ─── RevenueCat Webhook Secret ────────────────────────────────────────────
 // Set this in your environment: REVENUECAT_WEBHOOK_SECRET=your_secret_here
 // Get it from: RevenueCat dashboard → Project → Integrations → Webhooks
+//
+// SECURITY: this secret is mandatory. Without it, anyone could POST here
+// and grant themselves (or anyone) premium for free — fail closed, never open.
 const RC_SECRET = process.env.REVENUECAT_WEBHOOK_SECRET;
+if (!RC_SECRET) {
+  console.error(
+    '[webhook] FATAL: REVENUECAT_WEBHOOK_SECRET no está configurado. ' +
+    'El endpoint /api/webhooks/revenuecat rechazará todas las peticiones hasta que se configure.'
+  );
+}
+
+function timingSafeEqual(a, b) {
+  const bufA = Buffer.from(String(a));
+  const bufB = Buffer.from(String(b));
+  if (bufA.length !== bufB.length) return false;
+  return crypto.timingSafeEqual(bufA, bufB);
+}
 
 // Events that grant premium access
 const PREMIUM_EVENTS = new Set([
@@ -33,13 +49,15 @@ const REVOKE_EVENTS = new Set([
  * We verify it, then update the user's plan in our DB.
  */
 router.post('/revenuecat', express.json(), async (req, res) => {
-  // 1. Verify secret (if configured)
-  if (RC_SECRET) {
-    const authHeader = req.headers['authorization'];
-    if (authHeader !== RC_SECRET) {
-      console.warn('[webhook] Invalid RevenueCat secret');
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
+  // 1. Verify secret — fail closed if it's not configured server-side.
+  if (!RC_SECRET) {
+    console.error('[webhook] Rejected: REVENUECAT_WEBHOOK_SECRET no configurado');
+    return res.status(503).json({ error: 'Webhook not configured' });
+  }
+  const authHeader = req.headers['authorization'];
+  if (!authHeader || !timingSafeEqual(authHeader, RC_SECRET)) {
+    console.warn('[webhook] Invalid RevenueCat secret');
+    return res.status(401).json({ error: 'Unauthorized' });
   }
 
   const event = req.body?.event;

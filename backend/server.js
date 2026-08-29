@@ -56,9 +56,31 @@ const PORT = process.env.PORT || 3000;
 
 app.set('trust proxy', 1); // Render está detrás de un proxy
 
-app.use(cors());
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+// ── CORS ───────────────────────────────────────────────────────
+// La app es un cliente móvil (Expo/React Native) autenticado con Bearer
+// JWT, no con cookies — no depende de CORS para su propio funcionamiento
+// (los requests nativos no envían Origin). Restringimos igual el acceso
+// basado en navegador a un allowlist explícito, para no dejar la API
+// abierta a que cualquier página web haga requests desde el browser del
+// visitante. Sin ALLOWED_ORIGINS configurado, no se permite ningún origin
+// de navegador (fail closed), pero clientes sin Origin (apps nativas, curl,
+// webhooks) siguen funcionando normalmente.
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
+  .split(',')
+  .map((o) => o.trim())
+  .filter(Boolean);
+
+app.use(cors({
+  origin(origin, callback) {
+    if (!origin) return callback(null, true); // apps nativas / curl / server-to-server
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    const err = new Error('Not allowed by CORS');
+    err.status = 403;
+    callback(err);
+  },
+}));
+app.use(express.json({ limit: '15mb' }));
+app.use(express.urlencoded({ extended: true, limit: '15mb' }));
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -99,11 +121,13 @@ app.use('/api/shopping', shoppingRoute);
 app.use('/api/push-token', pushTokenRoute);
 app.use('/api/webhooks', webhooksRoute);
 
-// DEV only — never in production
-if (process.env.NODE_ENV !== 'production') {
+// DEV only — allowlist explícito en vez de blocklist: si NODE_ENV falta o
+// tiene un valor inesperado en producción, estas rutas quedan deshabilitadas
+// por defecto en lugar de expuestas por accidente.
+if (process.env.NODE_ENV === 'development') {
   const devRoute = require('./routes/dev');
   app.use('/api/dev', devRoute);
-  console.log('dev routes enabled (non-production)');
+  console.log('dev routes enabled (NODE_ENV=development)');
 }
 
 app.get('/health', (req, res) => {
