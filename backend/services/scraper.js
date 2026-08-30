@@ -382,6 +382,7 @@ const CATEGORIES = [
   { id: "farmacia",     label: "Farmacia",     icon: "medical-outline" },
   { id: "belleza",      label: "Belleza",       icon: "sparkles-outline" },
   { id: "ropa",         label: "Ropa",          icon: "shirt-outline" },
+  { id: "hogar",        label: "Hogar y Tecnología", icon: "tv-outline" },
 ];
 
 // ─── Definición de tiendas ────────────────────────────────────────
@@ -389,7 +390,8 @@ const SCRAPE_STORES = [
   // ── Supermercados ─────────────────────────────────────────────
   {
     id: "eldorado", name: "El Dorado", color: "#FFC400",
-    categories: ["supermercado"],
+    // Catálogo unificado: también trae electrodomésticos/tecnología, no solo víveres.
+    categories: ["supermercado", "hogar"],
     baseUrl: "https://www.eldorado.com.uy",
     searchUrl: (q) =>
       `https://www.eldorado.com.uy/api/io/_v/api/intelligent-search/product_search/?query=${encodeURIComponent(q)}`,
@@ -397,7 +399,8 @@ const SCRAPE_STORES = [
   },
   {
     id: "tata", name: "Tata", color: "#E4002B",
-    categories: ["supermercado"],
+    // Incluye la sección Multiahorro (hogar/electro) en el mismo catálogo VTEX.
+    categories: ["supermercado", "hogar"],
     baseUrl: "https://www.tata.com.uy",
     searchUrl: tataSearchUrl,
     parseJson: parseTata,
@@ -410,21 +413,22 @@ const SCRAPE_STORES = [
   },
   {
     id: "disco", name: "Disco", color: "#009B3A",
-    categories: ["supermercado"],
+    // Catálogo unificado: también trae electrodomésticos/tecnología, no solo víveres.
+    categories: ["supermercado", "hogar"],
     baseUrl: "https://www.disco.com.uy",
     searchUrl: (q) => `https://www.disco.com.uy/productos/keyword/${encodeURIComponent(q)}`,
     parse: parseCencosud,
   },
   {
     id: "geant", name: "Géant", color: "#E63946",
-    categories: ["supermercado"],
+    categories: ["supermercado", "hogar"],
     baseUrl: "https://www.geant.com.uy",
     searchUrl: (q) => `https://www.geant.com.uy/productos/keyword/${encodeURIComponent(q)}`,
     parse: parseCencosud,
   },
   {
     id: "devoto", name: "Devoto", color: "#F4A623",
-    categories: ["supermercado"],
+    categories: ["supermercado", "hogar"],
     baseUrl: "https://www.devoto.com.uy",
     searchUrl: (q) => `https://www.devoto.com.uy/productos/keyword/${encodeURIComponent(q)}`,
     parse: parseCencosud,
