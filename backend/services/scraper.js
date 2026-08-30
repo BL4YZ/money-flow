@@ -432,8 +432,11 @@ function parseSublime($, store) {
     const href = $link.attr("href") || "";
     const url = href.startsWith("http") ? href : store.baseUrl + href;
 
+    // El entero trae punto como separador de miles a partir de 4 cifras
+    // (ej. "1.999" = 1999) — hay que quitarlo antes de concatenar con los
+    // decimales, si no "1.999" + "." + "00" da 1.999 en vez de 1999.
     const $priceBlock = $el.find(".precio_cont").first();
-    const entero = $priceBlock.find(".pprecio").first().text().trim();
+    const entero = $priceBlock.find(".pprecio").first().text().trim().replace(/\./g, "");
     const decimales = $priceBlock.find(".pdeci").first().text().replace(",", "").trim();
     const price = parseFloat(`${entero}.${decimales || "00"}`) || 0;
     if (!name || price <= 0) return;
