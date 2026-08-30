@@ -100,12 +100,15 @@ async function scrapeTiendaInglesa(store, query, cacheKey) {
       else if (html[end] === "]" || html[end] === "}") { depth--; if (depth === 0) break; }
     }
     const products = JSON.parse(html.slice(arrStart, end + 1));
-    const results = products
+    let results = products
       .filter((p) => !p.NotForSaleFlag && !p.IsSoldout)
       .map((p) => {
         const price = parseFloat((p.Price || "").replace(/[^0-9]/g, "") || "0");
         if (!p.Name || price <= 0) return null;
         const code = String(p.Code || p.Id || "").padStart(6, "0");
+        // Catálogo mixto: víveres traen CurrencySymbol "$" (pesos),
+        // electrodomésticos "U$S" (dólares) — confirmado por producto.
+        const isUSD = p.CurrencySymbol === "U$S" || /U\$S/i.test(p.Price || "");
         return {
           store: store.name,
           storeId: store.id,
@@ -115,10 +118,13 @@ async function scrapeTiendaInglesa(store, query, cacheKey) {
           image: p.DefaultPicture?.Medium || null,
           url: `${store.baseUrl}/supermercado/producto/${code}`,
           available: true,
+          ...(isUSD ? { currency: "USD" } : {}),
         };
       })
       .filter(Boolean)
       .slice(0, 12);
+
+    results = await convertResultsToUyu(results);
 
     console.log(`[scraper] ${store.name}: ${results.length} productos`);
     setCache(cacheKey, results);
@@ -236,6 +242,12 @@ function parseCencosud($, store) {
     const price = parsePrice($el.find(".desc-prices .val").first().text());
     if (price <= 0) return;
 
+    // Catálogo mixto: víveres en "$" (pesos), electrodomésticos en "U$S"
+    // (dólares) — el mismo listado puede traer ambos, hay que chequear por
+    // producto, no asumir la moneda a nivel tienda.
+    const monText = $el.find(".desc-prices .mon").first().text();
+    const isUSD = /U\$S/i.test(monText);
+
     const image = $el.find("figure img").attr("src") || null;
 
     results.push({
@@ -247,6 +259,7 @@ function parseCencosud($, store) {
       image,
       url,
       available: true,
+      ...(isUSD ? { currency: "USD" } : {}),
     });
   });
   return results.slice(0, 12);
@@ -412,6 +425,7 @@ function parseZonaTecno($, store) {
       image,
       url,
       available: true,
+      currency: "USD",
     });
   });
   return results.slice(0, 12);
@@ -452,6 +466,7 @@ function parseSublime($, store) {
       image,
       url,
       available: true,
+      currency: "USD",
     });
   });
   return results.slice(0, 12);
@@ -488,6 +503,7 @@ function parseWooCommerce($, store) {
       image,
       url,
       available: true,
+      currency: "USD",
     });
   });
   return results.slice(0, 12);
@@ -652,26 +668,32 @@ const SCRAPE_STORES = [
   },
 ];
 
-// Convierte `price` (originalmente en USD) a su equivalente en UYU usando
-// la cotización oficial del BCU, preservando el valor original en
-// `originalPrice`/`currency` para mostrarlo en la UI. El resto del sistema
-// (sorts, sumas, min/max/avg en /api/prices) sigue leyendo `price` como
-// siempre — ahora comparable entre tiendas sin importar la moneda de origen.
+// Convierte `price` a su equivalente en UYU para todo ítem que el parser
+// haya marcado con `currency: "USD"`, usando la cotización oficial del BCU.
+// Es POR PRODUCTO, no por tienda: Disco/Géant/Devoto/Tienda Inglesa mezclan
+// víveres en pesos con electrodomésticos en dólares dentro del mismo
+// catálogo (confirmado en vivo — ej. un TV a "U$S 419" junto a leche a "$
+// 89" en el mismo listado), así que no alcanza con un flag a nivel tienda.
+// El valor original queda en `originalPrice` para mostrarlo en la UI; el
+// resto del sistema (sorts, sumas, min/max/avg en /api/prices) sigue
+// leyendo `price` como siempre — ahora comparable sin importar la moneda.
 async function convertResultsToUyu(results) {
-  if (results.length === 0) return results;
+  const usdItems = results.filter((r) => r.currency === "USD");
+  if (usdItems.length === 0) return results;
+
   let rate;
   try {
     rate = await getUsdToUyuRate();
   } catch (err) {
-    console.error("[scraper] no se pudo obtener la cotización BCU, se omiten estos resultados:", err.message);
-    return [];
+    console.error("[scraper] no se pudo obtener la cotización BCU, se omiten los productos en USD:", err.message);
+    return results.filter((r) => r.currency !== "USD"); // mejor omitir que mostrar un precio sin convertir
   }
-  return results.map((r) => ({
-    ...r,
-    originalPrice: r.price,
-    currency: "USD",
-    price: convertUsdToUyu(r.price, rate),
-  }));
+
+  return results.map((r) =>
+    r.currency === "USD"
+      ? { ...r, originalPrice: r.price, price: convertUsdToUyu(r.price, rate) }
+      : r
+  );
 }
 
 // ─── Scraper (axios + cheerio) ────────────────────────────────────
@@ -706,7 +728,7 @@ async function scrapeStore(store, query) {
       ? store.parseJson(JSON.parse(body), store)
       : store.parse(cheerio.load(body), store);
 
-    if (store.currency === "USD") results = await convertResultsToUyu(results);
+    results = await convertResultsToUyu(results);
 
     console.log(`[scraper] ${store.name}: ${results.length} productos`);
     setCache(cacheKey, results);
