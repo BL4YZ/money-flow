@@ -126,6 +126,9 @@ function ItemResult({ result, index }) {
         <View style={[styles.storeColorDot, { backgroundColor: result.cheapest.storeColor, width: 8, height: 8 }]} />
         <Text style={styles.itemResultStore}>{result.cheapest.store}</Text>
         <Text style={styles.itemResultProductName} numberOfLines={1}>· {result.cheapest.name}</Text>
+        {result.cheapest.currency === 'USD' && (
+          <Text style={styles.itemResultProductName}>· US$ {result.cheapest.originalPrice.toLocaleString('es-UY')}</Text>
+        )}
       </View>
       {result.options.length > 1 && (
         <View style={styles.itemResultOtherStores}>

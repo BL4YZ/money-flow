@@ -1,5 +1,6 @@
 const axios = require("axios");
 const cheerio = require("cheerio");
+const { getUsdToUyuRate, convertUsdToUyu } = require("./exchangeRate");
 
 // Cache en memoria: { key: { data, expiresAt } }
 const cache = new Map();
@@ -32,6 +33,15 @@ function parsePrice(text) {
     .replace(/[^\d.,]/g, "")
     .replace(/\./g, "")
     .replace(",", ".");
+  return parseFloat(s) || 0;
+}
+
+// Precio en formato americano: coma = miles, punto = decimal (las tiendas de
+// tecnología en Uruguay suelen cotizar en USD con este formato).
+// "US$1,530.00" → 1530 | "862.00" → 862
+function parsePriceUSD(text) {
+  if (!text) return 0;
+  const s = text.replace(/[^\d.,]/g, "").replace(/,/g, "");
   return parseFloat(s) || 0;
 }
 
@@ -373,6 +383,113 @@ function parseNopCommerce($, store) {
   return results.slice(0, 12);
 }
 
+// Fenicio — ZonaTecno (tema propio, distinto al de El Túnel/San Roque: el
+// precio real vive en ".precio.venta .monto", no solo ".precios .monto",
+// porque hay un segundo ".monto" anidado con el precio-con-descuento
+// condicional que no queremos tomar).
+function parseZonaTecno($, store) {
+  const results = [];
+  $(".info").each((_, el) => {
+    const $el = $(el);
+    const $name = $el.find("a.tit");
+    if (!$name.length) return;
+
+    const name = $name.attr("title") || $name.find("h3").text().trim() || "";
+    const url = $name.attr("href") || "";
+    const price = parsePrice($el.find(".precios .precio.venta .monto").first().text());
+    if (!name || price <= 0) return;
+
+    // La imagen está dentro del <a> hermano justo antes de .info, no dentro de él.
+    const rawImage = $el.prev("a").find("img").first().attr("src") || null;
+    const image = rawImage && rawImage.startsWith("//") ? `https:${rawImage}` : rawImage;
+
+    results.push({
+      store: store.name,
+      storeId: store.id,
+      storeColor: store.color,
+      name,
+      price,
+      image,
+      url,
+      available: true,
+    });
+  });
+  return results.slice(0, 12);
+}
+
+// Plataforma "Sublime Solutions" (NNET, Digital Outlet, TopTecnoUY comparten
+// exactamente el mismo HTML/CSS). El precio actual viene partido en dos
+// spans (entero + decimal) dentro de ".precio_cont", ej:
+// <span class="pprecio">862</span><span class="pdeci">,50</span>
+function parseSublime($, store) {
+  const results = [];
+  $("article.prod_item").each((_, el) => {
+    const $el = $(el);
+    if ($el.hasClass("prod_sin_stock")) return; // sin stock, no mostrar
+
+    const $link = $el.find("h2 a").first();
+    const name = $link.find("span").first().text().trim() || $link.text().trim();
+    const href = $link.attr("href") || "";
+    const url = href.startsWith("http") ? href : store.baseUrl + href;
+
+    const $priceBlock = $el.find(".precio_cont").first();
+    const entero = $priceBlock.find(".pprecio").first().text().trim();
+    const decimales = $priceBlock.find(".pdeci").first().text().replace(",", "").trim();
+    const price = parseFloat(`${entero}.${decimales || "00"}`) || 0;
+    if (!name || price <= 0) return;
+
+    const image = $el.find("img").first().attr("src") || null;
+
+    results.push({
+      store: store.name,
+      storeId: store.id,
+      storeColor: store.color,
+      name,
+      price,
+      image,
+      url,
+      available: true,
+    });
+  });
+  return results.slice(0, 12);
+}
+
+// WooCommerce estándar (Thot Computación, tema Porto). Precio en formato
+// americano ("US$1,530.00"); imagen con lazy-load (placeholder base64 en
+// src, la real está en data-src).
+function parseWooCommerce($, store) {
+  const results = [];
+  $(".product-col.product, li.product").each((_, el) => {
+    const $el = $(el);
+    if ($el.hasClass("outofstock")) return;
+
+    const $link = $el.find("a.product-loop-title, a.woocommerce-LoopProduct-link").first();
+    const name = $el.find(".woocommerce-loop-product__title").first().text().trim();
+    const url = $link.attr("href") || "";
+    if (!name || !url) return;
+
+    const price = parsePriceUSD(
+      $el.find(".price .woocommerce-Price-amount").last().text()
+    );
+    if (price <= 0) return;
+
+    const $img = $el.find("img").first();
+    const image = $img.attr("data-src") || $img.attr("src") || null;
+
+    results.push({
+      store: store.name,
+      storeId: store.id,
+      storeColor: store.color,
+      name,
+      price,
+      image,
+      url,
+      available: true,
+    });
+  });
+  return results.slice(0, 12);
+}
+
 // ─── Categorías disponibles ───────────────────────────────────────
 // Cada tienda declara a qué categorías pertenece. Una tienda puede estar
 // en más de una (ej: El Túnel vende tanto farmacia como belleza).
@@ -483,7 +600,76 @@ const SCRAPE_STORES = [
   // Natal: omitido — sus precios son placeholder $1 en el HTML (los carga JS).
   // Para agregar una tienda nueva: copiar un objeto, setear categories: ["id"]
   // y el parser correspondiente. El resto del sistema lo toma automáticamente.
+
+  // ── Hogar y Tecnología (todas cotizan en USD, no UYU) ───────────
+  // `currency: "USD"` hace que scrapeStore() convierta `price` a su
+  // equivalente en UYU (tasa oficial BCU) antes de devolverlo, preservando
+  // el original en `originalPrice`/`currency` — así el resto del sistema
+  // (sorts, sumas, /api/prices stats) sigue comparando manzanas con manzanas
+  // sin tener que tocar ese código.
+  {
+    id: "zonatecno", name: "ZonaTecno", color: "#0072CE",
+    categories: ["hogar"],
+    currency: "USD",
+    baseUrl: "https://www.zonatecno.com.uy",
+    searchUrl: (q) => `https://www.zonatecno.com.uy/catalogo?q=${encodeURIComponent(q)}`,
+    parse: parseZonaTecno,
+  },
+  {
+    id: "nnet", name: "NNET", color: "#D32F2F",
+    categories: ["hogar"],
+    currency: "USD",
+    baseUrl: "https://www.nnet.com.uy",
+    searchUrl: (q) => `https://www.nnet.com.uy/productos/?buscar=${encodeURIComponent(q)}`,
+    parse: parseSublime,
+  },
+  {
+    id: "digitaloutlet", name: "Digital Outlet", color: "#37474F",
+    categories: ["hogar"],
+    currency: "USD",
+    baseUrl: "https://www.digitaloutlet.com.uy",
+    searchUrl: (q) => `https://www.digitaloutlet.com.uy/productos/?buscar=${encodeURIComponent(q)}`,
+    parse: parseSublime,
+  },
+  {
+    id: "toptecnouy", name: "TopTecnoUY", color: "#FF6F00",
+    categories: ["hogar"],
+    currency: "USD",
+    baseUrl: "https://www.toptecnouy.com",
+    searchUrl: (q) => `https://www.toptecnouy.com/productos/?buscar=${encodeURIComponent(q)}`,
+    parse: parseSublime,
+  },
+  {
+    id: "thot", name: "Thot Computación", color: "#6A1B9A",
+    categories: ["hogar"],
+    currency: "USD",
+    baseUrl: "https://thotcomputacion.com.uy",
+    searchUrl: (q) => `https://thotcomputacion.com.uy/?s=${encodeURIComponent(q)}&post_type=product`,
+    parse: parseWooCommerce,
+  },
 ];
+
+// Convierte `price` (originalmente en USD) a su equivalente en UYU usando
+// la cotización oficial del BCU, preservando el valor original en
+// `originalPrice`/`currency` para mostrarlo en la UI. El resto del sistema
+// (sorts, sumas, min/max/avg en /api/prices) sigue leyendo `price` como
+// siempre — ahora comparable entre tiendas sin importar la moneda de origen.
+async function convertResultsToUyu(results) {
+  if (results.length === 0) return results;
+  let rate;
+  try {
+    rate = await getUsdToUyuRate();
+  } catch (err) {
+    console.error("[scraper] no se pudo obtener la cotización BCU, se omiten estos resultados:", err.message);
+    return [];
+  }
+  return results.map((r) => ({
+    ...r,
+    originalPrice: r.price,
+    currency: "USD",
+    price: convertUsdToUyu(r.price, rate),
+  }));
+}
 
 // ─── Scraper (axios + cheerio) ────────────────────────────────────
 async function scrapeStore(store, query) {
@@ -499,15 +685,26 @@ async function scrapeStore(store, query) {
 
   try {
     const url = store.searchUrl(query);
+    // arraybuffer en vez de dejar que axios decodifique — algunas tiendas
+    // (NNET, Digital Outlet, TopTecnoUY) sirven windows-1252/iso-8859-1 y
+    // no UTF-8; decodificar como UTF-8 a ciegas rompe los acentos.
     const r = await axios.get(url, {
       headers: HTTP_HEADERS,
       timeout: 12000,
       maxRedirects: 5,
+      responseType: "arraybuffer",
     });
+    const charsetMatch = String(r.headers["content-type"] || "").match(/charset=([\w-]+)/i);
+    const charset = charsetMatch ? charsetMatch[1].toLowerCase() : "utf-8";
+    const body = new TextDecoder(charset).decode(r.data);
+
     // VTEX devuelve JSON; el resto, HTML que parseamos con cheerio
-    const results = store.parseJson
-      ? store.parseJson(r.data, store)
-      : store.parse(cheerio.load(r.data), store);
+    let results = store.parseJson
+      ? store.parseJson(JSON.parse(body), store)
+      : store.parse(cheerio.load(body), store);
+
+    if (store.currency === "USD") results = await convertResultsToUyu(results);
+
     console.log(`[scraper] ${store.name}: ${results.length} productos`);
     setCache(cacheKey, results);
     return results;

@@ -18,6 +18,7 @@ const CATEGORIES = [
   { id: 'farmacia',     label: 'Farmacia',      icon: 'medical-outline' },
   { id: 'belleza',      label: 'Belleza',       icon: 'sparkles-outline' },
   { id: 'ropa',         label: 'Ropa',          icon: 'shirt-outline' },
+  { id: 'hogar',        label: 'Hogar',         icon: 'tv-outline' },
 ];
 
 function ResultCard({ item, index }) {
@@ -58,6 +59,9 @@ function ResultCard({ item, index }) {
           <Text style={styles.resultListPrice}>
             ${item.listPrice.toLocaleString('es-UY', { maximumFractionDigits: 0 })}
           </Text>
+        )}
+        {item.currency === 'USD' && (
+          <Text style={styles.resultListPrice}>US$ {item.originalPrice.toLocaleString('es-UY')}</Text>
         )}
         {item.url && (
           <Ionicons name="open-outline" size={13} color={COLORS.primary} style={{ marginTop: 4 }} />
