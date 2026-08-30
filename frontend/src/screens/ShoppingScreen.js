@@ -69,7 +69,9 @@ function StoreCard({ store, totalItems, rank, index }) {
               )}
             </View>
             <Text style={styles.storeFoundText}>
-              {isFull ? t('shopping.foundItems', { n: store.found }) : t('shopping.missing', { items: store.missing.join(', ') })}
+              {isFull
+                ? t(store.found === 1 ? 'shopping.foundItem' : 'shopping.foundItems', { n: store.found })
+                : t('shopping.missing', { items: store.missing.join(', ') })}
             </Text>
           </View>
           <View style={{ alignItems: 'flex-end' }}>
@@ -91,9 +93,14 @@ function StoreCard({ store, totalItems, rank, index }) {
               <View key={i} style={styles.storeItemRow}>
                 <Text style={styles.storeItemName} numberOfLines={2}>{si.productName}</Text>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <Text style={styles.storeItemPrice}>
-                    ${si.price.toLocaleString('es-UY', { maximumFractionDigits: 0 })}
-                  </Text>
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <Text style={styles.storeItemPrice}>
+                      ${si.price.toLocaleString('es-UY', { maximumFractionDigits: 0 })}
+                    </Text>
+                    {si.currency === 'USD' && (
+                      <Text style={styles.storeItemUsd}>US$ {si.originalPrice.toLocaleString('es-UY')}</Text>
+                    )}
+                  </View>
                   {si.url ? (
                     <TouchableOpacity onPress={() => Linking.openURL(si.url)}>
                       <Ionicons name="open-outline" size={14} color={COLORS.primary} />
@@ -503,6 +510,15 @@ export default function ShoppingScreen() {
               </LinearGradient>
             </View>
 
+            {/* Aviso: en Hogar/tecnología la variedad de modelos hace que el
+                "más barato por tienda" no siempre sea el mismo producto. */}
+            {category === 'hogar' && (
+              <View style={styles.disclaimerBox}>
+                <Ionicons name="information-circle-outline" size={16} color={COLORS.tertiary} />
+                <Text style={styles.disclaimerText}>{t('shopping.hogarDisclaimer')}</Text>
+              </View>
+            )}
+
             {/* Per-item cheapest */}
             <Text style={styles.sectionLabel}>{t('shopping.bestPrice')}</Text>
             {results.results.map((r, i) => (
@@ -663,6 +679,17 @@ const styles = StyleSheet.create({
     fontSize: 10, fontWeight: '700', letterSpacing: 1.2,
     color: COLORS.onSurfaceVariant, marginBottom: SPACING.sm,
   },
+  disclaimerBox: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 8,
+    backgroundColor: COLORS.tertiary + '14',
+    borderRadius: RADIUS.md,
+    padding: SPACING.sm,
+    marginBottom: SPACING.md,
+  },
+  disclaimerText: {
+    flex: 1, fontSize: 12, lineHeight: 17,
+    color: COLORS.onSurfaceVariant,
+  },
 
   // Item result
   itemResult: {
@@ -722,6 +749,7 @@ const styles = StyleSheet.create({
   storeItemRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 },
   storeItemName: { flex: 1, fontSize: 12, color: COLORS.onSurfaceVariant },
   storeItemPrice: { fontSize: 13, fontWeight: '600', color: COLORS.onSurface },
+  storeItemUsd: { fontSize: 10, color: COLORS.onSurfaceVariant },
 
   // Empty
   emptyResults: { alignItems: 'center', padding: SPACING.xl, gap: SPACING.sm },

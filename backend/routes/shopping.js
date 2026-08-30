@@ -151,6 +151,7 @@ function buildComparison(items, itemResults) {
         productName: product.name,
         url: product.url,
         image: product.image || null,
+        ...(product.currency === 'USD' ? { currency: 'USD', originalPrice: product.originalPrice } : {}),
       });
     }
   }
