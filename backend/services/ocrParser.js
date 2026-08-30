@@ -246,9 +246,12 @@ function cleanDescription(desc) {
   // 2. Quitar el enmascarado de la tarjeta (Ej: "TARJ: ############5025")
   cleaned = cleaned.replace(/TARJ(?:ETA)?[:\s]*[#X]*\d{4}/gi, "");
 
-  // 3. Quitar códigos de referencia largos (Ej: 610020699, TT55203750, 653179LR:0000305839)
-  // Elimina combinaciones alfanuméricas de 8 caracteres o más
-  cleaned = cleaned.replace(/\b[A-Z0-9:-]{8,}\b/gi, "");
+  // 3. Quitar códigos de referencia largos (Ej: 610020699, TT55203750, 653179LR:0000305839).
+  // Requiere al menos un dígito en la secuencia — si no, esto borraba por
+  // completo cualquier palabra normal de 8+ letras (SUPERMERCADO, FARMACIA,
+  // ELECTRODOMESTICOS...), destruyendo la pista principal que el categorizador
+  // necesita y degradando la categorización automática a "Otros".
+  cleaned = cleaned.replace(/\b(?=[A-Z0-9:-]*\d)[A-Z0-9:-]{8,}\b/gi, "");
 
   // 4. Quitar secuencias de números cortos sueltos que suelen ser referencias (Ej: "441", "810")
   cleaned = cleaned.replace(/\b\d{3,7}\b/g, "");
