@@ -316,7 +316,7 @@ export default {
     ctaBtn: 'Actualizar a Premium',
     ctaHint: 'Disponible en el App Store próximamente',
     featureAI: 'Asesor financiero con IA',
-    featurePrices: 'Comparador de precios in-app (9 tiendas)',
+    featurePrices: 'Comparador de precios in-app (17 tiendas)',
     featureShopping: 'Lista de compras inteligente con mejores precios',
     featureUpload: 'Subir extractos + cifrado extremo a extremo',
     featureGoals: 'Metas de ahorro ilimitadas',
@@ -335,7 +335,7 @@ export default {
     upgradeNudgeGoals: 'Alcanzaste el límite del plan gratuito (1 meta)',
     upgradeNudgeUpload: 'Subí extractos bancarios con Premium',
     upgradeNudgeAI: 'Obtené consejos financieros con IA en Premium',
-    upgradeNudgePrices: 'Comparé precios en 9 tiendas con Premium',
+    upgradeNudgePrices: 'Comparé precios en 17 tiendas con Premium',
     upgradeNudgeBills: 'Configurá recordatorios de pago con Premium',
   },
 };

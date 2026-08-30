@@ -316,7 +316,7 @@ export default {
     ctaBtn: 'Upgrade to Premium',
     ctaHint: 'Available on the App Store soon',
     featureAI: 'AI financial advisor',
-    featurePrices: 'In-app price comparator (9 stores)',
+    featurePrices: 'In-app price comparator (17 stores)',
     featureShopping: 'Smart shopping list with best prices',
     featureUpload: 'Bank statement upload + E2E encryption',
     featureGoals: 'Unlimited savings goals',
@@ -335,7 +335,7 @@ export default {
     upgradeNudgeGoals: 'You reached the free plan limit (1 goal)',
     upgradeNudgeUpload: 'Upload bank statements with Premium',
     upgradeNudgeAI: 'Get AI-powered spending advice with Premium',
-    upgradeNudgePrices: 'Compare prices across 9 stores with Premium',
+    upgradeNudgePrices: 'Compare prices across 17 stores with Premium',
     upgradeNudgeBills: 'Set bill reminders with Premium',
   },
 };

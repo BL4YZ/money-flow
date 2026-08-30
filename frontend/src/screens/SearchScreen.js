@@ -84,9 +84,9 @@ export default function SearchScreen() {
   const headerAnim = useEntrance({ fromY: -20 });
 
   const search = useCallback(async (q = query, cat = category) => {
+    if (!canComparePrices) { showUpgrade('prices'); return; }
     const term = (q || '').trim();
     if (term.length < 2) return;
-    if (!canComparePrices) { showUpgrade('prices'); return; }
     setLoading(true);
     setResults(null);
     try {
@@ -120,12 +120,20 @@ export default function SearchScreen() {
       >
         {/* Header */}
         <View style={styles.header}>
-          <LinearGradient colors={GRADIENT.primary} style={styles.headerIcon}>
-            <Ionicons name="search" size={20} color={COLORS.onPrimary} />
+          <LinearGradient colors={canComparePrices ? GRADIENT.primary : ['#555', '#333']} style={styles.headerIcon}>
+            <Ionicons name={canComparePrices ? 'search' : 'lock-closed'} size={20} color={COLORS.onPrimary} />
           </LinearGradient>
-          <View>
-            <Text style={styles.headerTitle}>Buscar precios</Text>
-            <Text style={styles.headerSub}>Compará en todas las tiendas</Text>
+          <View style={{ flex: 1 }}>
+            <View style={styles.headerTitleRow}>
+              <Text style={styles.headerTitle}>Buscar precios</Text>
+              {!canComparePrices && (
+                <View style={styles.proBadge}>
+                  <Ionicons name="diamond" size={10} color={COLORS.primary} />
+                  <Text style={styles.proBadgeText}>PRO</Text>
+                </View>
+              )}
+            </View>
+            <Text style={styles.headerSub}>Compará en 17 tiendas</Text>
           </View>
         </View>
 
@@ -170,14 +178,22 @@ export default function SearchScreen() {
             returnKeyType="search"
           />
           <TouchableOpacity
-            style={[styles.searchBtn, (loading || query.trim().length < 2) && styles.searchBtnDisabled]}
+            style={[styles.searchBtnWrap, (loading || (canComparePrices && query.trim().length < 2)) && styles.searchBtnDisabled]}
             onPress={() => search()}
-            disabled={loading || query.trim().length < 2}
+            disabled={loading || (canComparePrices && query.trim().length < 2)}
+            activeOpacity={0.85}
           >
-            {loading
-              ? <ActivityIndicator size="small" color={COLORS.onPrimary} />
-              : <Ionicons name="search" size={20} color={COLORS.onPrimary} />
-            }
+            <LinearGradient
+              colors={canComparePrices ? GRADIENT.primary : ['#555', '#333']}
+              style={styles.searchBtn}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            >
+              {loading
+                ? <ActivityIndicator size="small" color={COLORS.onPrimary} />
+                : <Ionicons name={canComparePrices ? 'search' : 'lock-closed'} size={20} color={COLORS.onPrimary} />
+              }
+            </LinearGradient>
           </TouchableOpacity>
         </View>
 
@@ -204,12 +220,33 @@ export default function SearchScreen() {
         ))}
 
         {/* Estado inicial */}
-        {results === null && !loading && (
+        {results === null && !loading && canComparePrices && (
           <View style={styles.hint}>
             <Ionicons name="pricetag-outline" size={40} color={COLORS.primary + '40'} />
             <Text style={styles.hintText}>
               Elegí una categoría y buscá cualquier producto para comparar precios entre tiendas.
             </Text>
+          </View>
+        )}
+
+        {/* Teaser premium para usuarios free */}
+        {results === null && !loading && !canComparePrices && (
+          <View style={styles.lockedTeaser}>
+            <LinearGradient colors={GRADIENT.primary} style={styles.lockedIconWrap}>
+              <Ionicons name="diamond" size={26} color={COLORS.onPrimary} />
+            </LinearGradient>
+            <Text style={styles.lockedTitle}>{t('premium.lockedPrices')}</Text>
+            <Text style={styles.lockedSub}>{t('premium.upgradeNudgePrices')}</Text>
+            <TouchableOpacity
+              style={styles.lockedCta}
+              activeOpacity={0.85}
+              onPress={() => showUpgrade('prices')}
+            >
+              <LinearGradient colors={GRADIENT.primary} style={styles.lockedCtaGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+                <Ionicons name="diamond-outline" size={16} color={COLORS.onPrimary} />
+                <Text style={styles.lockedCtaText}>{t('premium.ctaBtn')}</Text>
+              </LinearGradient>
+            </TouchableOpacity>
           </View>
         )}
 
@@ -226,8 +263,16 @@ const styles = StyleSheet.create({
 
   header: { flexDirection: 'row', alignItems: 'center', gap: SPACING.md, marginBottom: SPACING.lg },
   headerIcon: { width: 44, height: 44, borderRadius: RADIUS.md, alignItems: 'center', justifyContent: 'center' },
+  headerTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   headerTitle: { fontSize: 22, fontWeight: '700', color: COLORS.onSurface },
   headerSub: { fontSize: 13, color: COLORS.onSurfaceVariant, marginTop: 2 },
+  proBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 3,
+    backgroundColor: COLORS.primary + '22',
+    borderRadius: RADIUS.full,
+    paddingHorizontal: 8, paddingVertical: 3,
+  },
+  proBadgeText: { fontSize: 10, fontWeight: '800', color: COLORS.primary, letterSpacing: 0.5 },
 
   // Chips
   chipsRow: { flexDirection: 'row', gap: SPACING.sm, paddingBottom: SPACING.md },
@@ -257,9 +302,9 @@ const styles = StyleSheet.create({
     fontSize: 15,
     borderWidth: 1, borderColor: COLORS.outlineVariant,
   },
+  searchBtnWrap: { borderRadius: RADIUS.lg, ...SHADOWS.nebula },
   searchBtn: {
     width: 50, height: 50,
-    backgroundColor: COLORS.primaryContainer,
     borderRadius: RADIUS.lg,
     alignItems: 'center', justifyContent: 'center',
   },
@@ -297,4 +342,31 @@ const styles = StyleSheet.create({
   emptySub: { fontSize: 13, color: COLORS.onSurfaceVariant, textAlign: 'center' },
   hint: { alignItems: 'center', padding: SPACING.xl, gap: SPACING.md, marginTop: SPACING.xl },
   hintText: { fontSize: 14, color: COLORS.onSurfaceVariant, textAlign: 'center', lineHeight: 22 },
+
+  // Teaser premium (usuarios free)
+  lockedTeaser: {
+    alignItems: 'center',
+    padding: SPACING.xl,
+    marginTop: SPACING.lg,
+    gap: SPACING.sm,
+    backgroundColor: COLORS.surfaceContainer,
+    borderRadius: RADIUS.xl,
+    borderWidth: 1,
+    borderColor: COLORS.outlineVariant,
+    borderStyle: 'dashed',
+  },
+  lockedIconWrap: {
+    width: 56, height: 56, borderRadius: 28,
+    alignItems: 'center', justifyContent: 'center',
+    marginBottom: SPACING.xs,
+    ...SHADOWS.nebula,
+  },
+  lockedTitle: { fontSize: 17, fontWeight: '800', color: COLORS.onSurface },
+  lockedSub: { fontSize: 13, color: COLORS.onSurfaceVariant, textAlign: 'center', lineHeight: 19, marginBottom: SPACING.sm },
+  lockedCta: { borderRadius: RADIUS.full, overflow: 'hidden', ...SHADOWS.nebula },
+  lockedCtaGradient: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingHorizontal: SPACING.lg, paddingVertical: 12,
+  },
+  lockedCtaText: { fontSize: 14, fontWeight: '700', color: COLORS.onPrimary },
 });
