@@ -120,15 +120,15 @@ export default function SearchScreen() {
       >
         {/* Header */}
         <View style={styles.header}>
-          <LinearGradient colors={canComparePrices ? GRADIENT.primary : ['#555', '#333']} style={styles.headerIcon}>
-            <Ionicons name={canComparePrices ? 'search' : 'lock-closed'} size={20} color={COLORS.onPrimary} />
+          <LinearGradient colors={canComparePrices ? GRADIENT.primary : GRADIENT.locked} style={styles.headerIcon}>
+            <Ionicons name={canComparePrices ? 'search' : 'lock-closed'} size={20} color={canComparePrices ? COLORS.onPrimary : COLORS.onPrimaryContainer} />
           </LinearGradient>
           <View style={{ flex: 1 }}>
             <View style={styles.headerTitleRow}>
               <Text style={styles.headerTitle}>Buscar precios</Text>
               {!canComparePrices && (
                 <View style={styles.proBadge}>
-                  <Ionicons name="diamond" size={10} color={COLORS.primary} />
+                  <Ionicons name="diamond" size={10} color={COLORS.tertiary} />
                   <Text style={styles.proBadgeText}>PRO</Text>
                 </View>
               )}
@@ -184,14 +184,14 @@ export default function SearchScreen() {
             activeOpacity={0.85}
           >
             <LinearGradient
-              colors={canComparePrices ? GRADIENT.primary : ['#555', '#333']}
+              colors={canComparePrices ? GRADIENT.primary : GRADIENT.locked}
               style={styles.searchBtn}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
             >
               {loading
                 ? <ActivityIndicator size="small" color={COLORS.onPrimary} />
-                : <Ionicons name={canComparePrices ? 'search' : 'lock-closed'} size={20} color={COLORS.onPrimary} />
+                : <Ionicons name={canComparePrices ? 'search' : 'lock-closed'} size={20} color={canComparePrices ? COLORS.onPrimary : COLORS.onPrimaryContainer} />
               }
             </LinearGradient>
           </TouchableOpacity>
@@ -232,8 +232,8 @@ export default function SearchScreen() {
         {/* Teaser premium para usuarios free */}
         {results === null && !loading && !canComparePrices && (
           <View style={styles.lockedTeaser}>
-            <LinearGradient colors={GRADIENT.primary} style={styles.lockedIconWrap}>
-              <Ionicons name="diamond" size={26} color={COLORS.onPrimary} />
+            <LinearGradient colors={GRADIENT.locked} style={styles.lockedIconWrap}>
+              <Ionicons name="diamond" size={26} color={COLORS.onPrimaryContainer} />
             </LinearGradient>
             <Text style={styles.lockedTitle}>{t('premium.lockedPrices')}</Text>
             <Text style={styles.lockedSub}>{t('premium.upgradeNudgePrices')}</Text>
@@ -268,11 +268,11 @@ const styles = StyleSheet.create({
   headerSub: { fontSize: 13, color: COLORS.onSurfaceVariant, marginTop: 2 },
   proBadge: {
     flexDirection: 'row', alignItems: 'center', gap: 3,
-    backgroundColor: COLORS.primary + '22',
+    backgroundColor: COLORS.tertiary + '22',
     borderRadius: RADIUS.full,
     paddingHorizontal: 8, paddingVertical: 3,
   },
-  proBadgeText: { fontSize: 10, fontWeight: '800', color: COLORS.primary, letterSpacing: 0.5 },
+  proBadgeText: { fontSize: 10, fontWeight: '800', color: COLORS.tertiary, letterSpacing: 0.5 },
 
   // Chips
   chipsRow: { flexDirection: 'row', gap: SPACING.sm, paddingBottom: SPACING.md },
@@ -359,7 +359,7 @@ const styles = StyleSheet.create({
     width: 56, height: 56, borderRadius: 28,
     alignItems: 'center', justifyContent: 'center',
     marginBottom: SPACING.xs,
-    ...SHADOWS.nebula,
+    ...SHADOWS.gold,
   },
   lockedTitle: { fontSize: 17, fontWeight: '800', color: COLORS.onSurface },
   lockedSub: { fontSize: 13, color: COLORS.onSurfaceVariant, textAlign: 'center', lineHeight: 19, marginBottom: SPACING.sm },

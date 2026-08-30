@@ -53,6 +53,10 @@ export const COLORS = {
 export const GRADIENT = {
   primary: ['#cdbdff', '#7c4dff'],
   primaryReverse: ['#7c4dff', '#cdbdff'],
+  // Dorado/ámbar (extiende el tertiary) — estado "bloqueado por premium" en
+  // vez del gris plano genérico, que se leía como deshabilitado/roto en vez
+  // de premium.
+  locked: ['#ffcc99', '#e0824a'],
 };
 
 export const FONTS = {
@@ -95,6 +99,13 @@ export const SHADOWS = {
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.4,
     shadowRadius: 30,
+    elevation: 12,
+  },
+  gold: {
+    shadowColor: '#e0824a',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.35,
+    shadowRadius: 26,
     elevation: 12,
   },
 };

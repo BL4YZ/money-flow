@@ -141,14 +141,14 @@ export default function UploadScreen() {
           <Animated.View style={[styles.dropZoneGlow, glowPulse.style]} />
           <View style={[styles.dropZone, uploading && styles.dropZoneUploading, !canUpload && styles.dropZoneLocked]}>
             <LinearGradient
-              colors={canUpload ? GRADIENT.primary : ['#555', '#333']}
+              colors={canUpload ? GRADIENT.primary : GRADIENT.locked}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.uploadIconBg}
             >
               {uploading
                 ? <ActivityIndicator color={COLORS.onPrimary} size="large" />
-                : <Ionicons name={canUpload ? 'cloud-upload' : 'lock-closed'} size={32} color={COLORS.onPrimary} />
+                : <Ionicons name={canUpload ? 'cloud-upload' : 'lock-closed'} size={32} color={canUpload ? COLORS.onPrimary : COLORS.onPrimaryContainer} />
               }
             </LinearGradient>
             <Text style={styles.dropTitle}>{canUpload ? t('upload.dropTitle') : t('premium.lockedUpload')}</Text>

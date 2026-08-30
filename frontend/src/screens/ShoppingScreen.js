@@ -443,9 +443,9 @@ export default function ShoppingScreen() {
         {/* Compare button */}
         {items.length > 0 && !comparing && (
           <TouchableOpacity style={styles.compareBtn} onPress={compare} activeOpacity={0.85}>
-            <LinearGradient colors={canShopping ? GRADIENT.primary : ['#444', '#333']} style={styles.compareBtnGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
-              <Ionicons name={canShopping ? 'search' : 'lock-closed-outline'} size={18} color={COLORS.onPrimary} />
-              <Text style={styles.compareBtnText}>{canShopping ? t('shopping.compare') : t('premium.lockedShopping')}</Text>
+            <LinearGradient colors={canShopping ? GRADIENT.primary : GRADIENT.locked} style={styles.compareBtnGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+              <Ionicons name={canShopping ? 'search' : 'lock-closed-outline'} size={18} color={canShopping ? COLORS.onPrimary : COLORS.onPrimaryContainer} />
+              <Text style={[styles.compareBtnText, !canShopping && { color: COLORS.onPrimaryContainer }]}>{canShopping ? t('shopping.compare') : t('premium.lockedShopping')}</Text>
             </LinearGradient>
           </TouchableOpacity>
         )}
