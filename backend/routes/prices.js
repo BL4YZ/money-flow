@@ -16,6 +16,7 @@ const {
   withUnitPrices,
   compareByValue,
   groupProducts,
+  markOffCategoryItems,
   buildCorpusStats,
   bm25Score,
   tokenInProductFuzzy,
@@ -64,6 +65,8 @@ router.get("/search", requirePremium, async (req, res) => {
     // Precio por unidad (por L / kg / m / un) para poder comparar envases de
     // distinto tamaño — ver productMatcher.withUnitPrices.
     items = withUnitPrices(items);
+    // Categoría real de la tienda (ver productMatcher.markOffCategoryItems)
+    items = markOffCategoryItems(items, queryKeywords);
 
     // Estadísticas del corpus (IDF + largo promedio) para BM25. El corpus es
     // el set de resultados de esta búsqueda: la pregunta que importa es qué
@@ -129,6 +132,9 @@ router.get("/search", requirePremium, async (req, res) => {
         // a un producto real que empieza con la categoría ("Consola Nintendo
         // Switch 2") — el castigo tiene que superar ese margen con comodidad.
         if (isAccessoryFor(queryKeywords, itemName)) score -= 15;
+
+        // Otra categoría según la taxonomía de la tienda
+        if (item._offCategory) score -= 12;
 
         // Tokens de modelo/generación obligatorios en cualquier filtro,
         // incluso el relajado ("Switch 2" vs "Switch", "i7" vs "i5") —
@@ -264,7 +270,7 @@ router.get("/search", requirePremium, async (req, res) => {
       });
 
       // Limpiamos variables temporales
-      items = scoredItems.map(({ _score, _matched, _isMainNoun, _matchesFirstKeyword, _hasAllNumericKeywords, _itemName, _fuzzy, _storeTrust, ...rest }) => rest);
+      items = scoredItems.map(({ _score, _matched, _isMainNoun, _matchesFirstKeyword, _hasAllNumericKeywords, _itemName, _fuzzy, _storeTrust, _offCategory, _offUnit, ...rest }) => rest);
     } else {
       items = items.sort((a, b) => a.price - b.price);
     }

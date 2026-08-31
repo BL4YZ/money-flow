@@ -440,6 +440,72 @@ function withUnitPrices(items) {
 // Comparador para elegir la mejor oferta entre productos igual de relevantes:
 // si ambos tienen precio por unidad en la MISMA unidad base, gana el mejor
 // precio por unidad; si no, se cae al precio absoluto (comportamiento previo).
+// ─── Coherencia de CATEGORÍA dentro de un set de resultados ───────
+// El problema: productos de categorías distintas que comparten el sustantivo.
+// "Agua Lavandina" es lejía, "Aceite 15W40" es aceite de motor — los dos
+// empiezan con la palabra buscada, así que ninguna regla de texto (accesorio,
+// modificador, sustantivo principal) los distingue de un agua mineral o de un
+// aceite de girasol. Hace falta taxonomía, no más reglas sobre el nombre.
+//
+// De dónde sale: la API de El Dorado (VTEX) devuelve la categoría real del
+// producto — "/Bebidas/Bebidas Sin Alcohol/Aguas y Aguas Saborizadas/" contra
+// "/Limpieza/Limpieza Hogar/Desinfectantes/". Es la única tienda que da la
+// ruta legible (Tata sólo da IDs numéricos, el resto nada).
+//
+// Cómo se generaliza a las tiendas que NO la dan: no se propaga la categoría
+// sino su VOCABULARIO. Con la rama mayoritaria del set identificada, las
+// palabras que aparecen sólo en la rama minoritaria ("lavandina",
+// "desinfectante") pasan a ser señal de "otra categoría" para CUALQUIER
+// tienda. Una sola tienda con taxonomía alcanza para limpiar el set entero, y
+// el vocabulario se aprende por búsqueda en vez de estar escrito a mano.
+const CATEGORY_MAJORITY = 0.6;
+const MIN_CATEGORIZED = 4;
+
+function topCategory(path) {
+  const seg = String(path || '').split('/').filter(Boolean);
+  return seg.length ? normalize(seg[0]) : null;
+}
+
+function learnOffCategoryTokens(items, queryTokens = []) {
+  const conCat = items.filter((i) => i.category && topCategory(i.category));
+  if (conCat.length < MIN_CATEGORIZED) return new Set();
+
+  const conteo = {};
+  conCat.forEach((i) => {
+    const c = topCategory(i.category);
+    conteo[c] = (conteo[c] || 0) + 1;
+  });
+  const [dominante, n] = Object.entries(conteo).sort((a, b) => b[1] - a[1])[0];
+  if (n / conCat.length < CATEGORY_MAJORITY) return new Set();  // set mezclado, no opinamos
+
+  // Vocabulario de la rama mayoritaria: nada que aparezca acá puede usarse
+  // como señal de "otra categoría".
+  const vocabOk = new Set();
+  conCat.filter((i) => topCategory(i.category) === dominante)
+    .forEach((i) => tokenize(i.name).forEach((t) => vocabOk.add(t)));
+
+  // Palabras exclusivas de la rama minoritaria. Se excluyen los tokens de la
+  // propia búsqueda ("agua" aparece en ambas ramas y no distingue nada) y los
+  // muy cortos, que suelen ser códigos o abreviaturas.
+  const off = new Set();
+  conCat.filter((i) => topCategory(i.category) !== dominante)
+    .forEach((i) => tokenize(i.name).forEach((t) => {
+      if (t.length >= 4 && !vocabOk.has(t) && !queryTokens.includes(t) && !/\d/.test(t)) off.add(t);
+    }));
+  return off;
+}
+
+// Marca (no excluye) los ítems de cualquier tienda que usen el vocabulario de
+// la categoría minoritaria.
+function markOffCategoryItems(items, queryTokens = []) {
+  const off = learnOffCategoryTokens(items, queryTokens);
+  if (off.size === 0) return items;
+  return items.map((i) => {
+    const t = tokenize(i.name);
+    return t.some((w) => off.has(w)) ? { ...i, _offCategory: true } : i;
+  });
+}
+
 // ─── Coherencia de unidad dentro de un set de resultados ──────────
 // compareByValue sólo compara precio por unidad cuando la unidad BASE coincide
 // (comparar $/kg contra $/L no significa nada). Cuando no coincide cae a
@@ -724,6 +790,8 @@ module.exports = {
   withUnitPrices,
   compareByValue,
   markOffUnitItems,
+  markOffCategoryItems,
+  learnOffCategoryTokens,
   buildCorpusStats,
   bm25Score,
   levenshtein,

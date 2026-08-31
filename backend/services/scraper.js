@@ -153,6 +153,13 @@ function parseVtex(data, store) {
         image: item.images?.[0]?.imageUrl || null,
         url: `${store.baseUrl}/${p.linkText}/p`,
         available: offer.AvailableQuantity > 0,
+        // Taxonomía propia de la tienda ("/Bebidas/Bebidas Sin Alcohol/…" vs
+        // "/Limpieza/Limpieza Hogar/Desinfectantes/"). Es la única fuente de
+        // categoría real que devuelve alguna de las tiendas, y sirve para
+        // separar productos que comparten sustantivo pero no son lo mismo:
+        // "Agua Salus" y "Agua Lavandina" sólo se distinguen por acá.
+        // Ver productMatcher.learnOffCategoryTokens.
+        category: Array.isArray(p.categories) ? p.categories[0] || null : null,
       };
     })
     .filter(Boolean)

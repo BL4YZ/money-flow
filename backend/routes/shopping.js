@@ -20,6 +20,7 @@ const {
   withUnitPrices,
   compareByValue,
   markOffUnitItems,
+  markOffCategoryItems,
   tokenInProductFuzzy,
 } = require('../services/productMatcher');
 
@@ -181,6 +182,11 @@ async function scrapeItem(item, category = null) {
   // (un sobre de 15 g de polvo entre botellas de litros) — ver markOffUnitItems.
   relevant = markOffUnitItems(relevant);
 
+  // Categoría real de la tienda: separa productos que comparten sustantivo
+  // pero no son lo mismo (agua mineral vs agua lavandina, aceite comestible
+  // vs aceite de motor). Ver productMatcher.markOffCategoryItems.
+  relevant = markOffCategoryItems(relevant, queryTokens);
+
   // Mejor match por tienda: primero el más relevante, y entre iguales el de
   // MEJOR VALOR (precio por unidad si ambos lo tienen, si no precio
   // absoluto). Con precio absoluto a secas, entre dos leches igual de
@@ -192,6 +198,7 @@ async function scrapeItem(item, category = null) {
     // Unidad incomparable: no puede ganar sólo por tener el precio absoluto
     // más bajo. Castigo, no exclusión — si es lo único de esa tienda, aparece.
     if (p._offUnit) score *= 0.6;
+    if (p._offCategory) score *= 0.5;
     const existing = byStore[p.storeId];
     if (!existing || score > existing._score || (score === existing._score && compareByValue(p, existing) < 0)) {
       byStore[p.storeId] = { ...p, _score: score };
