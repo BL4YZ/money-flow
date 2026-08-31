@@ -30,14 +30,20 @@ export function formatUnitPrice(item) {
 }
 
 function ResultCard({ item, index }) {
-  const pct = item.listPrice && item.listPrice > item.price
-    ? Math.round((1 - item.price / item.listPrice) * 100)
+  // `item` es un producto agrupado: la mejor oferta manda para el precio y
+  // el link, y si está en varias tiendas se muestra el rango.
+  const best = (item.offers && item.offers[0]) || item;
+  const enVarias = (item.storeCount || 1) > 1;
+  const hayRango = enVarias && item.maxPrice > item.minPrice;
+  const precio = item.minPrice != null ? item.minPrice : item.price;
+  const pct = best.listPrice && best.listPrice > best.price
+    ? Math.round((1 - best.price / best.listPrice) * 100)
     : null;
 
   return (
     <TouchableOpacity
       style={styles.resultCard}
-      onPress={() => item.url && Linking.openURL(item.url)}
+      onPress={() => best.url && Linking.openURL(best.url)}
       activeOpacity={0.82}
     >
       {item.image ? (
@@ -50,8 +56,14 @@ function ResultCard({ item, index }) {
       <View style={styles.resultInfo}>
         <Text style={styles.resultName} numberOfLines={2}>{item.name}</Text>
         <View style={styles.resultStorRow}>
-          <View style={[styles.storeDot, { backgroundColor: item.storeColor || COLORS.primary }]} />
-          <Text style={styles.resultStore}>{item.store}</Text>
+          <View style={[styles.storeDot, { backgroundColor: best.storeColor || COLORS.primary }]} />
+          <Text style={styles.resultStore}>{best.store}</Text>
+          {enVarias && (
+            <View style={styles.storesBadge}>
+              <Ionicons name="storefront-outline" size={9} color={COLORS.secondary} />
+              <Text style={styles.storesBadgeText}>{item.storeCount} tiendas</Text>
+            </View>
+          )}
           {pct && (
             <View style={styles.discountBadge}>
               <Text style={styles.discountText}>-{pct}%</Text>
@@ -61,20 +73,25 @@ function ResultCard({ item, index }) {
       </View>
       <View style={styles.resultPriceCol}>
         <Text style={styles.resultPrice}>
-          ${item.price.toLocaleString('es-UY', { maximumFractionDigits: 0 })}
+          ${precio.toLocaleString('es-UY', { maximumFractionDigits: 0 })}
         </Text>
-        {item.listPrice && item.listPrice > item.price && (
-          <Text style={styles.resultListPrice}>
-            ${item.listPrice.toLocaleString('es-UY', { maximumFractionDigits: 0 })}
+        {hayRango && (
+          <Text style={styles.resultRange}>
+            hasta ${item.maxPrice.toLocaleString('es-UY', { maximumFractionDigits: 0 })}
           </Text>
         )}
-        {item.currency === 'USD' && (
+        {pct && (
+          <Text style={styles.resultListPrice}>
+            ${best.listPrice.toLocaleString('es-UY', { maximumFractionDigits: 0 })}
+          </Text>
+        )}
+        {item.currency === 'USD' && item.originalPrice != null && (
           <Text style={styles.resultListPrice}>US$ {item.originalPrice.toLocaleString('es-UY')}</Text>
         )}
         {item.unitPrice != null && (
           <Text style={styles.resultUnitPrice}>{formatUnitPrice(item)}</Text>
         )}
-        {item.url && (
+        {best.url && (
           <Ionicons name="open-outline" size={13} color={COLORS.primary} style={{ marginTop: 4 }} />
         )}
       </View>
@@ -104,7 +121,13 @@ export default function SearchScreen() {
       const params = { q: term, limit: 24 };
       if (cat) params.category = cat;
       const { data } = await api.get('/prices/search', { params, timeout: 60000 });
-      setResults(data.items || []);
+      // `groups` viene agrupado por producto real (mismo producto en varias
+      // tiendas = una sola fila). Si el backend no lo manda, se cae a la
+      // lista plana de siempre.
+      setResults(data.groups || (data.items || []).map((i) => ({
+        ...i, minPrice: i.price, maxPrice: i.price, storeCount: 1,
+        offers: [{ ...i }],
+      })));
       setStats(data.stats);
     } catch (err) {
       setResults([]);
@@ -227,7 +250,7 @@ export default function SearchScreen() {
         )}
 
         {results && !loading && results.map((item, i) => (
-          <ResultCard key={item.url || i} item={item} index={i} />
+          <ResultCard key={(item.offers && item.offers[0] && item.offers[0].url) || item.name || i} item={item} index={i} />
         ))}
 
         {/* Estado inicial */}
@@ -347,6 +370,13 @@ const styles = StyleSheet.create({
   resultPrice: { fontSize: 15, fontWeight: '800', color: COLORS.onSurface },
   resultListPrice: { fontSize: 11, color: COLORS.onSurfaceVariant, textDecorationLine: 'line-through' },
   resultUnitPrice: { fontSize: 11, color: COLORS.secondary, fontWeight: '600', marginTop: 2 },
+  resultRange: { fontSize: 10, color: COLORS.onSurfaceVariant },
+  storesBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 3,
+    backgroundColor: COLORS.secondary + '1E',
+    borderRadius: RADIUS.full, paddingHorizontal: 6, paddingVertical: 1,
+  },
+  storesBadgeText: { fontSize: 9, fontWeight: '700', color: COLORS.secondary },
 
   // Empty / hint
   empty: { alignItems: 'center', padding: SPACING.xl, gap: SPACING.sm },

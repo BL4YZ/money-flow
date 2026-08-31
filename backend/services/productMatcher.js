@@ -423,7 +423,155 @@ function tokenInProductFuzzy(token, productTokens) {
   return productTokens.some((pt) => !/\d/.test(pt) && levenshtein(token, pt) <= budget);
 }
 
+// ─── Entity resolution: agrupar el MISMO producto entre tiendas ───
+//
+// Un comparador serio no compara "lo más barato que matchea tu búsqueda en
+// cada tienda": primero resuelve qué listados son el mismo producto y recién
+// después compara precios. Ejemplo real de estos datos: "Papel Higiénico
+// HIGIENOL Max 8 Rollos x 90 mts" (Tienda Inglesa, $538) y "Papel higiénico
+// HIGIENOL Max 90 m x 8 un." (Disco, $520) son el mismo paquete escrito
+// distinto — sin agrupar son dos filas sueltas y el usuario no ve que hay
+// $18 de diferencia por lo mismo.
+//
+// Pipeline estándar de entity resolution: bloquear (por cantidad) → comparar
+// (Jaccard ponderado por IDF + guardas duras) → clusterizar (union-find).
+//
+// El sesgo es CONSERVADOR: un merge equivocado muestra "$45 en Disco, $12 en
+// Tata" para productos distintos, que es peor que no agrupar. Umbral calibrado
+// contra datos reales: en 0.5 empieza a unir marcas distintas (Calcar con
+// Conaprole) y la línea regular con la Ultra; en 0.72 no comete errores.
+const GROUPING_THRESHOLD = 0.72;
+const MAX_BLOCK_SIZE = 120; // corta el O(n²) en bloques patológicos
+
+// Variantes mutuamente excluyentes: si difieren acá NO son el mismo producto
+// por más que todo lo demás coincida. Es la guarda dura contra el error más
+// caro (confundir entera con descremada, o zero con común).
+const VARIANT_GROUPS = [
+  ['entera', 'descremada', 'semidescremada'],
+  ['deslactosada', 'lactosa'],
+  ['zero', 'light', 'diet', 'regular', 'original'],
+  ['chocolatada', 'frutilla', 'vainilla', 'natural'],
+  ['blanco', 'negro', 'integral'],
+  ['grande', 'chico', 'mediano'],
+  ['frio', 'calor'],
+];
+
+function variantSignature(tokens) {
+  return VARIANT_GROUPS.map((grupo) => grupo.filter((v) => tokens.includes(v)).sort().join('+'));
+}
+
+function variantConflict(sigA, sigB) {
+  for (let i = 0; i < sigA.length; i++) {
+    if (sigA[i] && sigB[i] && sigA[i] !== sigB[i]) return true;
+  }
+  return false;
+}
+
+// Jaccard ponderado por IDF: "leche" (común) pesa poco, "conaprole" (rara)
+// pesa mucho. Sin la ponderación, dos leches de marcas distintas comparten
+// tantas palabras genéricas que se verían casi idénticas.
+function weightedJaccard(tokensA, tokensB, stats) {
+  const A = new Set(tokensA), B = new Set(tokensB);
+  let inter = 0, union = 0;
+  for (const t of new Set([...A, ...B])) {
+    const n = stats.df.get(t) || 0;
+    const w = Math.log(1 + (stats.N - n + 0.5) / (n + 0.5));
+    union += w;
+    if (A.has(t) && B.has(t)) inter += w;
+  }
+  return union > 0 ? inter / union : 0;
+}
+
+/**
+ * Agrupa listados equivalentes en productos canónicos.
+ * Devuelve [{ name, image, minPrice, maxPrice, unitPrice, unitLabel,
+ *             storeCount, offers: [...] }], ordenado por el mejor precio.
+ */
+function groupProducts(items) {
+  if (items.length === 0) return [];
+
+  const stats = buildCorpusStats(items);
+  const enriched = items.map((it, i) => {
+    const tokens = tokenize(it.name);
+    const q = parseQuantity(it.name);
+    return {
+      item: it, i,
+      norm: normalize(it.name),
+      tokens,
+      variantSig: variantSignature(tokens),
+      blockKey: q ? `${q.unit}:${q.qty}` : 'sincant',
+    };
+  });
+
+  const parent = enriched.map((_, i) => i);
+  const find = (x) => (parent[x] === x ? x : (parent[x] = find(parent[x])));
+  const union = (a, b) => { const ra = find(a), rb = find(b); if (ra !== rb) parent[rb] = ra; };
+
+  // Blocking: sólo se comparan productos de la misma cantidad. Además de
+  // acotar el costo, es una guarda por sí misma — un pack de 1 L y uno de
+  // 3 L no son el mismo producto por más parecido que sea el nombre.
+  const blocks = new Map();
+  enriched.forEach((e) => {
+    if (!blocks.has(e.blockKey)) blocks.set(e.blockKey, []);
+    blocks.get(e.blockKey).push(e);
+  });
+
+  for (const block of blocks.values()) {
+    if (block.length > MAX_BLOCK_SIZE) continue;
+    for (let i = 0; i < block.length; i++) {
+      for (let j = i + 1; j < block.length; j++) {
+        const a = block[i], b = block[j];
+        if (a.item.storeId === b.item.storeId) continue;   // dos filas de la misma tienda no se fusionan
+        if (variantConflict(a.variantSig, b.variantSig)) continue;
+        if (a.norm === b.norm || weightedJaccard(a.tokens, b.tokens, stats) >= GROUPING_THRESHOLD) {
+          union(a.i, b.i);
+        }
+      }
+    }
+  }
+
+  const byRoot = new Map();
+  enriched.forEach((e) => {
+    const r = find(e.i);
+    if (!byRoot.has(r)) byRoot.set(r, []);
+    byRoot.get(r).push(e.item);
+  });
+
+  const groups = [];
+  for (const offers of byRoot.values()) {
+    const ordered = [...offers].sort(compareByValue);
+    const best = ordered[0];
+    const prices = ordered.map((o) => o.price).filter((p) => p > 0);
+    // Nombre canónico: el más descriptivo (el más largo) suele ser el que
+    // trae marca y presentación completas.
+    const canonical = ordered.reduce((a, b) => (b.name.length > a.name.length ? b : a), ordered[0]);
+    groups.push({
+      name: canonical.name,
+      image: ordered.find((o) => o.image)?.image || null,
+      minPrice: Math.min(...prices),
+      maxPrice: Math.max(...prices),
+      unitPrice: best.unitPrice ?? null,
+      unitLabel: best.unitLabel ?? null,
+      currency: best.currency,
+      originalPrice: best.originalPrice,
+      storeCount: new Set(ordered.map((o) => o.storeId)).size,
+      offers: ordered.map((o) => ({
+        store: o.store, storeId: o.storeId, storeColor: o.storeColor,
+        name: o.name, price: o.price, url: o.url,
+        ...(o.listPrice ? { listPrice: o.listPrice } : {}),
+        ...(o.unitPrice != null ? { unitPrice: o.unitPrice, unitLabel: o.unitLabel } : {}),
+        ...(o.currency === 'USD' ? { currency: 'USD', originalPrice: o.originalPrice } : {}),
+      })),
+    });
+  }
+
+  return groups;
+}
+
 module.exports = {
+  GROUPING_THRESHOLD,
+  groupProducts,
+  weightedJaccard,
   STOP_WORDS,
   SYNONYMS,
   ACCESSORY_WORDS,

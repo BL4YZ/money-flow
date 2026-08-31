@@ -11,6 +11,7 @@ const {
   filterPriceOutliers,
   withUnitPrices,
   compareByValue,
+  groupProducts,
   buildCorpusStats,
   bm25Score,
   tokenInProductFuzzy,
@@ -205,6 +206,12 @@ router.get("/search", requirePremium, async (req, res) => {
       items = items.slice(0, parseInt(limit));
     }
 
+    // Entity resolution: agrupar los listados que son el MISMO producto en
+    // distintas tiendas, para poder mostrar "desde $X en N tiendas" en vez de
+    // repetir la misma fila. Se agrupa DESPUÉS de ordenar y limitar, así el
+    // orden por relevancia manda y sólo se colapsa lo que se iba a mostrar.
+    const groups = groupProducts(items);
+
     // 5) Calcular estadísticas (Stats)
     const prices = items.map((i) => i.price);
     const stats = {
@@ -223,7 +230,9 @@ router.get("/search", requirePremium, async (req, res) => {
     }
 
     // Devolvemos el mismo formato que ya tenías, el frontend actualizado lo entiende perfecto
-    res.json({ query, items, stats, stores: storeNames });
+    // `items` se mantiene por compatibilidad; `groups` es la vista de
+    // comparador (un producto = una fila, con sus ofertas por tienda).
+    res.json({ query, items, groups, stats, stores: storeNames });
   } catch (err) {
     console.error("Prices search error:", err.message);
     res.status(500).json({ error: "Error al buscar precios" });
