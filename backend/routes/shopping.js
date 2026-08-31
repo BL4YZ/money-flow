@@ -77,6 +77,23 @@ async function scrapeItem(item, category = null) {
   // (mejor mostrar "no encontrado" que precios de productos equivocados)
   let relevant = products.filter((p) => isRelevant(queryTokens, p.name));
 
+  // Preferencia por match COMPLETO, con la misma escalera que routes/prices.js.
+  // RELEVANCE_THRESHOLD = 0.5 significa "la mitad de los tokens alcanza", y en
+  // una búsqueda de dos palabras eso deja pasar cualquier cosa que tenga una:
+  // "apple pencil" traía un "Whisky Jack Daniel's APPLE Tennessee 1 L" y unos
+  // "Auricular APPLE Md827lla", y como el comparador se queda con el más
+  // barato por tienda, los auriculares de $1.570 quedaban de "MEJOR PRECIO"
+  // para un lápiz de $4.910.
+  //
+  // Sigue siendo escalera y no filtro duro: el umbral existe para cuando las
+  // tiendas nombran distinto ("suprema de pollo" → "Suprema 3 Arroyos"), así
+  // que si ningún producto tiene todos los tokens, se usa lo anterior.
+  const completos = relevant.filter((p) => {
+    const pNorm = normalize(p.name);
+    return queryTokens.every((t) => tokenInProduct(t, pNorm));
+  });
+  if (completos.length > 0) relevant = completos;
+
   // Rescate por typos: si lo exacto no encontró nada, reintenta tolerando
   // errores de tipeo ("shampo" → "shampoo"). Nunca sustituye a un match
   // exacto porque sólo corre cuando no hubo ninguno, y los tokens con

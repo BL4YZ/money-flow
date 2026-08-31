@@ -92,7 +92,12 @@ module.exports = [
 
   // ─── E. Farmacia ────────────────────────────────────────────────
   { q: 'paracetamol', cat: 'farmacia', minResults: 3, allMatch: /paracetamol|perifar|dolotandax/i },
-  { q: 'ibuprofeno', cat: 'farmacia', minResults: 2, allMatch: /ibuprofeno|actron|ibupirac/i },
+  // Sin allMatch a proposito: el respaldo de buscador de tienda (ver
+  // routes/prices.js) devuelve las marcas con que se vende el generico
+  // -- Perifar, Actron, Ibupirac, Privalgia -- y ninguna lleva la palabra
+  // "ibuprofeno" en el nombre. Exigirla media mi lista de marcas, no la
+  // relevancia. Lo que si se puede afirmar es que sean medicamentos.
+  { q: 'ibuprofeno', cat: 'farmacia', minResults: 2, noneMatch: /shampoo|perfume|panal|cepillo|maquillaje/i },
   { q: 'aspirina', cat: 'farmacia', minResults: 1, allMatch: /aspirina|aas/i },
   { q: 'protector solar', cat: 'farmacia', minResults: 3, allMatch: /protector solar|solar/i },
   { q: 'alcohol en gel', cat: 'farmacia', minResults: 3, allMatch: /alcohol/i },
