@@ -142,6 +142,7 @@ const ACCESSORY_WORDS = [
   // conector que la regla gramatical pueda ver ("Apple Magic Keyboard iPad
   // Pro 11'' y iPad Air"), así que sólo los agarra la lista.
   'teclado', 'keyboard', 'mouse', 'raton', 'lapiz', 'pencil', 'stylus',
+  'stick', 'chromecast',  // un TV Stick se enchufa a un TV, no es un TV
   'disipador', 'cooler', 'ventilador para',
 ];
 

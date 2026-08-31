@@ -16,6 +16,7 @@ const {
   dedupeResults,
   filterPriceOutliers,
   isModifierMention,
+  isNegatedMention,
   withUnitPrices,
   compareByValue,
   tokenInProductFuzzy,
@@ -102,11 +103,41 @@ async function scrapeItem(item, category = null) {
     relevant = products.filter((p) => {
       const pNorm = normalize(p.name);
       if (!hasAllModelTokens(queryTokens, pNorm)) return false;
+      // El rescate no puede resucitar lo que la regla de accesorios descartó
+      // a propósito. En scoreRelevance el accesorio sólo se penaliza (×0.3),
+      // así que cae por debajo del umbral y `relevant` queda vacío — y
+      // entonces este rescate lo devolvía intacto. Buscando "xbox series x"
+      // el comparador terminaba mostrando "Juego para Xbox Series X FIFA
+      // 2023" como si fuera la consola. La misma guarda ya estaba en
+      // routes/prices.js; faltaba acá.
+      if (isAccessoryFor(queryTokens, pNorm)) return false;
       const pTokens = tokenize(p.name);
       return queryTokens.every(
         (t) => tokenInProduct(t, pNorm) || tokenInProductFuzzy(t, pTokens)
       );
     });
+  }
+
+  // "Sin X": el producto anuncia la AUSENCIA de lo buscado. Acá importa más
+  // que en el buscador: "Pulpa de Tomate Sin Azúcar" puntúa 1.00, idéntico al
+  // azúcar de verdad, así que el desempate lo decide el precio y basta con
+  // que baje para que se lleve el puesto de "más barato" y entre en el total
+  // del carrito. Igual que en prices.js, sólo se descartan si sobreviven
+  // productos que SÍ afirman el término (buscando "lactosa" o "gluten" lo que
+  // se quiere es justamente el "sin").
+  const afirmados = relevant.filter(
+    (p) => !isNegatedMention(queryTokens[0], normalize(p.name))
+  );
+  if (afirmados.length > 0) relevant = afirmados;
+
+  // Respaldo: confiar en el buscador de la tienda. Si no quedó nada pero las
+  // tiendas sí devolvieron productos, ellas saben algo que nosotros no —
+  // "ibuprofeno" daba CERO tiendas en el carrito (las farmacias lo venden
+  // como Perifar / Actron / Ibupirac, y ningún nombre lleva el genérico).
+  // Sólo para búsquedas de un token: con varias, la tienda degrada a
+  // matchear cualquiera de ellas y devuelve cualquier cosa.
+  if (relevant.length === 0 && queryTokens.length === 1) {
+    relevant = products.filter((p) => !isAccessoryFor(queryTokens, normalize(p.name)));
   }
 
   // Duplicados exactos y listados placeholder rotos (ej: un "Microondas" a
@@ -464,3 +495,10 @@ router.post('/compare', requirePremium, async (req, res) => {
 });
 
 module.exports = router;
+
+// Expuesto sólo para scripts/precision-eval-cart.js. Esta ruta calcula el
+// total del "Carrito óptimo" y durante mucho tiempo no tuvo ninguna cobertura
+// automática: la batería de precisión sólo ejercitaba /api/prices/search, y
+// por eso el umbral de 0.5 pudo dejar pasar un incienso de $30 como "mejor
+// precio" de un Apple Pencil sin que ningún test se enterara.
+module.exports.__testing = { scrapeItem, isRelevant, scoreRelevance };
