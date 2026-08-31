@@ -6,102 +6,25 @@ const db = require('../db');
 const authMiddleware = require('../middleware/auth');
 const requirePremium = require('../middleware/requirePremium');
 const { scrapeAll } = require('../services/scraper');
+const {
+  normalize,
+  tokenize,
+  buildSearchQuery,
+  tokenInProduct,
+  isAccessoryFor,
+  hasAllModelTokens,
+  dedupeResults,
+  filterPriceOutliers,
+} = require('../services/productMatcher');
 
 const router = express.Router();
 router.use(authMiddleware);
 
-// ─── Normalización y relevancia ───────────────────────────────────
-
-// Palabras vacías que no aportan a la búsqueda (artículos, preposiciones)
-const STOP_WORDS = new Set([
-  'de', 'con', 'para', 'el', 'la', 'los', 'las', 'un', 'una',
-  'en', 'y', 'o', 'al', 'del', 'sin', 'por', 'su',
-]);
-
-// Normaliza texto: quita tildes, expande abreviaturas de volumen
-function normalize(text) {
-  return text
-    .toLowerCase()
-    .normalize('NFD').replace(/[̀-ͯ]/g, '') // quitar tildes
-    .replace(/\b(\d+)\s*litros?\b/g, '$1l')   // "3 litros" → "3l"
-    .replace(/\b(\d+)\s*lts?\b/g, '$1l')       // "3lt" → "3l"
-    .replace(/\b(\d+)\s*mililitros?\b/g, '$1ml')
-    .replace(/\b(\d+)\s*kilos?\b/g, '$1kg')
-    .replace(/\b(\d+)\s*gramos?\b/g, '$1g')
-    .replace(/[^a-z0-9\s]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-// Tokeniza quitando stop-words y letras sueltas.
-// "Bidón de agua" → ["bidon", "agua"]  (independiente del orden)
-// Los dígitos siempre sobreviven aunque el token sea de 1 carácter — "2" en
-// "Nintendo Switch 2" es lo único que distingue la consola de accesorios
-// para la Switch original, descartarlo hacía que cualquier producto con
-// "nintendo switch" matcheara igual (confirmado: devolvía un pack de
-// Joy-Con para la Switch 1 como resultado de buscar "Nintendo Switch 2").
-function tokenize(text) {
-  return normalize(text)
-    .split(' ')
-    .filter((w) => (w.length > 1 || /\d/.test(w)) && !STOP_WORDS.has(w));
-}
-
-// Query "limpia" que mandamos al buscador de cada tienda (sin stop-words)
-function buildSearchQuery(raw) {
-  const tokens = tokenize(raw);
-  return tokens.length > 0 ? tokens.join(' ') : normalize(raw);
-}
-
-// Sinónimos: un token de la búsqueda matchea si el producto usa otra palabra
-// equivalente. Claves normalizadas (sin tildes). Ampliable según haga falta.
-const SYNONYMS = {
-  gaseosa: ['refresco'], refresco: ['gaseosa'],
-  papa: ['papas'], papas: ['papa'],
-  palta: ['aguacate'], aguacate: ['palta'],
-  pancho: ['salchicha', 'salchichas'], salchicha: ['pancho', 'salchichas'],
-  bidon: ['botellon'], botellon: ['bidon'],
-  fideos: ['pasta', 'pastas'], pasta: ['fideos'],
-  detergente: ['lavavajilla', 'lavavajillas'],
-  panal: ['panales'], panales: ['panal'],
-  yerba: ['yerba mate'],
-  choclo: ['maiz'], maiz: ['choclo'],
-  durazno: ['duraznos', 'melocoton'],
-  arveja: ['arvejas', 'guisantes'],
-};
-
-// ¿El token (o alguno de sus sinónimos) está en el nombre del producto?
-function tokenInProduct(token, pNorm) {
-  if (pNorm.includes(token)) return true;
-  const syns = SYNONYMS[token];
-  return syns ? syns.some((s) => pNorm.includes(s)) : false;
-}
-
-// Accesorios/complementos que suelen repetir el nombre completo del producto
-// principal en su título (SEO de e-commerce) — "Nintendo Switch 2 Pack
-// Volantes Joy-Con" matchea el 100% de los tokens de "nintendo switch 2"
-// igual que "Consola Nintendo Switch 2", y al desempatar por precio más
-// bajo el accesorio (mucho más barato) le ganaba a la consola real.
-// Si el producto menciona uno de estos términos y la búsqueda NO lo pidió
-// explícitamente, se penaliza el score para que el producto base rankee
-// primero — buscar "funda nintendo switch 2" sigue funcionando normal.
-const ACCESSORY_WORDS = [
-  'funda', 'case', 'estuche', 'protector', 'templado', 'vidrio',
-  'pack', 'combo', 'kit',
-  'volante', 'volantes', 'joystick', 'control', 'mando', 'gamepad',
-  'cargador', 'cable', 'adaptador', 'powerbank', 'bateria',
-  'soporte', 'base', 'mochila', 'bolso',
-  'auriculares', 'audifonos', 'correa', 'grip', 'skin', 'vinilo',
-  'camara', 'microfono',
-  'juego', 'videojuego', 'accesorio', 'accesorios', 'repuesto', 'repuestos',
-  'memoria', 'microsd', 'playstand', 'stand', 'dock', 'webcam',
-  'estacion', 'portal', 'remoto',
-];
-
-function hasUnrequestedAccessoryWord(queryTokens, pNorm) {
-  return ACCESSORY_WORDS.some(
-    (word) => pNorm.includes(word) && !queryTokens.includes(word)
-  );
-}
+// ─── Relevancia ───────────────────────────────────────────────────
+// Las primitivas (normalizar, tokenizar, sinónimos, detección de accesorios,
+// tokens de modelo obligatorios) viven en services/productMatcher.js, que
+// comparte con routes/prices.js. Acá queda solo la política de ranking
+// propia de esta pantalla: score 0-1 y "el mejor match por tienda".
 
 // Score 0-1: proporción de tokens de la búsqueda presentes en el nombre del
 // producto, con penalización si el producto es un accesorio no pedido.
@@ -110,28 +33,20 @@ function scoreRelevance(queryTokens, productName) {
   const pNorm = normalize(productName);
   const matches = queryTokens.filter((t) => tokenInProduct(t, pNorm)).length;
   let score = matches / queryTokens.length;
-  if (hasUnrequestedAccessoryWord(queryTokens, pNorm)) score *= 0.3;
+  if (isAccessoryFor(queryTokens, pNorm)) score *= 0.3;
   return score;
 }
 
-// ¿El producto es relevante? Exige el sustantivo principal (primer token)
-// + al menos la mitad de los tokens. Evita basura (ej: "arroz" → shampoo).
+// ¿El producto es relevante? Exige el sustantivo principal (primer token),
+// los tokens de modelo/generación completos, y al menos la mitad de los
+// tokens. Evita basura (ej: "arroz" → shampoo).
 const RELEVANCE_THRESHOLD = 0.5;
 function isRelevant(queryTokens, productName) {
   if (queryTokens.length === 0) return true;
   const pNorm = normalize(productName);
   // El primer token es el sustantivo principal y DEBE estar presente (o un sinónimo)
   if (!tokenInProduct(queryTokens[0], pNorm)) return false;
-  // Los tokens con dígitos son obligatorios, no solo "puntos": un número
-  // después de un nombre propio suele ser la generación/modelo del producto
-  // ("Switch 2" vs "Switch", "S24" vs "S23", "i7" vs "i5"), no un detalle
-  // opcional — el umbral de 50% dejaba pasar "Consola Nintendo Switch
-  // [original]" como match de "nintendo switch 2" porque nintendo+switch ya
-  // sumaban 67%. No solo dígitos puros: los códigos de modelo mezclan letra
-  // y número. Tiene que ser un token completo (\bTOKEN\b) — si no, "32GB" o
-  // "2024" "contienen" el "2" como substring y dejan pasar cualquier cosa.
-  const numericTokens = queryTokens.filter((t) => /\d/.test(t));
-  if (numericTokens.some((t) => !new RegExp(`\\b${t}\\b`).test(pNorm))) return false;
+  if (!hasAllModelTokens(queryTokens, pNorm)) return false;
   return scoreRelevance(queryTokens, productName) >= RELEVANCE_THRESHOLD;
 }
 
@@ -145,7 +60,13 @@ async function scrapeItem(item, category = null) {
 
   // Solo productos relevantes — si nada coincide, el ítem queda sin resultados
   // (mejor mostrar "no encontrado" que precios de productos equivocados)
-  const relevant = products.filter((p) => isRelevant(queryTokens, p.name));
+  let relevant = products.filter((p) => isRelevant(queryTokens, p.name));
+
+  // Duplicados exactos y listados placeholder rotos (ej: un "Microondas" a
+  // $239 sin marca junto a microondas reales de $3.400+). Importa acá más
+  // que en ningún lado: el total de "Carrito óptimo" se arma con el más
+  // barato de cada ítem, así que un placeholder corrompe la cifra principal.
+  relevant = filterPriceOutliers(dedupeResults(relevant), queryTokens);
 
   // Mejor match por tienda: primero el más relevante, entre iguales el más barato
   const byStore = {};

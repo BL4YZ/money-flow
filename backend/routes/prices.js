@@ -2,6 +2,14 @@ const express = require("express");
 const authMiddleware = require("../middleware/auth");
 const requirePremium = require("../middleware/requirePremium");
 const { scrapeAll, SCRAPE_STORES, CATEGORIES } = require("../services/scraper");
+const {
+  normalize,
+  tokenize,
+  isAccessoryFor,
+  hasAllModelTokens,
+  dedupeResults,
+  filterPriceOutliers,
+} = require("../services/productMatcher");
 
 const router = express.Router();
 
@@ -34,66 +42,20 @@ router.get("/search", requirePremium, async (req, res) => {
     console.log(`[prices] buscando "${query}" cat:${category||"todas"} tienda:${store||"todas"}`);
     let items = await scrapeAll(query, store ? [store] : null, category || null);
 
-    // ─── NUEVO: Sistema de Puntuación con Regla de Sustantivo ────────
-    const normalizedQuery = query
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "");
-    const stopWords = [
-      "de",
-      "con",
-      "para",
-      "el",
-      "la",
-      "los",
-      "las",
-      "un",
-      "una",
-      "en",
-      "y",
-      "o",
-      "al",
-    ];
+    // Normalización y tokenización compartidas con routes/shopping.js
+    // (services/productMatcher.js) — antes estaban duplicadas acá y cada
+    // arreglo de relevancia había que hacerlo dos veces.
+    const normalizedQuery = normalize(query);
+    const queryKeywords = tokenize(query);
 
-    // Los dígitos siempre sobreviven aunque el token sea corto — "2" en
-    // "Nintendo Switch 2" es lo único que distingue la consola de accesorios
-    // para la Switch original; descartarlo hacía que cualquier producto con
-    // "nintendo switch" matcheara igual de bien.
-    const queryKeywords = normalizedQuery
-      .split(" ")
-      .filter((word) => (word.length > 2 || /\d/.test(word)) && !stopWords.includes(word));
-
-    // Accesorios/complementos que repiten el nombre del producto principal en
-    // su título (SEO de e-commerce) — sin esto, "Pack Volantes Joy-Con para
-    // Nintendo Switch 2" empataba o incluso superaba a "Consola Nintendo
-    // Switch 2" (la regla del sustantivo penaliza a "Consola..." por no
-    // empezar con la marca, y el accesorio sí). Penaliza si el producto lo
-    // menciona pero la búsqueda no lo pidió — buscar "funda switch 2" sigue
-    // funcionando normal.
-    const ACCESSORY_WORDS = [
-      "funda", "case", "estuche", "protector", "templado", "vidrio",
-      "pack", "combo", "kit",
-      "volante", "volantes", "joystick", "control", "mando", "gamepad",
-      "cargador", "cable", "adaptador", "powerbank", "bateria",
-      "soporte", "base", "mochila", "bolso",
-      "auriculares", "audifonos", "correa", "grip", "skin", "vinilo",
-      "camara", "microfono",
-      "juego", "videojuego", "accesorio", "accesorios", "repuesto", "repuestos",
-      "memoria", "microsd", "playstand", "stand", "dock", "webcam",
-      "estacion", "portal", "remoto",
-    ];
+    // Duplicados exactos + listados placeholder rotos (ej: "Microondas" a
+    // $239 sin marca conviviendo con microondas reales de $3.400+).
+    items = filterPriceOutliers(dedupeResults(items), queryKeywords);
 
     if (queryKeywords.length > 0) {
       let scoredItems = items.map((item) => {
-        const itemName = item.name
-          .toLowerCase()
-          .normalize("NFD")
-          .replace(/[\u0300-\u036f]/g, "");
-
-        // Limpiamos el nombre del producto de "stopwords" y letras sueltas
-        const itemWords = itemName
-          .split(" ")
-          .filter((w) => (w.length > 1 || /\d/.test(w)) && !stopWords.includes(w));
+        const itemName = normalize(item.name);
+        const itemWords = tokenize(item.name);
 
         let score = 0;
         let matchedKeywords = 0;
@@ -132,26 +94,18 @@ router.get("/search", requirePremium, async (req, res) => {
         // "Pollo spiedo" no tiene "suprema" → _matchesFirstKeyword=false
         const matchesFirstKeyword = itemName.includes(queryKeywords[0]);
 
-        // 4. Penalización por accesorio no pedido (ver comentario arriba)
-        const isUnrequestedAccessory = ACCESSORY_WORDS.some(
-          (word) => itemName.includes(word) && !queryKeywords.includes(word)
-        );
+        // 4. Penalización por accesorio no pedido (lista de palabras +
+        // regla gramatical "X para <lo buscado>", ver productMatcher.js).
         // -15 (no -8): un accesorio que empieza con la marca ("Pack Volantes
         // Joy-Con...") ya le saca 5 puntos de ventaja de "regla del sustantivo"
         // a un producto real que empieza con la categoría ("Consola Nintendo
         // Switch 2") — el castigo tiene que superar ese margen con comodidad.
-        if (isUnrequestedAccessory) score -= 15;
+        if (isAccessoryFor(queryKeywords, itemName)) score -= 15;
 
-        // Los tokens con dígitos después de un nombre propio suelen ser la
-        // generación/modelo ("Switch 2" vs "Switch", "S24" vs "S23", "i7" vs
-        // "i5") — obligatorios en cualquier filtro, incluso el relajado, o
-        // "Consola Nintendo Switch [original]" pasa como match de "nintendo
-        // switch 2" con nintendo+switch ya matcheados. No solo dígitos puros:
-        // los códigos de modelo suelen mezclar letra+número.
-        const numericKeywords = queryKeywords.filter((k) => /\d/.test(k));
-        // Match de palabra completa (\bN\b) — si no, "32GB"/"2024" "contienen"
-        // el "2" como substring y dejan pasar cualquier producto igual.
-        const hasAllNumericKeywords = numericKeywords.every((k) => new RegExp(`\\b${k}\\b`).test(itemName));
+        // Tokens de modelo/generación obligatorios en cualquier filtro,
+        // incluso el relajado ("Switch 2" vs "Switch", "i7" vs "i5") —
+        // ver productMatcher.hasAllModelTokens.
+        const hasAllNumericKeywords = hasAllModelTokens(queryKeywords, itemName);
 
         return { ...item, _score: score, _matched: matchedKeywords, _isMainNoun: isMainNoun, _matchesFirstKeyword: matchesFirstKeyword, _hasAllNumericKeywords: hasAllNumericKeywords };
       });
