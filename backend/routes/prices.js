@@ -7,6 +7,10 @@ const {
   tokenize,
   isAccessoryFor,
   hasAllModelTokens,
+  matchesToken,
+  phraseInProduct,
+  isModifierMention,
+  isNegatedMention,
   dedupeResults,
   filterPriceOutliers,
   withUnitPrices,
@@ -73,7 +77,7 @@ router.get("/search", requirePremium, async (req, res) => {
 
         let matchedKeywords = 0;
         queryKeywords.forEach((kw) => {
-          if (itemName.includes(kw)) matchedKeywords++;
+          if (matchesToken(kw, itemName)) matchedKeywords++;
         });
 
         // Si no coincidió NADA, le damos 0 y pasamos al siguiente. Igual
@@ -96,7 +100,7 @@ router.get("/search", requirePremium, async (req, res) => {
         let score = bm25Score(queryKeywords, itemWords, corpus) * 3;
 
         // 2. Bonus masivo por frase exacta ("suprema de pollo")
-        if (itemName.includes(normalizedQuery)) score += 10;
+        if (phraseInProduct(normalizedQuery, itemName)) score += 10;
 
         // 3. LA REGLA DEL SUSTANTIVO
         // Solo miramos la PRIMERA palabra importante del producto (no las dos)
@@ -105,7 +109,7 @@ router.get("/search", requirePremium, async (req, res) => {
         let isMainNoun = false;
         if (itemWords.length > 0) {
           const firstWord = itemWords[0];
-          isMainNoun = queryKeywords.some((kw) => firstWord.includes(kw));
+          isMainNoun = queryKeywords.some((kw) => matchesToken(kw, firstWord));
           if (isMainNoun) {
             score += 5;
           } else {
@@ -116,7 +120,7 @@ router.get("/search", requirePremium, async (req, res) => {
         // Guardamos si la PRIMERA keyword de la búsqueda está en el nombre
         // Ej: búsqueda "suprema de pollo" → firstKeyword="suprema"
         // "Pollo spiedo" no tiene "suprema" → _matchesFirstKeyword=false
-        const matchesFirstKeyword = itemName.includes(queryKeywords[0]);
+        const matchesFirstKeyword = matchesToken(queryKeywords[0], itemName);
 
         // 4. Penalización por accesorio no pedido (lista de palabras +
         // regla gramatical "X para <lo buscado>", ver productMatcher.js).
@@ -174,13 +178,78 @@ router.get("/search", requirePremium, async (req, res) => {
           if (isAccessoryFor(queryKeywords, item._itemName)) return false;
           const itemWords = tokenize(item.name);
           return queryKeywords.every(
-            (kw) => item._itemName.includes(kw) || tokenInProductFuzzy(kw, itemWords)
+            (kw) => matchesToken(kw, item._itemName) || tokenInProductFuzzy(kw, itemWords)
           );
         });
         strictFiltered = strictFiltered.concat(
           difusos.map((i) => ({ ...i, _score: i._score - 100, _fuzzy: true }))
         );
       }
+
+      const mainToken = queryKeywords[0];
+
+      // Intento 4 — confiar en el buscador de la tienda. Si después de todo
+      // lo anterior no quedó nada, pero las tiendas SÍ devolvieron productos
+      // para este término, ellas saben algo que nosotros no.
+      //
+      // El caso que lo motivó: "ibuprofeno" devolvía 0. El scrape crudo traía
+      // 36 productos — Perifar, Actron, Ibupirac — porque el buscador de cada
+      // farmacia mapea el genérico a sus marcas. Ningún nombre contiene la
+      // palabra "ibuprofeno", así que nuestro filtro los tiraba todos. Con
+      // medicamentos esto es la norma, no la excepción: el genérico y la marca
+      // comercial no comparten ni un token, y una lista de sinónimos tendría
+      // que enumerar todo el vademécum.
+      //
+      // Entran con score muy bajo (nunca le ganan a un match propio) y siguen
+      // pasando por los filtros de accesorio/modificador/negación de abajo.
+      // Sólo para búsquedas de UN token, y esto es lo que hace la diferencia
+      // entre útil y basura. Con un término suelto, o la tienda lo entendió o
+      // no devolvió nada. Con varios degrada a matchear cualquiera de ellos:
+      // "xbox series x" devolvía un "Vino Tannat 90 POINTS SERIES", una
+      // asadera y una pistola NERF — todos enganchados por la palabra
+      // "series". Ahí cero resultados es la respuesta correcta.
+      if (strictFiltered.length === 0 && queryKeywords.length === 1) {
+        strictFiltered = scoredItems.map((i) => ({ ...i, _score: -500, _storeTrust: true }));
+      }
+
+      // Los accesorios se SACAN, no sólo se despriorizan. El castigo de -15
+      // los mandaba al fondo pero seguían en la lista, y eso contamina lo que
+      // el usuario ve como comparación: buscando "nintendo switch 2", un pack
+      // de Joy-Con de $2.374 conviviendo con consolas de $30.000 hace que el
+      // "desde $" y el mínimo del rango de precios mientan.
+      // Red de seguridad: si TODO lo que hay son accesorios, se muestran igual
+      // — es mejor que una pantalla vacía, y significa que la tienda no tiene
+      // el producto principal (ver "xbox series x", donde sólo hay juegos).
+      const sinAccesorios = strictFiltered.filter(
+        (item) => !isAccessoryFor(queryKeywords, item._itemName)
+      );
+      if (sinAccesorios.length > 0) strictFiltered = sinAccesorios;
+
+      // "X de Y": lo buscado aparece como ingrediente, no como producto —
+      // "Helado 3 L Dulce De Leche" ganaba la búsqueda "leche 3 litros".
+      // La regla ya existía en productMatcher (la usa shopping.js) pero acá
+      // nunca se había conectado.
+      //
+      // Este filtro NO tiene la red de seguridad que sí tienen los accesorios,
+      // a propósito. Verificado en vivo: no hay leche de 3 L en ninguna cadena
+      // (el scrape crudo de "leche 3l" devuelve helados, jabón líquido y
+      // Coca-Cola de 3 L, cero leche). Un accesorio al menos informa — "la
+      // consola no está, hay juegos" —, pero un helado no dice nada del precio
+      // de la leche. Ante un hueco de stock real, cero resultados es la
+      // respuesta honesta.
+      strictFiltered = strictFiltered.filter(
+        (item) => !isModifierMention(mainToken, item._itemName)
+      );
+
+      // "Sin X": el producto anuncia la AUSENCIA de lo buscado ("Pulpa de
+      // Tomate SIN AZÚCAR" para "azúcar", "Maní SIN SAL" para "sal").
+      // Se descartan sólo si quedan productos que sí lo afirman: buscando
+      // "lactosa" o "gluten" nadie vende el ingrediente suelto y lo que la
+      // gente quiere ES el "sin lactosa" — ahí este filtro no se aplica solo.
+      const sinNegados = strictFiltered.filter(
+        (item) => !isNegatedMention(mainToken, item._itemName)
+      );
+      if (sinNegados.length > 0) strictFiltered = sinNegados;
 
       scoredItems = strictFiltered;
 
@@ -195,7 +264,7 @@ router.get("/search", requirePremium, async (req, res) => {
       });
 
       // Limpiamos variables temporales
-      items = scoredItems.map(({ _score, _matched, _isMainNoun, _matchesFirstKeyword, _hasAllNumericKeywords, _itemName, _fuzzy, ...rest }) => rest);
+      items = scoredItems.map(({ _score, _matched, _isMainNoun, _matchesFirstKeyword, _hasAllNumericKeywords, _itemName, _fuzzy, _storeTrust, ...rest }) => rest);
     } else {
       items = items.sort((a, b) => a.price - b.price);
     }

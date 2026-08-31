@@ -32,6 +32,10 @@ const SYNONYMS = {
   yerba: ['yerba mate'],
   choclo: ['maiz'], maiz: ['choclo'],
   durazno: ['duraznos', 'melocoton'],
+  teclado: ['keyboard'], keyboard: ['teclado'],
+  mouse: ['raton'], raton: ['mouse'],
+  lapiz: ['pencil', 'stylus'],
+  auriculares: ['audifonos', 'headphones'], audifonos: ['auriculares'],
   arveja: ['arvejas', 'guisantes'],
 };
 
@@ -70,11 +74,52 @@ function buildSearchQuery(raw) {
   return tokens.length > 0 ? tokens.join(' ') : normalize(raw);
 }
 
+// ─── Match de token: prefijo de palabra, no substring ─────────────
+// Buscar "ipad" traía como PRIMER resultado un "Disipador CPU Cougar": la
+// palabra "d-i-s-IPAD-o-r" contiene "ipad" literalmente. Con `.includes()`
+// el token matcheaba, sumaba el bonus de frase exacta (+10) y el de
+// sustantivo principal (+5), y se iba al tope del ranking.
+//
+// No alcanza con exigir palabra completa (`\bipad\b`): el match por prefijo
+// es necesario para la morfología del español — "panal" tiene que encontrar
+// "panales", "leche" → "leches", "fideo" → "fideos".
+//
+// La observación que lo resuelve: el español extiende las palabras por el
+// FINAL (plurales, género), nunca por el principio. Entonces exigimos que el
+// token arranque en borde de palabra Y que lo que sobre sea un sufijo
+// flexivo plausible. Eso deja pasar "panal|es" y corta "sal|sa",
+// "pan|talon", "mesa|da" y el "dis|ipad|or" original.
+const INFLECTION_SUFFIXES = new Set(['', 's', 'es', 'as', 'os', 'a', 'o']);
+
+function escapeRe(s) {
+  return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function matchesToken(token, text) {
+  const re = new RegExp(`\\b${escapeRe(token)}(\\w*)`, 'g');
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    if (INFLECTION_SUFFIXES.has(m[1])) return true;
+  }
+  return false;
+}
+
 // ¿El token (o alguno de sus sinónimos) está en el nombre del producto?
 function tokenInProduct(token, pNorm) {
-  if (pNorm.includes(token)) return true;
+  if (matchesToken(token, pNorm)) return true;
   const syns = SYNONYMS[token];
-  return syns ? syns.some((s) => pNorm.includes(s)) : false;
+  return syns ? syns.some((s) => matchesToken(s, pNorm)) : false;
+}
+
+// Igual que arriba pero para una frase completa ("coca cola 2l"): cada token
+// de la frase tiene que aparecer, en orden y contiguo. Reemplaza al
+// `includes(normalizedQuery)` que otorgaba el bonus de frase exacta.
+function phraseInProduct(phrase, pNorm) {
+  const parts = String(phrase).trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return false;
+  const body = parts.map(escapeRe).join('\\s+');
+  return new RegExp(`\\b${body}(\\w*)`).test(pNorm)
+    && INFLECTION_SUFFIXES.has((pNorm.match(new RegExp(`\\b${body}(\\w*)`)) || [, ''])[1]);
 }
 
 // ─── Detección de accesorios ──────────────────────────────────────
@@ -93,6 +138,11 @@ const ACCESSORY_WORDS = [
   'juego', 'videojuego', 'accesorio', 'accesorios', 'repuesto', 'repuestos',
   'memoria', 'microsd', 'playstand', 'stand', 'dock', 'webcam',
   'estacion', 'portal', 'remoto',
+  // Periféricos: aparecen nombrando el equipo al que acompañan y sin ningún
+  // conector que la regla gramatical pueda ver ("Apple Magic Keyboard iPad
+  // Pro 11'' y iPad Air"), así que sólo los agarra la lista.
+  'teclado', 'keyboard', 'mouse', 'raton', 'lapiz', 'pencil', 'stylus',
+  'disipador', 'cooler', 'ventilador para',
 ];
 
 // Regla gramatical, complementaria a la lista de palabras: "X para Y" /
@@ -103,10 +153,36 @@ const ACCESSORY_WORDS = [
 // producto buscado aparece ANTES del "para": es el producto, no un accesorio.
 const ACCESSORY_CONNECTORS = /\b(para|compatible con|apto para)\b/;
 
+// ¿La búsqueda pidió este accesorio? Tiene que mirar sinónimos, no sólo
+// igualdad literal: buscando "teclado", el producto se llama "Magic Keyboard"
+// y una comparación palabra a palabra lo marcaba como accesorio ajeno —
+// justo lo que el usuario estaba buscando.
+// La equivalencia tiene que mirarse en LAS DOS DIRECCIONES. Con el lookup en
+// un solo sentido, buscar "apple pencil" marcaba como accesorio ajeno a los
+// cuatro Apple Pencil reales: el producto se llama "Lápiz Apple Pencil", la
+// palabra de la lista que dispara es "lapiz", y `SYNONYMS['pencil']` no
+// existía aunque sí estuviera definido `lapiz: ['pencil']`.
+//
+// El síntoma era intermitente y por eso confuso: sin filtro de categoría
+// TODOS los resultados quedaban marcados como accesorio, la red de seguridad
+// los devolvía enteros y se veía bien; con categoría, un resultado cualquiera
+// no era accesorio, la red no se activaba y desaparecían los Pencils de
+// verdad dejando sólo lo que no tenía nada que ver.
+function queryAsksFor(word, queryTokens) {
+  if (queryTokens.includes(word)) return true;
+  const wordSyns = SYNONYMS[word] || [];
+  return queryTokens.some((qt) => {
+    if (qt === word) return true;
+    if (wordSyns.includes(qt)) return true;          // lapiz → pencil
+    const syns = SYNONYMS[qt];
+    return syns ? syns.includes(word) : false;       // pencil → lapiz
+  });
+}
+
 function isAccessoryFor(queryTokens, pNorm) {
   // 1. Lista de palabras: menciona un accesorio que la búsqueda no pidió
   const byWord = ACCESSORY_WORDS.some(
-    (word) => pNorm.includes(word) && !queryTokens.includes(word)
+    (word) => matchesToken(word, pNorm) && !queryAsksFor(word, queryTokens)
   );
   if (byWord) return true;
 
@@ -142,6 +218,34 @@ function isModifierMention(mainToken, pNorm) {
   if (tokens[0].includes(mainToken)) return false;
   const re = new RegExp(`\\b${MODIFIER_CONNECTORS}\\s+${mainToken.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`);
   return re.test(pNorm);
+}
+
+// ─── "Sin X": el producto anuncia la AUSENCIA de lo buscado ───────
+// "Pulpa de Tomate SIN AZÚCAR" contiene la palabra "azúcar" y matcheaba la
+// búsqueda de azúcar — es literalmente el producto opuesto al pedido.
+//
+// Pero no se puede excluir siempre: buscando "lactosa" o "gluten", lo que la
+// gente quiere ES el producto "sin lactosa" / "sin gluten". Nadie compra
+// lactosa suelta.
+//
+// La diferencia no se resuelve con una lista de palabras sino mirando los
+// datos: si en los resultados existen productos donde el término aparece
+// afirmado ("Azúcar Bella Unión"), entonces los "sin azúcar" son ruido. Si
+// NINGÚN producto lo afirma (nadie vende "Lactosa 1kg"), la búsqueda tiene
+// que ser sobre la ausencia y los conservamos. Ver el uso en routes/prices.js.
+const NEGATION_CONNECTORS = '(?:sin|libre de|cero|0%)';
+
+function isNegatedMention(token, pNorm) {
+  if (!token) return false;
+  const t = escapeRe(token);
+  // ¿Aparece al menos una vez SIN estar negado? Entonces no es una negación.
+  const afirmado = new RegExp(`(?:^|[^a-z])(?<!${NEGATION_CONNECTORS} )${t}`);
+  const negado = new RegExp(`\\b${NEGATION_CONNECTORS}\\s+${t}\\b`);
+  if (!negado.test(pNorm)) return false;
+  // Si el término también aparece afirmado en otra parte del nombre
+  // ("Leche sin lactosa" buscando "leche"), no lo tratamos como negación.
+  const sinNegaciones = pNorm.replace(new RegExp(`\\b${NEGATION_CONNECTORS}\\s+${t}\\b`, 'g'), ' ');
+  return !matchesToken(token, sinNegaciones);
 }
 
 // ─── Tokens de modelo/generación obligatorios ─────────────────────
@@ -579,9 +683,12 @@ module.exports = {
   tokenize,
   buildSearchQuery,
   tokenInProduct,
+  matchesToken,
+  phraseInProduct,
   isAccessoryFor,
   hasAllModelTokens,
   isModifierMention,
+  isNegatedMention,
   dedupeResults,
   filterPriceOutliers,
   parseQuantity,
