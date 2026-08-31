@@ -35,10 +35,15 @@ function normalize(text) {
 
 // Tokeniza quitando stop-words y letras sueltas.
 // "Bidón de agua" → ["bidon", "agua"]  (independiente del orden)
+// Los dígitos siempre sobreviven aunque el token sea de 1 carácter — "2" en
+// "Nintendo Switch 2" es lo único que distingue la consola de accesorios
+// para la Switch original, descartarlo hacía que cualquier producto con
+// "nintendo switch" matcheara igual (confirmado: devolvía un pack de
+// Joy-Con para la Switch 1 como resultado de buscar "Nintendo Switch 2").
 function tokenize(text) {
   return normalize(text)
     .split(' ')
-    .filter((w) => w.length > 1 && !STOP_WORDS.has(w));
+    .filter((w) => (w.length > 1 || /\d/.test(w)) && !STOP_WORDS.has(w));
 }
 
 // Query "limpia" que mandamos al buscador de cada tienda (sin stop-words)
@@ -71,12 +76,41 @@ function tokenInProduct(token, pNorm) {
   return syns ? syns.some((s) => pNorm.includes(s)) : false;
 }
 
-// Score 0-1: proporción de tokens de la búsqueda presentes en el nombre del producto
+// Accesorios/complementos que suelen repetir el nombre completo del producto
+// principal en su título (SEO de e-commerce) — "Nintendo Switch 2 Pack
+// Volantes Joy-Con" matchea el 100% de los tokens de "nintendo switch 2"
+// igual que "Consola Nintendo Switch 2", y al desempatar por precio más
+// bajo el accesorio (mucho más barato) le ganaba a la consola real.
+// Si el producto menciona uno de estos términos y la búsqueda NO lo pidió
+// explícitamente, se penaliza el score para que el producto base rankee
+// primero — buscar "funda nintendo switch 2" sigue funcionando normal.
+const ACCESSORY_WORDS = [
+  'funda', 'case', 'estuche', 'protector', 'templado', 'vidrio',
+  'pack', 'combo', 'kit',
+  'volante', 'volantes', 'joystick', 'control', 'mando', 'gamepad',
+  'cargador', 'cable', 'adaptador', 'powerbank', 'bateria',
+  'soporte', 'base', 'mochila', 'bolso',
+  'auriculares', 'audifonos', 'correa', 'grip', 'skin', 'vinilo',
+  'camara', 'microfono',
+  'juego', 'videojuego', 'accesorio', 'accesorios', 'repuesto', 'repuestos',
+  'memoria', 'microsd', 'playstand', 'stand', 'dock', 'webcam',
+];
+
+function hasUnrequestedAccessoryWord(queryTokens, pNorm) {
+  return ACCESSORY_WORDS.some(
+    (word) => pNorm.includes(word) && !queryTokens.includes(word)
+  );
+}
+
+// Score 0-1: proporción de tokens de la búsqueda presentes en el nombre del
+// producto, con penalización si el producto es un accesorio no pedido.
 function scoreRelevance(queryTokens, productName) {
   if (queryTokens.length === 0) return 0;
   const pNorm = normalize(productName);
   const matches = queryTokens.filter((t) => tokenInProduct(t, pNorm)).length;
-  return matches / queryTokens.length;
+  let score = matches / queryTokens.length;
+  if (hasUnrequestedAccessoryWord(queryTokens, pNorm)) score *= 0.3;
+  return score;
 }
 
 // ¿El producto es relevante? Exige el sustantivo principal (primer token)
@@ -87,6 +121,15 @@ function isRelevant(queryTokens, productName) {
   const pNorm = normalize(productName);
   // El primer token es el sustantivo principal y DEBE estar presente (o un sinónimo)
   if (!tokenInProduct(queryTokens[0], pNorm)) return false;
+  // Los tokens puramente numéricos son obligatorios, no solo "puntos": un
+  // número después de un nombre propio suele ser la generación/modelo del
+  // producto ("Switch 2" vs "Switch"), no un detalle opcional — el umbral
+  // de 50% dejaba pasar "Consola Nintendo Switch [original]" como match de
+  // "nintendo switch 2" porque nintendo+switch ya sumaban 67%. Tiene que
+  // ser un token completo (\b2\b) — si no, "32GB" o "2024" "contienen" el
+  // "2" como substring y dejan pasar cualquier cosa igual.
+  const numericTokens = queryTokens.filter((t) => /^\d+$/.test(t));
+  if (numericTokens.some((t) => !new RegExp(`\\b${t}\\b`).test(pNorm))) return false;
   return scoreRelevance(queryTokens, productName) >= RELEVANCE_THRESHOLD;
 }
 
