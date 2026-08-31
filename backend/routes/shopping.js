@@ -15,6 +15,10 @@ const {
   hasAllModelTokens,
   dedupeResults,
   filterPriceOutliers,
+  isModifierMention,
+  withUnitPrices,
+  compareByValue,
+  tokenInProductFuzzy,
 } = require('../services/productMatcher');
 
 const router = express.Router();
@@ -27,13 +31,24 @@ router.use(authMiddleware);
 // propia de esta pantalla: score 0-1 y "el mejor match por tienda".
 
 // Score 0-1: proporción de tokens de la búsqueda presentes en el nombre del
-// producto, con penalización si el producto es un accesorio no pedido.
+// producto, penalizado si es un accesorio no pedido o si lo buscado aparece
+// como adjetivo al final en vez de ser el sustantivo principal.
 function scoreRelevance(queryTokens, productName) {
   if (queryTokens.length === 0) return 0;
   const pNorm = normalize(productName);
   const matches = queryTokens.filter((t) => tokenInProduct(t, pNorm)).length;
   let score = matches / queryTokens.length;
+
   if (isAccessoryFor(queryTokens, pNorm)) score *= 0.3;
+
+  // Regla del sustantivo: lo buscado tiene que ser el producto, no un
+  // ingrediente. Sin esto, "Chocolate Batón de Leche" ($30) le ganaba a
+  // "Leche Conaprole 1L" ($45) buscando "leche" — y como el comparador
+  // elige uno por tienda, el chocolate quedaba como "lo más barato".
+  // Es penalización, no exclusión: si en esa tienda no hay nada mejor,
+  // sigue apareciendo, pero pierde contra un match de verdad.
+  if (isModifierMention(queryTokens[0], pNorm)) score *= 0.4;
+
   return score;
 }
 
@@ -62,27 +77,53 @@ async function scrapeItem(item, category = null) {
   // (mejor mostrar "no encontrado" que precios de productos equivocados)
   let relevant = products.filter((p) => isRelevant(queryTokens, p.name));
 
+  // Rescate por typos: si lo exacto no encontró nada, reintenta tolerando
+  // errores de tipeo ("shampo" → "shampoo"). Nunca sustituye a un match
+  // exacto porque sólo corre cuando no hubo ninguno, y los tokens con
+  // dígitos siguen exigiendo exactitud (ver productMatcher).
+  if (relevant.length === 0) {
+    relevant = products.filter((p) => {
+      const pNorm = normalize(p.name);
+      if (!hasAllModelTokens(queryTokens, pNorm)) return false;
+      const pTokens = tokenize(p.name);
+      return queryTokens.every(
+        (t) => tokenInProduct(t, pNorm) || tokenInProductFuzzy(t, pTokens)
+      );
+    });
+  }
+
   // Duplicados exactos y listados placeholder rotos (ej: un "Microondas" a
   // $239 sin marca junto a microondas reales de $3.400+). Importa acá más
   // que en ningún lado: el total de "Carrito óptimo" se arma con el más
   // barato de cada ítem, así que un placeholder corrompe la cifra principal.
   relevant = filterPriceOutliers(dedupeResults(relevant), queryTokens);
 
-  // Mejor match por tienda: primero el más relevante, entre iguales el más barato
+  // Precio por unidad (por L / kg / m / un): necesario para elegir bien entre
+  // envases de distinto tamaño.
+  relevant = withUnitPrices(relevant);
+
+  // Mejor match por tienda: primero el más relevante, y entre iguales el de
+  // MEJOR VALOR (precio por unidad si ambos lo tienen, si no precio
+  // absoluto). Con precio absoluto a secas, entre dos leches igual de
+  // relevantes ganaba la de 250 ml a $44 sobre la de 1 L a $45 — 4× más cara
+  // por litro, y encima es la que alimentaba el total de "Carrito óptimo".
   const byStore = {};
   for (const p of relevant) {
     const score = scoreRelevance(queryTokens, p.name);
     const existing = byStore[p.storeId];
-    if (
-      !existing ||
-      score > existing._score ||
-      (score === existing._score && p.price < existing.price)
-    ) {
+    if (!existing || score > existing._score || (score === existing._score && compareByValue(p, existing) < 0)) {
       byStore[p.storeId] = { ...p, _score: score };
     }
   }
 
-  const sorted = Object.values(byStore).sort((a, b) => a.price - b.price);
+  // El "más barato" global se elige entre los MEJORES matches, no entre
+  // cualquier cosa que haya pasado el umbral: primero relevancia, después
+  // valor. Si no, un producto flojo pero barato (un chocolate con leche
+  // buscando "leche") se llevaba el puesto.
+  const sorted = Object.values(byStore).sort((a, b) => {
+    if (b._score !== a._score) return b._score - a._score;
+    return compareByValue(a, b);
+  });
   return {
     item: item.name,
     itemId: item.id,
@@ -118,6 +159,7 @@ function buildComparison(items, itemResults) {
         url: product.url,
         image: product.image || null,
         ...(product.currency === 'USD' ? { currency: 'USD', originalPrice: product.originalPrice } : {}),
+        ...(product.unitPrice ? { unitPrice: product.unitPrice, unitLabel: product.unitLabel } : {}),
       });
     }
   }
@@ -154,7 +196,7 @@ function buildComparison(items, itemResults) {
       itemId: ir.itemId,
       quantity: ir.quantity,
       cheapest: ir.cheapest,
-      options: Object.values(ir.byStore).sort((a, b) => a.price - b.price).slice(0, 4),
+      options: Object.values(ir.byStore).sort(compareByValue).slice(0, 4),
     })),
     byStore: allStores,
     optimalTotal,

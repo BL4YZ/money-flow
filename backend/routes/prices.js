@@ -9,6 +9,11 @@ const {
   hasAllModelTokens,
   dedupeResults,
   filterPriceOutliers,
+  withUnitPrices,
+  compareByValue,
+  buildCorpusStats,
+  bm25Score,
+  tokenInProductFuzzy,
 } = require("../services/productMatcher");
 
 const router = express.Router();
@@ -51,25 +56,43 @@ router.get("/search", requirePremium, async (req, res) => {
     // Duplicados exactos + listados placeholder rotos (ej: "Microondas" a
     // $239 sin marca conviviendo con microondas reales de $3.400+).
     items = filterPriceOutliers(dedupeResults(items), queryKeywords);
+    // Precio por unidad (por L / kg / m / un) para poder comparar envases de
+    // distinto tamaño — ver productMatcher.withUnitPrices.
+    items = withUnitPrices(items);
+
+    // Estadísticas del corpus (IDF + largo promedio) para BM25. El corpus es
+    // el set de resultados de esta búsqueda: la pregunta que importa es qué
+    // término discrimina entre ESTOS candidatos.
+    const corpus = buildCorpusStats(items);
 
     if (queryKeywords.length > 0) {
       let scoredItems = items.map((item) => {
         const itemName = normalize(item.name);
         const itemWords = tokenize(item.name);
 
-        let score = 0;
         let matchedKeywords = 0;
-
-        // 1. Puntos base por cada palabra que coincida en cualquier parte
         queryKeywords.forEach((kw) => {
-          if (itemName.includes(kw)) {
-            score += 3;
-            matchedKeywords++;
-          }
+          if (itemName.includes(kw)) matchedKeywords++;
         });
 
-        // Si no coincidió NADA, le damos 0 y pasamos al siguiente
-        if (matchedKeywords === 0) return { ...item, _score: 0, _matched: 0 };
+        // Si no coincidió NADA, le damos 0 y pasamos al siguiente. Igual
+        // conserva _itemName/_hasAllNumericKeywords: el rescate por typos de
+        // más abajo justamente busca entre estos.
+        if (matchedKeywords === 0) {
+          return {
+            ...item,
+            _score: 0,
+            _matched: 0,
+            _itemName: itemName,
+            _hasAllNumericKeywords: hasAllModelTokens(queryKeywords, itemName),
+          };
+        }
+
+        // 1. Base BM25 (reemplaza el "+3 plano por keyword"): pondera por
+        // rareza del término (IDF) y satura la repetición. Se escala x3 para
+        // mantener los bonus/castigos de abajo en la misma proporción con la
+        // que fueron calibrados contra datos reales.
+        let score = bm25Score(queryKeywords, itemWords, corpus) * 3;
 
         // 2. Bonus masivo por frase exacta ("suprema de pollo")
         if (itemName.includes(normalizedQuery)) score += 10;
@@ -107,7 +130,7 @@ router.get("/search", requirePremium, async (req, res) => {
         // ver productMatcher.hasAllModelTokens.
         const hasAllNumericKeywords = hasAllModelTokens(queryKeywords, itemName);
 
-        return { ...item, _score: score, _matched: matchedKeywords, _isMainNoun: isMainNoun, _matchesFirstKeyword: matchesFirstKeyword, _hasAllNumericKeywords: hasAllNumericKeywords };
+        return { ...item, _score: score, _matched: matchedKeywords, _isMainNoun: isMainNoun, _matchesFirstKeyword: matchesFirstKeyword, _hasAllNumericKeywords: hasAllNumericKeywords, _itemName: itemName };
       });
 
       // Filtro inteligente para búsquedas de 2+ palabras:
@@ -131,18 +154,47 @@ router.get("/search", requirePremium, async (req, res) => {
         });
       }
 
+      // Intento 3 — tolerancia a typos, sólo como red de seguridad cuando lo
+      // exacto casi no encontró nada ("shampo" → "shampoo"). Los matches
+      // difusos entran con score penalizado para que NUNCA le ganen a un
+      // match exacto, y los tokens con dígitos siguen exigiendo exactitud
+      // (confundir "i5" con "i7" es peor que no encontrar nada).
+      const FUZZY_TRIGGER = 3;
+      if (strictFiltered.length < FUZZY_TRIGGER) {
+        const yaIncluidos = new Set(strictFiltered.map((i) => i.url || i.name));
+        const difusos = scoredItems.filter((item) => {
+          if (yaIncluidos.has(item.url || item.name)) return false;
+          if (!item._hasAllNumericKeywords) return false;
+          // El rescate no puede resucitar lo que la regla de accesorios
+          // descartó a propósito: buscando "xbox series x" traía de vuelta
+          // "Juego para Xbox Series X FIFA 2023" (la consola no está en
+          // ninguna tienda; mostrar el juego en su lugar confunde más de lo
+          // que ayuda).
+          if (isAccessoryFor(queryKeywords, item._itemName)) return false;
+          const itemWords = tokenize(item.name);
+          return queryKeywords.every(
+            (kw) => item._itemName.includes(kw) || tokenInProductFuzzy(kw, itemWords)
+          );
+        });
+        strictFiltered = strictFiltered.concat(
+          difusos.map((i) => ({ ...i, _score: i._score - 100, _fuzzy: true }))
+        );
+      }
+
       scoredItems = strictFiltered;
 
-      // Ordenar: PRIMERO por relevancia (puntaje más alto), LUEGO por precio (menor a mayor)
+      // Ordenar: primero relevancia, después el MEJOR VALOR — precio por
+      // unidad cuando ambos lo tienen en la misma unidad base, si no precio
+      // absoluto (ver compareByValue). Sin esto, entre dos leches igual de
+      // relevantes ganaba la de 250 ml a $44 por sobre la de 1 L a $45, que
+      // es 4× más cara por litro.
       scoredItems.sort((a, b) => {
-        if (b._score !== a._score) {
-          return b._score - a._score;
-        }
-        return a.price - b.price;
+        if (b._score !== a._score) return b._score - a._score;
+        return compareByValue(a, b);
       });
 
       // Limpiamos variables temporales
-      items = scoredItems.map(({ _score, _matched, _isMainNoun, _matchesFirstKeyword, _hasAllNumericKeywords, ...rest }) => rest);
+      items = scoredItems.map(({ _score, _matched, _isMainNoun, _matchesFirstKeyword, _hasAllNumericKeywords, _itemName, _fuzzy, ...rest }) => rest);
     } else {
       items = items.sort((a, b) => a.price - b.price);
     }

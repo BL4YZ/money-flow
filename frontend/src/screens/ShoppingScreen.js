@@ -20,6 +20,14 @@ import { COMMON_PRODUCTS } from '../data/products';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const POLL_INTERVAL = 1500; // ms entre cada consulta de progreso
 
+// "$45/L", "$139/kg", "$4,90/un" — el precio por unidad es lo único que
+// permite comparar envases de distinto tamaño.
+function formatUnitPrice(item) {
+  if (!item || item.unitPrice == null) return null;
+  const decimals = item.unitPrice < 10 ? 2 : 0;
+  return `$${item.unitPrice.toLocaleString('es-UY', { maximumFractionDigits: decimals })}/${item.unitLabel}`;
+}
+
 // ─── Item chip en la lista ────────────────────────────────────────
 function ItemChip({ item, index, onDelete }) {
   const anim = useStaggerEntrance(index, { baseDelay: 40, fromY: 10 });
@@ -100,6 +108,9 @@ function StoreCard({ store, totalItems, rank, index }) {
                     {si.currency === 'USD' && (
                       <Text style={styles.storeItemUsd}>US$ {si.originalPrice.toLocaleString('es-UY')}</Text>
                     )}
+                    {si.unitPrice != null && (
+                      <Text style={styles.storeItemUnit}>{formatUnitPrice(si)}</Text>
+                    )}
                   </View>
                   {si.url ? (
                     <TouchableOpacity onPress={() => Linking.openURL(si.url)}>
@@ -135,6 +146,9 @@ function ItemResult({ result, index }) {
         <Text style={styles.itemResultProductName} numberOfLines={1}>· {result.cheapest.name}</Text>
         {result.cheapest.currency === 'USD' && (
           <Text style={styles.itemResultProductName}>· US$ {result.cheapest.originalPrice.toLocaleString('es-UY')}</Text>
+        )}
+        {result.cheapest.unitPrice != null && (
+          <Text style={styles.itemResultUnit}>· {formatUnitPrice(result.cheapest)}</Text>
         )}
       </View>
       {result.options.length > 1 && (
@@ -708,6 +722,7 @@ const styles = StyleSheet.create({
   itemResultOtherStores: { flexDirection: 'row', gap: 12, marginTop: 6 },
   itemResultOtherStore: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   itemResultOtherPrice: { fontSize: 11, color: COLORS.onSurfaceVariant },
+  itemResultUnit: { fontSize: 11, color: COLORS.secondary, fontWeight: '600' },
 
   // Store card
   storeCard: {
@@ -750,6 +765,7 @@ const styles = StyleSheet.create({
   storeItemName: { flex: 1, fontSize: 12, color: COLORS.onSurfaceVariant },
   storeItemPrice: { fontSize: 13, fontWeight: '600', color: COLORS.onSurface },
   storeItemUsd: { fontSize: 10, color: COLORS.onSurfaceVariant },
+  storeItemUnit: { fontSize: 10, color: COLORS.secondary, fontWeight: '600' },
 
   // Empty
   emptyResults: { alignItems: 'center', padding: SPACING.xl, gap: SPACING.sm },

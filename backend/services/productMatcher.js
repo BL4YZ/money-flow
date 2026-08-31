@@ -124,6 +124,26 @@ function isAccessoryFor(queryTokens, pNorm) {
   return tailHasQuery && !headHasQuery;
 }
 
+// ─── "X de Y": lo buscado como ingrediente, no como producto ──────
+// En español "Chocolate de Leche" / "Crema de Leche" / "Yogur con Leche"
+// son chocolate, crema y yogur — no leche. Buscando "leche", los tres
+// matchean el token igual que "Leche Conaprole 1L", y como suelen ser más
+// baratos se quedaban con el puesto de "más barato". Detecta que el término
+// buscado aparece SOLO detrás de un conector y que el producto arranca con
+// otra cosa. La posición sola no alcanzaba: en "Chocolate Batón de Leche"
+// la palabra cae igual entre los primeros tokens.
+const MODIFIER_CONNECTORS = '(?:de|con|sabor|rellen\\w+ de|base de)';
+
+function isModifierMention(mainToken, pNorm) {
+  if (!mainToken) return false;
+  const tokens = pNorm.split(' ').filter(Boolean);
+  if (tokens.length === 0) return false;
+  // Si el producto EMPIEZA con lo buscado, es el producto ("Leche Conaprole")
+  if (tokens[0].includes(mainToken)) return false;
+  const re = new RegExp(`\\b${MODIFIER_CONNECTORS}\\s+${mainToken.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`);
+  return re.test(pNorm);
+}
+
 // ─── Tokens de modelo/generación obligatorios ─────────────────────
 // Un número (o código alfanumérico) después de un nombre propio suele ser la
 // generación/modelo: "Switch 2" vs "Switch", "S24" vs "S23", "i7" vs "i5".
@@ -190,6 +210,219 @@ function filterPriceOutliers(items, queryTokens = []) {
   });
 }
 
+// ─── Cantidad y precio por unidad ─────────────────────────────────
+// El problema #1 de los comparadores de precios ("pack size chaos"):
+// comparar por precio absoluto hace que un envase chico gane siempre.
+// Medido en vivo acá: "Leche Frutilla 250 ml $44" salía como más barata
+// que "Leche Conaprole 1L $45" — pero son $176/L contra $45/L. Como el
+// total de "Carrito óptimo" se arma con el más barato de cada ítem, la
+// cifra principal recomendaba sistemáticamente la peor opción por unidad.
+//
+// Unidades base: ml (volumen), g (peso), m (largo), un (cantidad).
+const UNIT_FAMILIES = [
+  { base: 'ml', factor: 1000, re: /(\d+(?:[.,]\d+)?)\s*(?:litros?|lts?|l)\b/ },
+  { base: 'ml', factor: 1,    re: /(\d+(?:[.,]\d+)?)\s*(?:mililitros?|ml|cc)\b/ },
+  { base: 'g',  factor: 1000, re: /(\d+(?:[.,]\d+)?)\s*(?:kilogramos?|kilos?|kgs?)\b/ },
+  { base: 'g',  factor: 1,    re: /(\d+(?:[.,]\d+)?)\s*(?:gramos?|grs?|g)\b/ },
+  { base: 'm',  factor: 1,    re: /(\d+(?:[.,]\d+)?)\s*(?:metros?|mtrs?|mts?|m)\b/ },
+];
+
+// "4 un.", "12 unidades", "6 rollos", "24 comprimidos", "10 Comp."
+const COUNT_RE = /(?:^|\s|x)\s*(\d+)\s*(?:un\b|unid\w*|unidades?|u\b|rollos?|comp\w*|caps\w*|capsulas?|tabletas?|sobres?|pa[ñn]os?)/;
+// Conteo al final sin palabra de unidad, como lo escriben varias tiendas:
+// "Pañales HUGGIES Natural Care XXG x 100" → 100 unidades.
+const TRAILING_COUNT_RE = /[x×]\s*(\d+)\s*$/;
+// Multipack explícito: "6 x 330 ml", "2 x 500 g", "4x1kg"
+const MULTIPACK_RE = /(\d+)\s*[x×]\s*(\d+(?:[.,]\d+)?)\s*(litros?|lts?|l|mililitros?|ml|cc|kilogramos?|kilos?|kgs?|gramos?|grs?|g|metros?|mtrs?|mts?|m)\b/;
+// Multipack con la unidad pegada, como lo escriben varias tiendas:
+// "12unx30mtrs", "16Un X30Mt" → 12 rollos × 30 m. Va antes que MULTIPACK_RE
+// porque ese leería "12" x "30" perdiendo que son unidades por rollo.
+const PACK_COUNT_RE = /(\d+)\s*u\w*\s*[x×]\s*(\d+(?:[.,]\d+)?)\s*(litros?|lts?|l|mililitros?|ml|cc|kilogramos?|kilos?|kgs?|gramos?|grs?|g|metros?|mtrs?|mts?|m)\b/;
+
+function toNumber(s) {
+  return parseFloat(String(s).replace(',', '.'));
+}
+
+function familyFor(unitWord) {
+  const w = unitWord.toLowerCase();
+  if (/^(litros?|lts?|l)$/.test(w)) return { base: 'ml', factor: 1000 };
+  if (/^(mililitros?|ml|cc)$/.test(w)) return { base: 'ml', factor: 1 };
+  if (/^(kilogramos?|kilos?|kgs?)$/.test(w)) return { base: 'g', factor: 1000 };
+  if (/^(gramos?|grs?|g)$/.test(w)) return { base: 'g', factor: 1 };
+  if (/^(metros?|mtrs?|mts?|m)$/.test(w)) return { base: 'm', factor: 1 };
+  return null;
+}
+
+/**
+ * Extrae la cantidad total del nombre de un producto.
+ * "Leche Conaprole 1L"            → { qty: 1000, unit: 'ml' }
+ * "Coca Cola 6 x 330 ml"          → { qty: 1980, unit: 'ml' }  (multipack expandido)
+ * "Papel higiénico Noble 4 un. 30 m" → { qty: 120, unit: 'm' } (4 rollos × 30 m)
+ * "Pañales Trial T G 60 U"        → { qty: 60,  unit: 'un' }
+ * Devuelve null si no hay nada parseable.
+ */
+function parseQuantity(name) {
+  const n = normalizeForQty(name);
+
+  // 1. Multipack explícito ("6 x 330 ml", "12unx30mtrs") — gana sobre el resto
+  const multi = n.match(PACK_COUNT_RE) || n.match(MULTIPACK_RE);
+  if (multi) {
+    const fam = familyFor(multi[3]);
+    if (fam) {
+      return { qty: toNumber(multi[1]) * toNumber(multi[2]) * fam.factor, unit: fam.base };
+    }
+  }
+
+  // 2. Medida por familia (litros, gramos, metros…)
+  let measure = null;
+  for (const fam of UNIT_FAMILIES) {
+    const m = n.match(fam.re);
+    if (m) { measure = { qty: toNumber(m[1]) * fam.factor, unit: fam.base }; break; }
+  }
+
+  // 3. Conteo de unidades ("4 un.", "60 U", "2 rollos", "... x 100")
+  const countMatch = n.match(COUNT_RE) || n.match(TRAILING_COUNT_RE);
+  const count = countMatch ? toNumber(countMatch[1]) : null;
+
+  // Conteo + medida = multipack implícito ("4 un. 30 m" → 120 m)
+  if (measure && count && count > 1) return { qty: measure.qty * count, unit: measure.unit };
+  if (measure) return measure;
+  if (count) return { qty: count, unit: 'un' };
+  return null;
+}
+
+// Normalización propia para cantidades: NO colapsa "500 ml" en "500ml"
+// (necesitamos el número y la unidad por separado) pero sí baja a minúscula
+// y saca puntuación que rompa los regex.
+function normalizeForQty(text) {
+  return String(text || '')
+    .toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9.,x×\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// Etiqueta legible para mostrar el precio por unidad: por L / por kg / por m / c/u
+const UNIT_DISPLAY = {
+  ml: { per: 1000, label: 'L' },
+  g:  { per: 1000, label: 'kg' },
+  m:  { per: 100,  label: '100m' },
+  un: { per: 1,    label: 'un' },
+};
+
+/**
+ * Agrega `unitPrice` + `unitLabel` a cada ítem que tenga cantidad parseable.
+ * `unitPrice` queda en la escala que se muestra (por litro, por kilo, por
+ * metro, por unidad) para que el frontend no tenga que convertir nada.
+ */
+function withUnitPrices(items) {
+  return items.map((item) => {
+    const q = parseQuantity(item.name);
+    if (!q || !(q.qty > 0) || !(item.price > 0)) return item;
+    const disp = UNIT_DISPLAY[q.unit];
+    if (!disp) return item;
+    return {
+      ...item,
+      unitPrice: Math.round((item.price / q.qty) * disp.per * 100) / 100,
+      unitLabel: disp.label,
+      unitQty: q.qty,
+      unitBase: q.unit,
+    };
+  });
+}
+
+// Comparador para elegir la mejor oferta entre productos igual de relevantes:
+// si ambos tienen precio por unidad en la MISMA unidad base, gana el mejor
+// precio por unidad; si no, se cae al precio absoluto (comportamiento previo).
+function compareByValue(a, b) {
+  if (a.unitPrice && b.unitPrice && a.unitBase === b.unitBase) {
+    return a.unitPrice - b.unitPrice;
+  }
+  return a.price - b.price;
+}
+
+// ─── BM25 ─────────────────────────────────────────────────────────
+// Reemplaza el "+3 por keyword" plano por un score con dos propiedades que
+// esa fórmula no tenía: IDF (una palabra rara y discriminante como
+// "anticaspa" pesa más que una común como "shampoo", sin calibrarlo a mano)
+// y saturación (que un término aparezca 5 veces no lo hace 5× más relevante).
+const BM25_K1 = 1.2;
+const BM25_B = 0.75;
+
+// El "corpus" es el set de resultados de ESTA búsqueda. Es chico (50-200
+// ítems), pero es exactamente la pregunta que importa: dentro de estos
+// candidatos, ¿qué término de mi búsqueda discrimina más?
+function buildCorpusStats(items) {
+  const docs = items.map((it) => tokenize(it.name));
+  const df = new Map();
+  let totalLen = 0;
+  docs.forEach((toks) => {
+    totalLen += toks.length;
+    new Set(toks).forEach((t) => df.set(t, (df.get(t) || 0) + 1));
+  });
+  return { df, N: docs.length || 1, avgLen: totalLen / (docs.length || 1) || 1 };
+}
+
+function bm25Score(queryTokens, productTokens, stats) {
+  if (queryTokens.length === 0 || productTokens.length === 0) return 0;
+  const freq = new Map();
+  productTokens.forEach((t) => freq.set(t, (freq.get(t) || 0) + 1));
+  const docLen = productTokens.length;
+
+  let score = 0;
+  for (const qt of queryTokens) {
+    // Cuenta también matches por substring/sinónimo, no sólo token exacto:
+    // los títulos pegan unidades y modelos ("1lt", "55") y perderíamos señal.
+    let f = freq.get(qt) || 0;
+    if (f === 0 && productTokens.some((pt) => pt.includes(qt) || tokenInProduct(qt, pt))) f = 1;
+    if (f === 0) continue;
+
+    const n = stats.df.get(qt) || 0;
+    const idf = Math.log(1 + (stats.N - n + 0.5) / (n + 0.5));
+    score += idf * (f * (BM25_K1 + 1)) / (f + BM25_K1 * (1 - BM25_B + BM25_B * (docLen / stats.avgLen)));
+  }
+  return score;
+}
+
+// ─── Tolerancia a typos ───────────────────────────────────────────
+// Sólo como red de seguridad: se usa cuando la búsqueda exacta trae muy
+// pocos resultados, y los matches difusos siempre rankean por debajo de los
+// exactos. La distancia permitida escala con el largo de la palabra y los
+// tokens cortos exigen match exacto (si no, "pan" matchearía "pon", "san"…).
+function levenshtein(a, b) {
+  if (a === b) return 0;
+  if (Math.abs(a.length - b.length) > 2) return 99; // corte temprano
+  const prev = new Array(b.length + 1);
+  const cur = new Array(b.length + 1);
+  for (let j = 0; j <= b.length; j++) prev[j] = j;
+  for (let i = 1; i <= a.length; i++) {
+    cur[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      cur[j] = Math.min(cur[j - 1] + 1, prev[j] + 1, prev[j - 1] + cost);
+    }
+    for (let j = 0; j <= b.length; j++) prev[j] = cur[j];
+  }
+  return prev[b.length];
+}
+
+function allowedTypos(token) {
+  if (token.length < 5) return 0;   // tokens cortos: siempre exacto
+  if (token.length < 8) return 1;
+  return 2;
+}
+
+// ¿El token matchea algún token del producto tolerando N typos?
+// Nunca aplica a tokens con dígitos: un modelo mal matcheado ("i5" vs "i7",
+// "switch 2" vs "switch 3") es peor que no encontrar nada.
+function tokenInProductFuzzy(token, productTokens) {
+  if (/\d/.test(token)) return false;
+  const budget = allowedTypos(token);
+  if (budget === 0) return false;
+  return productTokens.some((pt) => !/\d/.test(pt) && levenshtein(token, pt) <= budget);
+}
+
 module.exports = {
   STOP_WORDS,
   SYNONYMS,
@@ -200,6 +433,14 @@ module.exports = {
   tokenInProduct,
   isAccessoryFor,
   hasAllModelTokens,
+  isModifierMention,
   dedupeResults,
   filterPriceOutliers,
+  parseQuantity,
+  withUnitPrices,
+  compareByValue,
+  buildCorpusStats,
+  bm25Score,
+  levenshtein,
+  tokenInProductFuzzy,
 };

@@ -21,6 +21,14 @@ const CATEGORIES = [
   { id: 'hogar',        label: 'Hogar',         icon: 'tv-outline' },
 ];
 
+// "$45/L", "$139/kg", "$4,90/un" — permite comparar envases de distinto
+// tamaño, que es la única forma de saber cuál conviene de verdad.
+export function formatUnitPrice(item) {
+  if (item.unitPrice == null) return null;
+  const decimals = item.unitPrice < 10 ? 2 : 0;
+  return `$${item.unitPrice.toLocaleString('es-UY', { maximumFractionDigits: decimals })}/${item.unitLabel}`;
+}
+
 function ResultCard({ item, index }) {
   const pct = item.listPrice && item.listPrice > item.price
     ? Math.round((1 - item.price / item.listPrice) * 100)
@@ -62,6 +70,9 @@ function ResultCard({ item, index }) {
         )}
         {item.currency === 'USD' && (
           <Text style={styles.resultListPrice}>US$ {item.originalPrice.toLocaleString('es-UY')}</Text>
+        )}
+        {item.unitPrice != null && (
+          <Text style={styles.resultUnitPrice}>{formatUnitPrice(item)}</Text>
         )}
         {item.url && (
           <Ionicons name="open-outline" size={13} color={COLORS.primary} style={{ marginTop: 4 }} />
@@ -335,6 +346,7 @@ const styles = StyleSheet.create({
   resultPriceCol: { alignItems: 'flex-end', minWidth: 64 },
   resultPrice: { fontSize: 15, fontWeight: '800', color: COLORS.onSurface },
   resultListPrice: { fontSize: 11, color: COLORS.onSurfaceVariant, textDecorationLine: 'line-through' },
+  resultUnitPrice: { fontSize: 11, color: COLORS.secondary, fontWeight: '600', marginTop: 2 },
 
   // Empty / hint
   empty: { alignItems: 'center', padding: SPACING.xl, gap: SPACING.sm },
