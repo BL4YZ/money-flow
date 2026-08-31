@@ -19,6 +19,7 @@ const {
   isNegatedMention,
   withUnitPrices,
   compareByValue,
+  markOffUnitItems,
   tokenInProductFuzzy,
 } = require('../services/productMatcher');
 
@@ -49,6 +50,21 @@ function scoreRelevance(queryTokens, productName) {
   // Es penalización, no exclusión: si en esa tienda no hay nada mejor,
   // sigue apareciendo, pero pierde contra un match de verdad.
   if (isModifierMention(queryTokens[0], pNorm)) score *= 0.4;
+
+  // Regla del sustantivo principal, la misma que aplica routes/prices.js con
+  // +5/-3. Faltaba acá y por eso "Poroto Cololo MANTECA Lata 400Gr" (un
+  // poroto manteca, la legumbre) puntuaba 1.00 buscando "manteca", idéntico a
+  // "Manteca Conaprole" — y al desempatar por precio se llevaba el puesto de
+  // más barato. La palabra buscada tiene que ser el producto, no un
+  // calificativo de otro producto.
+  //
+  // Es castigo y no exclusión: 0.6 sigue por encima del umbral, así que si en
+  // esa tienda no hay nada mejor el producto igual aparece, pero pierde
+  // contra cualquier match donde lo buscado sea el sustantivo.
+  const primeraPalabra = tokenize(productName)[0];
+  if (primeraPalabra && !queryTokens.some((t) => tokenInProduct(t, primeraPalabra))) {
+    score *= 0.6;
+  }
 
   return score;
 }
@@ -118,6 +134,17 @@ async function scrapeItem(item, category = null) {
     });
   }
 
+  // "X de Y": lo buscado como ingrediente y no como producto. El castigo de
+  // ×0.4 en scoreRelevance alcanza para que pierda contra un match real, pero
+  // no para cuando TODOS los resultados son del mismo tipo: buscando "leche 3
+  // litros" (que ninguna cadena stockea) el carrito se quedaba con "Helado 3 L
+  // Dulce De Leche" como si fuera leche. Igual que en prices.js, este filtro
+  // no tiene red de seguridad — ante un hueco de stock real, no mostrar nada
+  // es más honesto que ofrecer un helado como precio de la leche.
+  relevant = relevant.filter(
+    (p) => !isModifierMention(queryTokens[0], normalize(p.name))
+  );
+
   // "Sin X": el producto anuncia la AUSENCIA de lo buscado. Acá importa más
   // que en el buscador: "Pulpa de Tomate Sin Azúcar" puntúa 1.00, idéntico al
   // azúcar de verdad, así que el desempate lo decide el precio y basta con
@@ -150,6 +177,10 @@ async function scrapeItem(item, category = null) {
   // envases de distinto tamaño.
   relevant = withUnitPrices(relevant);
 
+  // Marca los envases cuya unidad no se puede comparar con la del resto
+  // (un sobre de 15 g de polvo entre botellas de litros) — ver markOffUnitItems.
+  relevant = markOffUnitItems(relevant);
+
   // Mejor match por tienda: primero el más relevante, y entre iguales el de
   // MEJOR VALOR (precio por unidad si ambos lo tienen, si no precio
   // absoluto). Con precio absoluto a secas, entre dos leches igual de
@@ -157,7 +188,10 @@ async function scrapeItem(item, category = null) {
   // por litro, y encima es la que alimentaba el total de "Carrito óptimo".
   const byStore = {};
   for (const p of relevant) {
-    const score = scoreRelevance(queryTokens, p.name);
+    let score = scoreRelevance(queryTokens, p.name);
+    // Unidad incomparable: no puede ganar sólo por tener el precio absoluto
+    // más bajo. Castigo, no exclusión — si es lo único de esa tienda, aparece.
+    if (p._offUnit) score *= 0.6;
     const existing = byStore[p.storeId];
     if (!existing || score > existing._score || (score === existing._score && compareByValue(p, existing) < 0)) {
       byStore[p.storeId] = { ...p, _score: score };

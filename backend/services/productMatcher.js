@@ -440,6 +440,34 @@ function withUnitPrices(items) {
 // Comparador para elegir la mejor oferta entre productos igual de relevantes:
 // si ambos tienen precio por unidad en la MISMA unidad base, gana el mejor
 // precio por unidad; si no, se cae al precio absoluto (comportamiento previo).
+// ─── Coherencia de unidad dentro de un set de resultados ──────────
+// compareByValue sólo compara precio por unidad cuando la unidad BASE coincide
+// (comparar $/kg contra $/L no significa nada). Cuando no coincide cae a
+// precio absoluto — y ahí el envase más chico gana siempre.
+//
+// Eso hacía que buscando "refresco" ganara un sobre de "Refresco TANG naranja
+// mango 15 g" a $30: es polvo para preparar, se mide en gramos, así que nunca
+// se compara por litro contra una botella y su precio absoluto es imbatible.
+// El mismo patrón aparece con cualquier concentrado, saborizante o repuesto
+// que se venda junto al producto listo.
+//
+// Se marca (no se excluye) el ítem cuya unidad difiere de la dominante del
+// set. Requiere una mayoría clara y al menos 3 ítems con unidad, para que en
+// categorías donde el envase varía de por sí (hogar, ropa) no haga nada.
+function markOffUnitItems(items) {
+  const bases = items.map((i) => i.unitBase).filter(Boolean);
+  if (bases.length < 3) return items;
+
+  const conteo = {};
+  bases.forEach((b) => { conteo[b] = (conteo[b] || 0) + 1; });
+  const [dominante, n] = Object.entries(conteo).sort((a, b) => b[1] - a[1])[0];
+  if (n / bases.length < 0.6) return items;   // sin mayoría clara, no opinamos
+
+  return items.map((i) => (
+    i.unitBase && i.unitBase !== dominante ? { ...i, _offUnit: true } : i
+  ));
+}
+
 function compareByValue(a, b) {
   if (a.unitPrice && b.unitPrice && a.unitBase === b.unitBase) {
     return a.unitPrice - b.unitPrice;
@@ -695,6 +723,7 @@ module.exports = {
   parseQuantity,
   withUnitPrices,
   compareByValue,
+  markOffUnitItems,
   buildCorpusStats,
   bm25Score,
   levenshtein,

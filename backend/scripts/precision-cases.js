@@ -215,4 +215,13 @@ module.exports = [
   // intermitente segun la categoria (ver queryAsksFor en productMatcher.js).
   { q: 'apple pencil', cat: 'hogar', minResults: 2, allMatch: /pencil|lapiz/i, minPrice: 2000, label: 'regresion: sinonimo bidireccional' },
   { q: 'ipad', cat: 'hogar', minResults: 2, noneMatch: /pencil|lapiz|keyboard|teclado/i, label: 'y el lapiz SIGUE siendo accesorio del ipad' },
+
+  // ─── N2. Encontrados por scripts/audit-disagreement.js ──────────
+  // Ninguno de estos lo cazaba la bateria: los encontro la auditoria sin
+  // etiquetas comparando lo que eligen las dos rutas para la misma busqueda.
+  { q: 'manteca', cat: 'supermercado', minResults: 3, noneMatch: /poroto|lata/i, label: 'regresion: poroto manteca no es manteca' },
+  { q: 'heladera', cat: 'hogar', minResults: 3, noneMatch: /caja|organizador|bandeja|iman/i, minPrice: 5000, label: 'regresion: organizador de heladera' },
+  { q: 'refresco', cat: 'supermercado', minResults: 3, noneMatch: /\bpolvo\b|sobre/i, label: 'regresion: Tang en polvo vs botella' },
+  { q: 'arroz', cat: 'supermercado', minResults: 3, noneMatch: /harina de arroz|leche de arroz/i, label: 'regresion: harina de arroz no es arroz' },
+  { q: 'queso', cat: 'supermercado', minResults: 3, noneMatch: /ravioles|sorrentinos|tarta/i, label: 'regresion: relleno de queso no es queso' },
 ];
