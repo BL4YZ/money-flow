@@ -80,6 +80,7 @@ router.get("/search", requirePremium, async (req, res) => {
       "camara", "microfono",
       "juego", "videojuego", "accesorio", "accesorios", "repuesto", "repuestos",
       "memoria", "microsd", "playstand", "stand", "dock", "webcam",
+      "estacion", "portal", "remoto",
     ];
 
     if (queryKeywords.length > 0) {
@@ -141,11 +142,13 @@ router.get("/search", requirePremium, async (req, res) => {
         // Switch 2") — el castigo tiene que superar ese margen con comodidad.
         if (isUnrequestedAccessory) score -= 15;
 
-        // Los números después de un nombre propio suelen ser la generación/
-        // modelo ("Switch 2" vs "Switch") — obligatorios en cualquier filtro,
-        // incluso el relajado, o "Consola Nintendo Switch [original]" pasa
-        // como match de "nintendo switch 2" con nintendo+switch ya matcheados.
-        const numericKeywords = queryKeywords.filter((k) => /^\d+$/.test(k));
+        // Los tokens con dígitos después de un nombre propio suelen ser la
+        // generación/modelo ("Switch 2" vs "Switch", "S24" vs "S23", "i7" vs
+        // "i5") — obligatorios en cualquier filtro, incluso el relajado, o
+        // "Consola Nintendo Switch [original]" pasa como match de "nintendo
+        // switch 2" con nintendo+switch ya matcheados. No solo dígitos puros:
+        // los códigos de modelo suelen mezclar letra+número.
+        const numericKeywords = queryKeywords.filter((k) => /\d/.test(k));
         // Match de palabra completa (\bN\b) — si no, "32GB"/"2024" "contienen"
         // el "2" como substring y dejan pasar cualquier producto igual.
         const hasAllNumericKeywords = numericKeywords.every((k) => new RegExp(`\\b${k}\\b`).test(itemName));

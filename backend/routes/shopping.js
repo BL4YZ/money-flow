@@ -94,6 +94,7 @@ const ACCESSORY_WORDS = [
   'camara', 'microfono',
   'juego', 'videojuego', 'accesorio', 'accesorios', 'repuesto', 'repuestos',
   'memoria', 'microsd', 'playstand', 'stand', 'dock', 'webcam',
+  'estacion', 'portal', 'remoto',
 ];
 
 function hasUnrequestedAccessoryWord(queryTokens, pNorm) {
@@ -121,14 +122,15 @@ function isRelevant(queryTokens, productName) {
   const pNorm = normalize(productName);
   // El primer token es el sustantivo principal y DEBE estar presente (o un sinónimo)
   if (!tokenInProduct(queryTokens[0], pNorm)) return false;
-  // Los tokens puramente numéricos son obligatorios, no solo "puntos": un
-  // número después de un nombre propio suele ser la generación/modelo del
-  // producto ("Switch 2" vs "Switch"), no un detalle opcional — el umbral
-  // de 50% dejaba pasar "Consola Nintendo Switch [original]" como match de
-  // "nintendo switch 2" porque nintendo+switch ya sumaban 67%. Tiene que
-  // ser un token completo (\b2\b) — si no, "32GB" o "2024" "contienen" el
-  // "2" como substring y dejan pasar cualquier cosa igual.
-  const numericTokens = queryTokens.filter((t) => /^\d+$/.test(t));
+  // Los tokens con dígitos son obligatorios, no solo "puntos": un número
+  // después de un nombre propio suele ser la generación/modelo del producto
+  // ("Switch 2" vs "Switch", "S24" vs "S23", "i7" vs "i5"), no un detalle
+  // opcional — el umbral de 50% dejaba pasar "Consola Nintendo Switch
+  // [original]" como match de "nintendo switch 2" porque nintendo+switch ya
+  // sumaban 67%. No solo dígitos puros: los códigos de modelo mezclan letra
+  // y número. Tiene que ser un token completo (\bTOKEN\b) — si no, "32GB" o
+  // "2024" "contienen" el "2" como substring y dejan pasar cualquier cosa.
+  const numericTokens = queryTokens.filter((t) => /\d/.test(t));
   if (numericTokens.some((t) => !new RegExp(`\\b${t}\\b`).test(pNorm))) return false;
   return scoreRelevance(queryTokens, productName) >= RELEVANCE_THRESHOLD;
 }
