@@ -2,19 +2,109 @@ const axios = require("axios");
 const cheerio = require("cheerio");
 const { getUsdToUyuRate, convertUsdToUyu } = require("./exchangeRate");
 
-// Cache en memoria: { key: { data, expiresAt } }
+// Cache en memoria: { key: { data, freshUntil, staleUntil } }
+//
+// Dos ventanas en vez de una sola expiración:
+//  - fresco (30 min): se sirve directo.
+//  - rancio (hasta 2 h): se sirve IGUAL al instante y se dispara un refresh
+//    en segundo plano (stale-while-revalidate). Un scraping en frío cuesta
+//    entre 5 y 12 segundos medidos; hacer esperar todo eso por datos que
+//    cambian una o dos veces al día no tiene sentido.
 const cache = new Map();
-const CACHE_TTL = 30 * 60 * 1000; // 30 minutos
+// Configurables por env sobre todo para poder testearlos sin esperar 30 min.
+const CACHE_TTL = Number(process.env.SCRAPER_FRESH_MS) || 30 * 60 * 1000;
+const STALE_TTL = Number(process.env.SCRAPER_STALE_MS) || 2 * 60 * 60 * 1000;
 
-function getCached(key) {
+function getCacheEntry(key) {
   const entry = cache.get(key);
-  if (entry && Date.now() < entry.expiresAt) return entry.data;
-  cache.delete(key);
-  return null;
+  if (!entry) return null;
+  if (Date.now() > entry.staleUntil) { cache.delete(key); return null; }
+  return entry;
 }
 
 function setCache(key, data) {
-  cache.set(key, { data, expiresAt: Date.now() + CACHE_TTL });
+  const now = Date.now();
+  cache.set(key, { data, freshUntil: now + CACHE_TTL, staleUntil: now + STALE_TTL });
+}
+
+// ─── Single-flight (evita el cache stampede) ──────────────────────
+// Sin esto, N pedidos concurrentes de la misma búsqueda con la caché fría
+// disparan N scrapings idénticos. Medido: 4 pedidos simultáneos de una query
+// nueva generaban 40 requests HTTP en vez de 10, y tardaban 12,2s en vez de
+// ~3s. Acá el primero scrapea y el resto espera esa misma promesa.
+const inFlight = new Map();
+
+function singleFlight(key, fn) {
+  const running = inFlight.get(key);
+  if (running) return running;
+  const promise = (async () => {
+    try {
+      return await fn();
+    } finally {
+      inFlight.delete(key);
+    }
+  })();
+  inFlight.set(key, promise);
+  return promise;
+}
+
+// ─── Límite de concurrencia por dominio ───────────────────────────
+// Una lista de compras larga puede disparar decenas de requests casi
+// simultáneos contra la misma tienda. Que nos bloqueen la IP rompe la app
+// entera, así que se limita cuántos requests van a la vez a un mismo host.
+const MAX_CONCURRENT_PER_HOST = 3;
+const hostQueues = new Map(); // host → { active, waiting[] }
+
+function hostOf(url) {
+  try { return new URL(url).host; } catch { return "desconocido"; }
+}
+
+async function withHostLimit(url, fn) {
+  const host = hostOf(url);
+  let q = hostQueues.get(host);
+  if (!q) { q = { active: 0, waiting: [] }; hostQueues.set(host, q); }
+
+  if (q.active >= MAX_CONCURRENT_PER_HOST) {
+    await new Promise((resolve) => q.waiting.push(resolve));
+  }
+  q.active++;
+  try {
+    return await fn();
+  } finally {
+    q.active--;
+    const next = q.waiting.shift();
+    if (next) next();
+    else if (q.active === 0) hostQueues.delete(host);
+  }
+}
+
+// ─── Fetch con reintento ──────────────────────────────────────────
+// Un corte de red momentáneo hacía desaparecer la tienda de la comparación
+// sin dejar rastro. Se reintenta sólo lo que tiene sentido reintentar:
+// errores de red y 5xx/429. Un 404 o un 403 no mejoran reintentando.
+const RETRY_DELAYS_MS = [400, 1200];
+
+function isRetryable(err) {
+  const status = err.response?.status;
+  if (status === undefined) return true;            // error de red / timeout
+  return status === 429 || (status >= 500 && status < 600);
+}
+
+async function fetchWithRetry(url, options) {
+  let lastErr;
+  for (let intento = 0; intento <= RETRY_DELAYS_MS.length; intento++) {
+    try {
+      return await withHostLimit(url, () => axios.get(url, options));
+    } catch (err) {
+      lastErr = err;
+      if (!isRetryable(err) || intento === RETRY_DELAYS_MS.length) break;
+      const espera = err.response?.headers?.["retry-after"]
+        ? Number(err.response.headers["retry-after"]) * 1000
+        : RETRY_DELAYS_MS[intento];
+      await new Promise((r) => setTimeout(r, Math.min(espera, 5000)));
+    }
+  }
+  throw lastErr;
 }
 
 // ─── Headers para fetch HTTP directo ──────────────────────────────
@@ -75,7 +165,7 @@ function parseVtex(data, store) {
 async function scrapeTiendaInglesa(store, query, cacheKey) {
   try {
     const url = `https://www.tiendainglesa.com.uy/supermercado/busqueda?0,0,${encodeURIComponent(query)},0`;
-    const r = await axios.get(url, {
+    const r = await fetchWithRetry(url, {
       headers: { ...HTTP_HEADERS, Accept: "text/html" },
       timeout: 15000,
       maxRedirects: 5,
@@ -305,22 +395,38 @@ function parseFenicio($, store) {
 }
 
 // Magento (Farmashop)
+// El contenedor es `.product-item-info`: NO existe ningún elemento con la
+// clase `product-item` sola (las que hay son compuestas — product-item-info,
+// product-item-name…), así que el selector viejo `.product-item` no matcheaba
+// nada y la tienda venía devolviendo cero productos en silencio. Se acepta
+// también `li.product-item` por si vuelven al markup anterior.
 function parseMagento($, store) {
   const results = [];
-  $(".product-item").each((_, el) => {
+  $(".product-item-info, li.product-item").each((_, el) => {
     const $el = $(el);
-    const name = $el.find("h2").first().text().trim();
+    const name =
+      $el.find(".product-item-link").first().text().trim() ||
+      $el.find(".product-item-name").first().text().trim() ||
+      $el.find("h2").first().text().trim();
 
     const url =
+      $el.find("a.product-item-link").attr("href") ||
       $el.find("a.product.photo").attr("href") ||
       $el.find("a[href*='.html']").attr("href") ||
       "";
 
-    // Múltiples span.price; el último es el precio final (con descuento si lo hay)
-    const price = parsePrice($el.find("span.price").last().text());
+    // OJO con cuál precio: además del regular hay uno de "Farmacard" (tarjeta
+    // de fidelidad) más barato. Tomar el último span.price — lo que hacía el
+    // parser anterior — mostraba un precio que no paga cualquiera.
+    const price = parsePrice(
+      $el.find(".price.regular_price").first().text() ||
+      $el.find(".price-box.price-final_price .price").first().text() ||
+      $el.find("span.price").first().text()
+    );
     if (!name || price <= 0) return;
 
-    const image = $el.find("img.product-image-photo").attr("src") || null;
+    const $img = $el.find("img.product-image-photo").first();
+    const image = $img.attr("src") || $img.attr("data-src") || null;
 
     results.push({
       store: store.name,
@@ -697,42 +803,58 @@ async function convertResultsToUyu(results) {
 }
 
 // ─── Scraper (axios + cheerio) ────────────────────────────────────
-async function scrapeStore(store, query) {
-  const cacheKey = `${store.id}:${query.toLowerCase()}`;
-  const cached = getCached(cacheKey);
-  if (cached) {
-    console.log(`[scraper] cache hit: ${store.name} "${query}"`);
-    return cached;
-  }
 
-  // Tiendas con función de scraping propia (ej: GeneXus, flujos complejos)
+// El scraping en sí, sin caché ni coalescing (eso lo envuelve scrapeStore).
+async function doScrape(store, query, cacheKey) {
   if (store.scrape) return store.scrape(store, query, cacheKey);
 
+  const url = store.searchUrl(query);
+  // arraybuffer en vez de dejar que axios decodifique — algunas tiendas
+  // (NNET, Digital Outlet, TopTecnoUY) sirven windows-1252/iso-8859-1 y
+  // no UTF-8; decodificar como UTF-8 a ciegas rompe los acentos.
+  const r = await fetchWithRetry(url, {
+    headers: HTTP_HEADERS,
+    timeout: 12000,
+    maxRedirects: 5,
+    responseType: "arraybuffer",
+  });
+  const charsetMatch = String(r.headers["content-type"] || "").match(/charset=([\w-]+)/i);
+  const charset = charsetMatch ? charsetMatch[1].toLowerCase() : "utf-8";
+  const body = new TextDecoder(charset).decode(r.data);
+
+  // VTEX devuelve JSON; el resto, HTML que parseamos con cheerio
+  let results = store.parseJson
+    ? store.parseJson(JSON.parse(body), store)
+    : store.parse(cheerio.load(body), store);
+
+  results = await convertResultsToUyu(results);
+
+  console.log(`[scraper] ${store.name}: ${results.length} productos`);
+  setCache(cacheKey, results);
+  return results;
+}
+
+async function scrapeStore(store, query) {
+  const cacheKey = `${store.id}:${query.toLowerCase().trim()}`;
+  const entry = getCacheEntry(cacheKey);
+
+  if (entry && Date.now() < entry.freshUntil) {
+    console.log(`[scraper] cache hit: ${store.name} "${query}"`);
+    return entry.data;
+  }
+
+  // Rancio pero utilizable: se devuelve al instante y se refresca de fondo.
+  if (entry) {
+    console.log(`[scraper] cache rancio: ${store.name} "${query}" (refrescando)`);
+    singleFlight(cacheKey, () => doScrape(store, query, cacheKey)).catch((err) =>
+      console.error(`[scraper] refresh de fondo falló (${store.name}):`, err.message)
+    );
+    return entry.data;
+  }
+
+  // Frío: se scrapea, colapsando pedidos concurrentes de la misma clave.
   try {
-    const url = store.searchUrl(query);
-    // arraybuffer en vez de dejar que axios decodifique — algunas tiendas
-    // (NNET, Digital Outlet, TopTecnoUY) sirven windows-1252/iso-8859-1 y
-    // no UTF-8; decodificar como UTF-8 a ciegas rompe los acentos.
-    const r = await axios.get(url, {
-      headers: HTTP_HEADERS,
-      timeout: 12000,
-      maxRedirects: 5,
-      responseType: "arraybuffer",
-    });
-    const charsetMatch = String(r.headers["content-type"] || "").match(/charset=([\w-]+)/i);
-    const charset = charsetMatch ? charsetMatch[1].toLowerCase() : "utf-8";
-    const body = new TextDecoder(charset).decode(r.data);
-
-    // VTEX devuelve JSON; el resto, HTML que parseamos con cheerio
-    let results = store.parseJson
-      ? store.parseJson(JSON.parse(body), store)
-      : store.parse(cheerio.load(body), store);
-
-    results = await convertResultsToUyu(results);
-
-    console.log(`[scraper] ${store.name}: ${results.length} productos`);
-    setCache(cacheKey, results);
-    return results;
+    return await singleFlight(cacheKey, () => doScrape(store, query, cacheKey));
   } catch (err) {
     console.error(`[scraper] ${store.name} error:`, err.message);
     return [];
