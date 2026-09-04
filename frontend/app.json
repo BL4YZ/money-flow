@@ -86,7 +86,8 @@
           "color": "#7c3aed"
         }
       ],
-      "expo-localization"
+      "expo-localization",
+      "expo-status-bar"
     ],
     "extra": {
       "eas": {

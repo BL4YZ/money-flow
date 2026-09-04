@@ -1,4 +1,11 @@
-import * as FileSystem from 'expo-file-system';
+// Entrypoint `legacy` a proposito. Desde SDK 57 el principal expone la API
+// nueva (File/Directory/Paths) y ya NO exporta readAsStringAsync: el import de
+// siempre compilaba igual y FileSystem.readAsStringAsync quedaba undefined,
+// rompiendo la subida recien cuando el usuario elegia un PDF. La API nueva no
+// tiene lectura en base64 (solo arrayBuffer), y convertirlo a mano dentro de
+// la ruta de cifrado es riesgo que no hace falta correr. Si algun dia Expo
+// saca `legacy`, migrar con un test de subida real, no a ojo.
+import * as FileSystem from 'expo-file-system/legacy';
 import CryptoJS from 'crypto-js';
 import forge from 'node-forge';
 import * as Crypto from 'expo-crypto';

@@ -10,7 +10,7 @@ MoneyFlow is a personal-finance mobile app for the Uruguayan market (Spanish/es-
 
 Two independent apps in one repo, deployed separately:
 - `backend/` — Node/Express REST API, deployed to **Render** (production: `https://money-flow-co41.onrender.com`). Postgres via Supabase.
-- `frontend/` — React Native / Expo (SDK 54) mobile app.
+- `frontend/` — React Native / Expo (SDK 57, RN 0.86.3, React 19.2.3) mobile app.
 
 ## Commands
 
@@ -24,6 +24,8 @@ Two independent apps in one repo, deployed separately:
 - `npm start` — Expo dev server (Metro). Use `npm start -- --clear` after touching native-module-adjacent code (expo-crypto, expo-file-system) or after changing dependency versions — stale Metro cache is a common source of confusing "module not found" errors.
 - `npm run android` / `npm run ios` / `npm run web` — same, targeting a specific platform directly.
 - Keep Expo package versions aligned with the SDK: run `npx expo install --check` before adding/upgrading any `expo-*` package, and `npx expo install <pkg>` (not plain `npm install`) to install one at the SDK-compatible version. A mismatch here fails silently until a native module lookup throws at runtime deep in some screen (e.g. `expo-crypto` was previously pinned to `55.0.14` on an SDK 54 project — should have been `~15.0.9` — which crashed with "cannot find native module ExpoCryptoAES" only when the upload screen's encryption path first ran expo-crypto's code).
+- **`expo-file-system` is imported from `expo-file-system/legacy` in `src/utils/encryption.js`, deliberately.** As of SDK 57 the main entrypoint exports only the new `File`/`Directory`/`Paths` API and no longer exports `readAsStringAsync`. The old import kept bundling fine and left `FileSystem.readAsStringAsync` as `undefined`, so the upload would only break when a user actually picked a PDF — the exact silent-failure shape this section warns about. The new API has no base64 read (only `arrayBuffer()`), and hand-rolling that conversion inside the encryption path is risk for no gain. If Expo ever drops `legacy`, migrate with a real upload test, not by eye.
+- **SDK 54 → 57 upgrade (done via `npx expo install expo@^57` then `npx expo install --fix`)**: `npx expo install --check` reports clean, and both `expo export --platform android` and `--platform ios` bundle without errors. Every native API the app calls was verified to still exist on its package's declared entrypoint (`getRandomBytesAsync`, the three `SecureStore` calls, `getLocales`, `isDevice`, `LinearGradient`, `openBrowserAsync`, the `Notifications` set, `getDocumentAsync`). `react-native-purchases` stays at 10.0.0 (latest is 10.9.0) — `expo install --fix` does not manage it, it declares no `codegenConfig` for the New Architecture, and its `require` is wrapped in try/catch so an incompatibility degrades to the mock rather than crashing. **Still untested on a real device**: upload encryption end-to-end, secure-store token persistence across restarts, and push registration.
 - `react-native-purchases` (RevenueCat) requires a native module not present in Expo Go — expect it to fall back to the mock in `services/purchases.js` unless running a custom dev client / production build.
 
 ## Architecture
