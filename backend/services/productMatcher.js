@@ -440,6 +440,26 @@ function withUnitPrices(items) {
 // Comparador para elegir la mejor oferta entre productos igual de relevantes:
 // si ambos tienen precio por unidad en la MISMA unidad base, gana el mejor
 // precio por unidad; si no, se cae al precio absoluto (comportamiento previo).
+// ─── Respaldo de tienda: quedarse con la cabeza, no con la cola ───
+// El respaldo confía en el buscador de la tienda cuando el nuestro no encontró
+// nada, y eso resuelve "ibuprofeno" → Perifar/Actron. Pero arrastra también la
+// expansión difusa de la propia tienda, que vive en la COLA de su listado:
+// Farmashop devuelve para "barbijo" cuatro "Tapaboca Safy" (que es exactamente
+// lo buscado) en las posiciones 1-4 y cuatro "Muñeca Barbie" en las 5-8 — su
+// buscador estiró "barbijo" hasta "Barbie".
+//
+// Como las tiendas rankean sus propios resultados por relevancia, quedarse con
+// los primeros de cada una conserva lo bueno y corta lo que el propio buscador
+// puso último por poco confiable.
+function topPerStore(items, k = 4) {
+  const vistos = {};
+  return items.filter((i) => {
+    const key = i.storeId || i.store || '?';
+    vistos[key] = (vistos[key] || 0) + 1;
+    return vistos[key] <= k;
+  });
+}
+
 // ─── Coherencia de CATEGORÍA dentro de un set de resultados ───────
 // El problema: productos de categorías distintas que comparten el sustantivo.
 // "Agua Lavandina" es lejía, "Aceite 15W40" es aceite de motor — los dos
@@ -791,6 +811,7 @@ module.exports = {
   compareByValue,
   markOffUnitItems,
   markOffCategoryItems,
+  topPerStore,
   learnOffCategoryTokens,
   buildCorpusStats,
   bm25Score,

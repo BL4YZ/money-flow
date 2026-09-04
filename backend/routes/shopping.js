@@ -21,6 +21,7 @@ const {
   compareByValue,
   markOffUnitItems,
   markOffCategoryItems,
+  topPerStore,
   tokenInProductFuzzy,
 } = require('../services/productMatcher');
 
@@ -77,8 +78,13 @@ const RELEVANCE_THRESHOLD = 0.5;
 function isRelevant(queryTokens, productName) {
   if (queryTokens.length === 0) return true;
   const pNorm = normalize(productName);
-  // El primer token es el sustantivo principal y DEBE estar presente (o un sinónimo)
-  if (!tokenInProduct(queryTokens[0], pNorm)) return false;
+  // Alcanza con que aparezca ALGUNO de los tokens, no forzosamente el primero.
+  // Exigir el primero es exigir la palabra generica de categoria, y las tiendas
+  // la omiten: Disco lista "MOTOROLA Moto G06 64 Gb", sin la palabra "celular".
+  // Buscando "celular motorola" eso descartaba los 41 Motorola reales y dejaba
+  // pasar "Celular Samsung" y "Celular Blu" — exactamente al reves. El filtro
+  // fuerte es la escalera de match completo de scrapeItem, no esta condicion.
+  if (!queryTokens.some((t) => tokenInProduct(t, pNorm))) return false;
   if (!hasAllModelTokens(queryTokens, pNorm)) return false;
   return scoreRelevance(queryTokens, productName) >= RELEVANCE_THRESHOLD;
 }
@@ -110,7 +116,18 @@ async function scrapeItem(item, category = null) {
     const pNorm = normalize(p.name);
     return queryTokens.every((t) => tokenInProduct(t, pNorm));
   });
-  if (completos.length > 0) relevant = completos;
+  if (completos.length > 0) {
+    relevant = completos;
+  } else if (queryTokens.length > 1) {
+    // Sin ningun match completo, un match parcial vale solo si incluye el token
+    // DISCRIMINADOR. En "celular motorola", "leche conaprole" o "apple pencil"
+    // la informacion que distingue esta en la ultima palabra: el espanol pone
+    // el modificador despues del sustantivo y el ingles pone ahi el sustantivo.
+    // Quedarse con los que solo traen la palabra generica es quedarse con
+    // cualquier producto de la categoria — otra marca, otro sabor, otra cosa.
+    const discriminador = queryTokens[queryTokens.length - 1];
+    relevant = relevant.filter((p) => tokenInProduct(discriminador, normalize(p.name)));
+  }
 
   // Rescate por typos: si lo exacto no encontró nada, reintenta tolerando
   // errores de tipeo ("shampo" → "shampoo"). Nunca sustituye a un match
@@ -165,7 +182,7 @@ async function scrapeItem(item, category = null) {
   // Sólo para búsquedas de un token: con varias, la tienda degrada a
   // matchear cualquiera de ellas y devuelve cualquier cosa.
   if (relevant.length === 0 && queryTokens.length === 1) {
-    relevant = products.filter((p) => !isAccessoryFor(queryTokens, normalize(p.name)));
+    relevant = topPerStore(products.filter((p) => !isAccessoryFor(queryTokens, normalize(p.name))));
   }
 
   // Duplicados exactos y listados placeholder rotos (ej: un "Microondas" a

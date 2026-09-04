@@ -17,6 +17,7 @@ const {
   compareByValue,
   groupProducts,
   markOffCategoryItems,
+  topPerStore,
   buildCorpusStats,
   bm25Score,
   tokenInProductFuzzy,
@@ -58,6 +59,7 @@ router.get("/search", requirePremium, async (req, res) => {
     // arreglo de relevancia había que hacerlo dos veces.
     const normalizedQuery = normalize(query);
     const queryKeywords = tokenize(query);
+    let usoRespaldoDeTienda = false;
 
     // Duplicados exactos + listados placeholder rotos (ej: "Microondas" a
     // $239 sin marca conviviendo con microondas reales de $3.400+).
@@ -215,7 +217,9 @@ router.get("/search", requirePremium, async (req, res) => {
       // asadera y una pistola NERF — todos enganchados por la palabra
       // "series". Ahí cero resultados es la respuesta correcta.
       if (strictFiltered.length === 0 && queryKeywords.length === 1) {
-        strictFiltered = scoredItems.map((i) => ({ ...i, _score: -500, _storeTrust: true }));
+        // Sólo la cabeza del listado de cada tienda: la cola es donde vive su
+        // propia expansión difusa (ver productMatcher.topPerStore).
+        strictFiltered = topPerStore(scoredItems).map((i) => ({ ...i, _score: -500, _storeTrust: true }));
       }
 
       // Los accesorios se SACAN, no sólo se despriorizan. El castigo de -15
@@ -256,6 +260,12 @@ router.get("/search", requirePremium, async (req, res) => {
         (item) => !isNegatedMention(mainToken, item._itemName)
       );
       if (sinNegados.length > 0) strictFiltered = sinNegados;
+
+      // ¿Estos resultados son sustitutos? El respaldo de tienda devuelve las
+      // marcas con las que se vende un genérico ("ibuprofeno" → Perifar,
+      // Actron). Sin avisarlo, el usuario ve nombres que no pidió y parece que
+      // el buscador falló; con el aviso, es información útil.
+      usoRespaldoDeTienda = strictFiltered.some((i) => i._storeTrust);
 
       scoredItems = strictFiltered;
 
@@ -307,7 +317,15 @@ router.get("/search", requirePremium, async (req, res) => {
     // Devolvemos el mismo formato que ya tenías, el frontend actualizado lo entiende perfecto
     // `items` se mantiene por compatibilidad; `groups` es la vista de
     // comparador (un producto = una fila, con sus ofertas por tienda).
-    res.json({ query, items, groups, stats, stores: storeNames });
+    res.json({
+      query, items, groups, stats, stores: storeNames,
+      // La UI lo usa para explicar por qué los nombres no coinciden con lo
+      // buscado, y para distinguir "no hay stock" de "escribiste mal".
+      substitutes: usoRespaldoDeTienda,
+      storesSearched: SCRAPE_STORES.filter(
+        (st) => !category || st.categories.includes(category)
+      ).length,
+    });
   } catch (err) {
     console.error("Prices search error:", err.message);
     res.status(500).json({ error: "Error al buscar precios" });

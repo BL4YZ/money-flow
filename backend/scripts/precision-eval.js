@@ -118,20 +118,32 @@ function evaluate(c, items) {
   const cases = catFilter ? CASES.filter((c) => c.cat === catFilter) : CASES;
   origLog(`\nEvaluando ${cases.length} casos${catFilter ? ` (${catFilter})` : ''} contra datos en vivo…\n`);
 
-  const results = [];
-  for (const c of cases) {
-    let items = [];
-    let err = null;
-    try {
-      const { data } = await axios.get(base, { params: { q: c.q, category: c.cat, limit: 20 }, timeout: 90000 });
-      items = data.items || [];
-    } catch (e) { err = e.message; }
+  // Los casos corren en paralelo de a CONCURRENCY. No golpea más fuerte a las
+  // tiendas: el tope de 3 conexiones por host vive en el scraper y es global,
+  // así que esto sólo llena el pipeline en vez de esperar una búsqueda por vez.
+  // Con 260 casos en vivo la diferencia es entre ~35 min y ~10, y un ciclo de
+  // feedback corto es lo que hace que la batería se corra de verdad.
+  const CONCURRENCY = 4;
+  const results = new Array(cases.length);
+  let siguiente = 0;
+  await Promise.all(Array.from({ length: CONCURRENCY }, async () => {
+    for (let i = siguiente++; i < cases.length; i = siguiente++) {
+      const c = cases[i];
+      let items = [];
+      let err = null;
+      try {
+        const { data } = await axios.get(base, { params: { q: c.q, category: c.cat, limit: 20 }, timeout: 90000 });
+        items = data.items || [];
+      } catch (e) { err = e.message; }
+      results[i] = { c, ...(err
+        ? { fails: [`ERROR: ${err}`], n: 0, good: 0, bad: 0, top1: false, stockIssue: false }
+        : evaluate(c, items)) };
+    }
+  }));
 
-    const r = err
-      ? { fails: [`ERROR: ${err}`], n: 0, good: 0, bad: 0, top1: false, stockIssue: false }
-      : evaluate(c, items);
-    results.push({ c, ...r });
-
+  // Se imprime al final y en orden, para que el reporte se lea igual que antes
+  for (const r of results) {
+    const c = r.c;
     const pass = r.fails.length === 0;
     const icon = pass ? '✓' : r.stockIssue ? '·' : '✗';
     if (!onlyFails || !pass) {

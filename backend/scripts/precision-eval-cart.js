@@ -104,16 +104,24 @@ function evaluate(c, res) {
     .filter((c) => c.allMatch || c.noneMatch || c.minPrice || c.expectEmpty);
   origLog(`\nComparador de carrito — ${cases.length} casos contra datos en vivo…\n`);
 
-  const results = [];
-  for (const c of cases) {
-    let r;
-    try {
-      const res = await scrapeItem({ name: c.q, quantity: 1, id: 0 }, c.cat);
-      r = evaluate(c, res);
-    } catch (e) {
-      r = { fails: [`ERROR: ${e.message}`], n: 0, good: 0, bad: 0, cheapOk: false, stockIssue: false };
+  // Paralelo de a 4, igual que precision-eval.js — el tope por host del
+  // scraper es global, así que esto llena el pipeline sin golpear más.
+  const CONCURRENCY = 4;
+  const results = new Array(cases.length);
+  let siguiente = 0;
+  await Promise.all(Array.from({ length: CONCURRENCY }, async () => {
+    for (let i = siguiente++; i < cases.length; i = siguiente++) {
+      const c = cases[i];
+      try {
+        results[i] = { c, ...evaluate(c, await scrapeItem({ name: c.q, quantity: 1, id: 0 }, c.cat)) };
+      } catch (e) {
+        results[i] = { c, fails: [`ERROR: ${e.message}`], n: 0, good: 0, bad: 0, cheapOk: false, stockIssue: false };
+      }
     }
-    results.push({ c, ...r });
+  }));
+
+  for (const r of results) {
+    const c = r.c;
     const icon = r.fails.length === 0 ? '✓' : r.stockIssue ? '·' : '✗';
     origLog(`${icon} ${(c.q + (c.label ? ` [${c.label}]` : '')).padEnd(38)} ${String(r.n).padStart(2)} tiendas` +
       (r.n ? `  ${String(Math.round(100 * r.good / r.n)).padStart(3)}% ok` : ''));
