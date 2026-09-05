@@ -46,12 +46,16 @@ function ItemChip({ item, index, onDelete }) {
 }
 
 // ─── Resultado por tienda ─────────────────────────────────────────
-function StoreCard({ store, totalItems, rank, index }) {
+function StoreCard({ store, totalItems, rank, index, mejorTotal }) {
   const { t } = useLanguage();
   const [expanded, setExpanded] = useState(false);
   const anim = useStaggerEntrance(index, { baseDelay: 60, fromY: 16 });
   const isFull = store.found === totalItems;
   const isBest = rank === 0 && isFull;
+  // Cuánto MÁS cuesta esta tienda que la mejor. Sólo tiene sentido entre
+  // tiendas que tienen la lista completa: un total menor por tener 6 de 8
+  // productos no es más barato, es incompleto.
+  const extra = isFull && mejorTotal != null ? Math.round(store.total - mejorTotal) : 0;
 
   return (
     <Animated.View style={anim.style}>
@@ -86,6 +90,11 @@ function StoreCard({ store, totalItems, rank, index }) {
             <Text style={[styles.storeTotal, isBest && { color: COLORS.secondary }]}>
               ${store.total.toLocaleString('es-UY', { maximumFractionDigits: 0 })}
             </Text>
+            {extra > 0 && (
+              <Text style={styles.storeExtra}>
+                +${extra.toLocaleString('es-UY')}
+              </Text>
+            )}
             <Ionicons
               name={expanded ? 'chevron-up' : 'chevron-down'}
               size={14}
@@ -153,14 +162,22 @@ function ItemResult({ result, index }) {
       </View>
       {result.options.length > 1 && (
         <View style={styles.itemResultOtherStores}>
-          {result.options.slice(1, 3).map((opt, i) => (
-            <View key={i} style={styles.itemResultOtherStore}>
-              <View style={[styles.storeColorDot, { backgroundColor: opt.storeColor, width: 6, height: 6 }]} />
-              <Text style={styles.itemResultOtherPrice}>
-                {opt.store} ${opt.price.toLocaleString('es-UY', { maximumFractionDigits: 0 })}
-              </Text>
-            </View>
-          ))}
+          {result.options.slice(1, 3).map((opt, i) => {
+            // El delta sólo se muestra si el envase es equivalente: comparar un
+            // 5 kg contra un 1 kg como si fuera "más caro" es la trampa que el
+            // precio por unidad existe para evitar.
+            const comparable = opt.unitLabel && opt.unitLabel === result.cheapest.unitLabel;
+            const dif = Math.round(opt.price - result.cheapest.price);
+            return (
+              <View key={i} style={styles.itemResultOtherStore}>
+                <View style={[styles.storeColorDot, { backgroundColor: opt.storeColor, width: 6, height: 6 }]} />
+                <Text style={styles.itemResultOtherPrice}>
+                  {opt.store} ${opt.price.toLocaleString('es-UY', { maximumFractionDigits: 0 })}
+                  {comparable && dif > 0 ? ` (+$${dif.toLocaleString('es-UY')})` : ''}
+                </Text>
+              </View>
+            );
+          })}
         </View>
       )}
     </Animated.View>
@@ -352,6 +369,13 @@ export default function ShoppingScreen() {
     setResults(null);
   };
 
+  // Referencia para el "+$X" de cada tienda: la más barata que tenga TODA la
+  // lista. Si ninguna la tiene, queda undefined y el delta no se muestra, en
+  // vez de compararse contra una base incompleta que lo haría mentir.
+  const mejorTotalCompleto = results
+    ? (results.byStore.find((s2) => s2.found === results.totalItems) || {}).total
+    : undefined;
+
   return (
     <KeyboardAvoidingView
       style={styles.root}
@@ -513,11 +537,32 @@ export default function ShoppingScreen() {
                 <Text style={styles.optimalTotal}>
                   ${results.optimalTotal.toLocaleString('es-UY', { maximumFractionDigits: 0 })}
                 </Text>
-                {results.optimalSavings > 0 && (
+
+                {/* Cuántas tiendas hay que recorrer. Un total que exige ir a
+                    cuatro lugares es aspiracional; el usuario decide con esto. */}
+                {results.storesNeeded > 0 && (
+                  <View style={styles.optimalMetaRow}>
+                    <Ionicons name="storefront-outline" size={13} color={COLORS.onSurfaceVariant} />
+                    <Text style={styles.optimalMetaText}>
+                      {results.storesNeeded === 1
+                        ? t('shopping.storesNeeded_one')
+                        : t('shopping.storesNeeded_other', { n: results.storesNeeded })}
+                    </Text>
+                  </View>
+                )}
+
+                {/* Ahorro sobre envases equivalentes. `itemSavings` reemplaza a
+                    `optimalSavings`, que sólo existía si alguna tienda tenía la
+                    lista completa — y con listas largas eso casi nunca pasa, así
+                    que el ahorro desaparecía sin explicación. */}
+                {(results.itemSavings > 0 || results.optimalSavings > 0) && (
                   <View style={styles.savingsRow}>
                     <Ionicons name="trending-down" size={14} color={COLORS.secondary} />
                     <Text style={styles.savingsText}>
-                      {t('shopping.savings', { amount: results.optimalSavings.toLocaleString('es-UY', { maximumFractionDigits: 0 }) })}
+                      {t('shopping.savings', {
+                        amount: (results.itemSavings || results.optimalSavings)
+                          .toLocaleString('es-UY', { maximumFractionDigits: 0 }),
+                      })}
                     </Text>
                   </View>
                 )}
@@ -541,6 +586,16 @@ export default function ShoppingScreen() {
 
             {/* By store */}
             <Text style={[styles.sectionLabel, { marginTop: SPACING.lg }]}>{t('shopping.storesRanked')}</Text>
+            {/* Los totales sólo se pueden comparar entre tiendas que tienen la
+                lista completa Y con envases parecidos. Buscando "arroz" una
+                tienda puede aportar un 5 kg y otra un 1 kg: el total más bajo
+                sería el de la que vende menos producto. */}
+            {results.byStore.length > 1 && results.comparableStores < results.byStore.length && (
+              <View style={styles.disclaimerBox}>
+                <Ionicons name="information-circle-outline" size={16} color={COLORS.tertiary} />
+                <Text style={styles.disclaimerText}>{t('shopping.notComparable')}</Text>
+              </View>
+            )}
             {results.byStore.map((store, i) => (
               <StoreCard
                 key={store.storeId}
@@ -548,6 +603,7 @@ export default function ShoppingScreen() {
                 totalItems={results.totalItems}
                 rank={i}
                 index={i}
+                mejorTotal={mejorTotalCompleto}
               />
             ))}
 
@@ -725,6 +781,12 @@ const styles = StyleSheet.create({
   itemResultUnit: { fontSize: 11, color: COLORS.secondary, fontWeight: '600' },
 
   // Store card
+  // "+$X que la mejor tienda": el número que convierte una lista de totales
+  // en una comparación.
+  storeExtra: { fontSize: 11, fontWeight: '700', color: COLORS.tertiary, marginTop: 1 },
+  optimalMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 6 },
+  optimalMetaText: { fontSize: 11, color: COLORS.onSurfaceVariant, fontWeight: '600' },
+
   storeCard: {
     backgroundColor: COLORS.surfaceContainer,
     borderRadius: RADIUS.xl,

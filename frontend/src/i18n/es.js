@@ -275,8 +275,18 @@ export default {
     compare: 'Comparar precios',
     clearList: 'Vaciar lista',
     optimalCart: 'Carrito óptimo',
-    optimalSub: 'Comprando cada ítem donde es más barato',
-    savings: 'Ahorrás ${{amount}} vs comprar todo en una sola tienda',
+    // "mejor valor" y no "más barato": entre un arroz de 1 kg a $37 y uno de
+    // 5 kg a $159 gana el segundo, porque rinde $31,8/kg contra $37/kg. Por eso
+    // el total puede superar al de una sola tienda — son canastas distintas.
+    optimalSub: 'El mejor valor por unidad de cada producto',
+    // El ahorro compara sólo envases equivalentes (ver itemSavings en el
+    // backend); decir "vs una sola tienda" comparaba 5 kg contra 1 kg.
+    savings: 'Ahorrás ${{amount}} eligiendo bien cada producto',
+    storesNeeded_one: 'Todo en 1 tienda',
+    storesNeeded_other: 'Recorriendo {{n}} tiendas',
+    notComparable: 'Totales no comparables: cada tienda ofrece envases distintos',
+    vsBest: '+${{amount}} que {{store}}',
+    cheapestHere: 'El más barato',
     hogarDisclaimer: 'En electrodomésticos y tecnología, cada tienda puede mostrar una marca o modelo distinto — no siempre es el mismo producto. Fijate en el nombre antes de comparar.',
     bestPrice: 'MEJOR PRECIO POR PRODUCTO',
     storesRanked: 'TIENDAS RANKEADAS',

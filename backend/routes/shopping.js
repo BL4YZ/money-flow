@@ -15,6 +15,7 @@ const {
   hasAllModelTokens,
   dedupeResults,
   filterPriceOutliers,
+  parseQuantity,
   isModifierMention,
   isNegatedMention,
   withUnitPrices,
@@ -296,6 +297,43 @@ function buildComparison(items, itemResults) {
     ? Math.max(0, cheapestFullStore.total - optimalTotal)
     : 0;
 
+  // Ahorro item por item, comparando SOLO ofertas equivalentes.
+  //
+  // Restar el precio mas alto menos el mas bajo seria mentir: buscando "arroz"
+  // las tiendas devuelven paquetes de 1, 2 y 5 kg, y la diferencia entre un
+  // 5 kg de $333 y un 1 kg de $37 no es ahorro, es otro producto. Por eso solo
+  // se comparan ofertas con la misma unidad base y una cantidad parecida
+  // (+-10%), y las que no tienen con quien compararse aportan cero.
+  //
+  // Tambien explica por que optimalTotal puede superar el total de una sola
+  // tienda: el mejor valor por unidad suele venir en envase grande. Comparar
+  // esos dos totales en pesos no significa nada — miden canastas distintas.
+  const CANT_TOLERANCIA = 0.1;
+  const itemSavings = itemResults.reduce((sum, ir) => {
+    const elegido = ir.cheapest;
+    if (!elegido) return sum;
+    const qElegido = parseQuantity(elegido.name);
+    const equivalentes = Object.values(ir.byStore).filter((p) => {
+      if (p.storeId === elegido.storeId) return false;
+      const q = parseQuantity(p.name);
+      if (!qElegido || !q) return !qElegido && !q;  // sin cantidad: comparables entre si
+      if (q.unit !== qElegido.unit) return false;
+      return Math.abs(q.qty - qElegido.qty) <= qElegido.qty * CANT_TOLERANCIA;
+    });
+    if (equivalentes.length === 0) return sum;
+    const peor = Math.max(...equivalentes.map((p) => p.price));
+    return sum + Math.max(0, peor - elegido.price) * ir.quantity;
+  }, 0);
+
+  // Cuantas tiendas hay que recorrer para pagar el "Carrito optimo". Un total
+  // que exige ir a cuatro lugares distintos es aspiracional, no accionable, y
+  // el usuario merece saberlo antes de decidir.
+  const storesNeeded = new Set(
+    itemResults.filter((ir) => ir.cheapest).map((ir) => ir.cheapest.storeId)
+  ).size;
+
+  const comparableStores = allStores.filter((s) => s.found === items.length).length;
+
   return {
     results: itemResults.map((ir) => ({
       item: ir.item,
@@ -307,6 +345,9 @@ function buildComparison(items, itemResults) {
     byStore: allStores,
     optimalTotal,
     optimalSavings,
+    itemSavings: Math.round(itemSavings),
+    storesNeeded,
+    comparableStores,
     totalItems: items.length,
   };
 }
