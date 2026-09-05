@@ -143,6 +143,7 @@ const ACCESSORY_WORDS = [
   // Pro 11'' y iPad Air"), así que sólo los agarra la lista.
   'teclado', 'keyboard', 'mouse', 'raton', 'lapiz', 'pencil', 'stylus',
   'stick', 'chromecast',  // un TV Stick se enchufa a un TV, no es un TV
+  'brazalete', 'pulsera', 'holder', 'tripode', 'selfie',
   'disipador', 'cooler', 'ventilador para',
 ];
 
@@ -440,6 +441,99 @@ function withUnitPrices(items) {
 // Comparador para elegir la mejor oferta entre productos igual de relevantes:
 // si ambos tienen precio por unidad en la MISMA unidad base, gana el mejor
 // precio por unidad; si no, se cae al precio absoluto (comportamiento previo).
+// ─── Tokens obligatorios vs. calificadores ────────────────────────
+// Exigir TODOS los tokens del nombre descarta productos que la tienda entendio
+// perfectamente. Buscando "pan de molde", Tata devuelve "Pan Lacteado TaTa",
+// "Pan Americano Los Sorchantes" y "Pan Integral Los Sorchantes" — son
+// exactamente lo pedido, estan en su categoria "Pan de Molde", pero ninguno
+// lleva la palabra "molde" en el nombre y el filtro los tiraba. Igual con
+// "bidon salus": Tienda Inglesa lo lista como "Agua Mineral Natural SALUS sin
+// Gas 6.25 L", sin la palabra "bidon".
+//
+// La senal que separa "la tienda entendio" de "la tienda devolvio cualquier
+// cosa" es la cobertura de cada token en el set devuelto:
+//
+//   "pan de molde"      pan 100%  molde 32%   → el dominio esta confirmado
+//   "bidon salus"       salus 100%  bidon 67% → idem
+//   "xbox series x"     xbox 37%  series 27%  → nadie tiene la consola
+//   "celular motorola"  celular 58%  motorola 19% → marca que no domina
+//
+// Cuando algun token aparece en casi todos los resultados, ese es el ancla del
+// dominio y los demas pasan a ser calificadores: siguen sumando al score (un
+// producto que dice "molde" rankea mas alto) pero dejan de ser requisito. Si
+// ningun token llega al umbral, no hay dominio confirmado y se exigen todos,
+// que es lo correcto para "xbox series x" — ahi cero es la respuesta honesta.
+// RESULTADO: NO FUNCIONA, y queda documentada para que nadie la reintente.
+// Medida contra los 260 casos bajó la precisión de 99.8% a 99.1% y triplicó
+// los fallos, porque relaja justamente el token que distingue:
+//
+//   "pure de tomate"   ancla "pure"      relaja "tomate" → Puré de PAPAS
+//   "tablet samsung"   ancla "samsung"   relaja "tablet" → ASPIRADORA Samsung
+//   "pava electrica"   ancla "electrica" relaja "pava"   → CAFETERA Eléctrica
+//
+// Tienen la misma forma que los casos que sí queríamos arreglar (nucleo +
+// calificador), pero en "pan de molde" el calificador es prescindible y en
+// "pure de tomate" es la esencia del producto. Desde el TEXTO no se pueden
+// separar: hace falta la taxonomía de la tienda, y sólo El Dorado la expone.
+const ANCHOR_COVERAGE = 0.9;
+
+function requiredTokens(queryTokens, items) {
+  if (queryTokens.length < 2 || items.length < 3) return queryTokens;
+  const cobertura = {};
+  queryTokens.forEach((t) => {
+    cobertura[t] = items.filter((i) => tokenInProduct(t, normalize(i.name))).length / items.length;
+  });
+  const anclas = queryTokens.filter((t) => cobertura[t] >= ANCHOR_COVERAGE);
+  if (anclas.length === 0) return queryTokens;   // sin dominio confirmado: todo obligatorio
+  // Los tokens con digitos nunca se relajan: confundir "i5" con "i7" o
+  // "Switch 2" con "Switch" es peor que no encontrar nada.
+  const conDigitos = queryTokens.filter((t) => /\d/.test(t));
+  return [...new Set([...anclas, ...conDigitos])];
+}
+
+// ─── Palabras de formato que la cantidad ya delata ────────────────
+// "bidon salus": El Dorado y Tata lo nombran "Bidon 6.25Lt", Tienda Inglesa lo
+// llama "Agua Mineral Natural SALUS sin Gas 6.25 L". Es el mismo envase y la
+// cantidad lo dice — pero al faltar la palabra "bidon" el producto quedaba
+// afuera.
+//
+// A diferencia de relajar el token (probado y revertido: relajaba tambien
+// "tomate" en "pure de tomate"), esto NO afloja nada. Exige una equivalencia
+// dura: el token solo se da por satisfecho si el producto tiene exactamente la
+// misma cantidad que los productos del set que SI lo nombran. Si nadie en el
+// set nombra el formato, no hay de donde deducirlo y no pasa nada.
+// Clase CERRADA: nombres de envase. La equivalencia por cantidad solo tiene
+// sentido para palabras que describen el recipiente, no el contenido. Sin este
+// limite la regla deducia que "tomate" equivale a 520 g y habria dejado pasar
+// un "Pure de Papas 520 g" como si fuera de tomate. Es una lista reactiva, si,
+// pero sobre un conjunto que en la practica no crece: en espanol los envases de
+// gondola son estos.
+const CONTAINER_WORDS = new Set([
+  'bidon', 'bidones', 'botellon', 'botellones', 'sachet', 'lata', 'latas',
+  'botella', 'botellas', 'frasco', 'frascos', 'envase', 'caja', 'cajas',
+]);
+
+function formatTokenQuantities(token, items) {
+  if (!CONTAINER_WORDS.has(token)) return null;
+  const conToken = items.filter((i) => matchesToken(token, normalize(i.name)));
+  if (conToken.length === 0 || conToken.length === items.length) return null;
+  const cants = conToken.map((i) => parseQuantity(i.name)).filter(Boolean);
+  if (cants.length !== conToken.length) return null;   // alguno sin cantidad: no concluimos
+  const unidades = new Set(cants.map((c) => c.unit));
+  const valores = new Set(cants.map((c) => c.qty));
+  // Una sola unidad Y una sola cantidad: el formato es inequivoco.
+  if (unidades.size !== 1 || valores.size !== 1) return null;
+  return { unit: [...unidades][0], qty: [...valores][0] };
+}
+
+// ¿El producto satisface el token, por nombre o por cantidad equivalente?
+function tokenSatisfied(token, pNorm, productName, equivalencia) {
+  if (matchesToken(token, pNorm)) return true;
+  if (!equivalencia) return false;
+  const q = parseQuantity(productName);
+  return !!q && q.unit === equivalencia.unit && q.qty === equivalencia.qty;
+}
+
 // ─── Respaldo de tienda: quedarse con la cabeza, no con la cola ───
 // El respaldo confía en el buscador de la tienda cuando el nuestro no encontró
 // nada, y eso resuelve "ibuprofeno" → Perifar/Actron. Pero arrastra también la
@@ -812,6 +906,9 @@ module.exports = {
   markOffUnitItems,
   markOffCategoryItems,
   topPerStore,
+  requiredTokens,
+  formatTokenQuantities,
+  tokenSatisfied,
   learnOffCategoryTokens,
   buildCorpusStats,
   bm25Score,

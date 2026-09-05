@@ -18,6 +18,9 @@ const {
   groupProducts,
   markOffCategoryItems,
   topPerStore,
+  requiredTokens,
+  formatTokenQuantities,
+  tokenSatisfied,
   buildCorpusStats,
   bm25Score,
   tokenInProductFuzzy,
@@ -152,8 +155,28 @@ router.get("/search", requirePremium, async (req, res) => {
       // - Matchea PARCIAL + palabra clave NO al inicio → descartado ("Harina Suprema")
       // Intento 1 — filtro estricto: el producto debe tener TODAS las keywords
       // Ej: "kotex nocturna" → solo pasan productos con "kotex" Y "nocturna"
+      // Obligatorios sólo los tokens que el corpus confirma como ancla del
+      // dominio; el resto queda como calificador que suma al score pero no
+      // filtra (ver productMatcher.requiredTokens).
+      // requiredTokens quedó DESACTIVADO a propósito: ver el comentario en
+      // productMatcher.requiredTokens. Medido, hacía más daño que bien.
+      const obligatorios = queryKeywords;
+      // Un token de envase ("bidon") se da por satisfecho si el producto tiene
+      // exactamente la cantidad de los que SÍ lo nombran — ver
+      // productMatcher.formatTokenQuantities.
+      const equivalencias = {};
+      queryKeywords.forEach((t) => { equivalencias[t] = formatTokenQuantities(t, items); });
+      // Elegibilidad = matchear los tokens obligatorios. El SCORE decide el
+      // orden, no la entrada: con `_score > 0` como compuerta, el castigo de -3
+      // de la regla del sustantivo superaba a todo el aporte de BM25 en sets
+      // chicos y tiraba resultados validos. Buscando "bidon salus", el
+      // "Agua Mineral Natural SALUS sin Gas 6.25 L" de Tienda Inglesa puntuaba
+      // 0.39 - 3 = -2.61 y quedaba afuera; los otros dos aparecian sólo porque
+      // los rescataba el fallback de typos, no el filtro principal.
       let strictFiltered = scoredItems.filter(
-        (item) => item._score > 0 && item._matched >= queryKeywords.length && item._hasAllNumericKeywords,
+        (item) => item._matched > 0
+          && obligatorios.every((t) => tokenSatisfied(t, item._itemName, item.name, equivalencias[t]))
+          && item._hasAllNumericKeywords,
       );
 
       // Intento 2 — si el estricto no encuentra nada, relajamos el filtro
@@ -216,7 +239,14 @@ router.get("/search", requirePremium, async (req, res) => {
       // "xbox series x" devolvía un "Vino Tannat 90 POINTS SERIES", una
       // asadera y una pistola NERF — todos enganchados por la palabra
       // "series". Ahí cero resultados es la respuesta correcta.
-      if (strictFiltered.length === 0 && queryKeywords.length === 1) {
+      // Nunca para tokens con digitos. "ibuprofeno" es un generico y la farmacia
+      // sabe que se vende como Perifar; "ps5" es un codigo de producto exacto y
+      // si ningun nombre lo contiene, no hay nada que deducir — Digital Outlet
+      // devolvia un "Smart Watch Joyroom" como si fuera la consola. Es la misma
+      // regla que ya rige para los tokens de modelo: con digitos, exactitud o
+      // nada.
+      if (strictFiltered.length === 0 && queryKeywords.length === 1
+          && !/\d/.test(queryKeywords[0])) {
         // Sólo la cabeza del listado de cada tienda: la cola es donde vive su
         // propia expansión difusa (ver productMatcher.topPerStore).
         strictFiltered = topPerStore(scoredItems).map((i) => ({ ...i, _score: -500, _storeTrust: true }));
@@ -230,10 +260,16 @@ router.get("/search", requirePremium, async (req, res) => {
       // Red de seguridad: si TODO lo que hay son accesorios, se muestran igual
       // — es mejor que una pantalla vacía, y significa que la tienda no tiene
       // el producto principal (ver "xbox series x", donde sólo hay juegos).
-      const sinAccesorios = strictFiltered.filter(
+      // Filtro DURO, sin red de seguridad. Antes la tenía porque el gate de
+      // `_score > 0` ya eliminaba los accesorios de hecho (el castigo de -15 los
+      // dejaba en negativo) y la red casi nunca se activaba. Al pasar el score a
+      // ser sólo orden, la red empezó a devolver 5 accesorios para "xbox series
+      // x" — juegos, un volante y un control — para una consola que ninguna
+      // tienda stockea. Mostrar accesorios de $600 cuando se buscó una consola
+      // de $30.000 desinforma sobre el precio; cero es la respuesta honesta.
+      strictFiltered = strictFiltered.filter(
         (item) => !isAccessoryFor(queryKeywords, item._itemName)
       );
-      if (sinAccesorios.length > 0) strictFiltered = sinAccesorios;
 
       // "X de Y": lo buscado aparece como ingrediente, no como producto —
       // "Helado 3 L Dulce De Leche" ganaba la búsqueda "leche 3 litros".

@@ -52,7 +52,7 @@ module.exports = [
 
   // ─── B. Con marca: lo que la gente busca de verdad ───────────────
   { q: 'yerba canarias', cat: 'supermercado', minResults: 2, allMatch: /canarias/i, allHaveUnit: true },
-  { q: 'leche conaprole', cat: 'supermercado', minResults: 3, allMatch: /conaprole/i, noneMatch: /dulce de leche/i },
+  { q: 'leche conaprole', cat: 'supermercado', minResults: 3, allMatch: /conaprole/i, noneMatch: /^dulce de leche/i, label: 'el postre SI se excluye; la leche saborizada NO' },
   { q: 'coca cola', cat: 'supermercado', minResults: 5, allMatch: /coca.?cola/i },
   { q: 'arroz saman', cat: 'supermercado', minResults: 1, allMatch: /saman/i },
   { q: 'agua salus', cat: 'supermercado', minResults: 2, allMatch: /salus/i },

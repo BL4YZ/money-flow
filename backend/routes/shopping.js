@@ -23,6 +23,7 @@ const {
   markOffUnitItems,
   markOffCategoryItems,
   topPerStore,
+  requiredTokens,
   tokenInProductFuzzy,
 } = require('../services/productMatcher');
 
@@ -113,9 +114,13 @@ async function scrapeItem(item, category = null) {
   // Sigue siendo escalera y no filtro duro: el umbral existe para cuando las
   // tiendas nombran distinto ("suprema de pollo" → "Suprema 3 Arroyos"), así
   // que si ningún producto tiene todos los tokens, se usa lo anterior.
+  // Los obligatorios los decide el corpus, no la longitud de la búsqueda:
+  // "pan de molde" exige "pan" pero no "molde", porque las tiendas nombran el
+  // producto sin esa palabra (ver productMatcher.requiredTokens).
+  const obligatorios = queryTokens;  // ver productMatcher.requiredTokens: desactivado
   const completos = relevant.filter((p) => {
     const pNorm = normalize(p.name);
-    return queryTokens.every((t) => tokenInProduct(t, pNorm));
+    return obligatorios.every((t) => tokenInProduct(t, pNorm));
   });
   if (completos.length > 0) {
     relevant = completos;
@@ -182,7 +187,14 @@ async function scrapeItem(item, category = null) {
   // como Perifar / Actron / Ibupirac, y ningún nombre lleva el genérico).
   // Sólo para búsquedas de un token: con varias, la tienda degrada a
   // matchear cualquiera de ellas y devuelve cualquier cosa.
-  if (relevant.length === 0 && queryTokens.length === 1) {
+  // Nunca para tokens con digitos. "ibuprofeno" es un generico y la farmacia
+  // sabe que se vende como Perifar; "ps5" es un codigo de producto exacto y
+  // si ningun nombre lo contiene, no hay nada que deducir — Digital Outlet
+  // devolvia un "Smart Watch Joyroom" como si fuera la consola. Es la misma
+  // regla que ya rige para los tokens de modelo: con digitos, exactitud o
+  // nada.
+  if (relevant.length === 0 && queryTokens.length === 1
+      && !/\d/.test(queryTokens[0])) {
     relevant = topPerStore(products.filter((p) => !isAccessoryFor(queryTokens, normalize(p.name))));
   }
 
