@@ -126,6 +126,16 @@ function evaluate(c, items) {
   const CONCURRENCY = 4;
   const results = new Array(cases.length);
   let siguiente = 0;
+  // El reporte se imprime ordenado al final, así que sin esto la corrida se ve
+  // congelada durante diez minutos. Va a stderr para no ensuciar el reporte
+  // cuando se redirige la salida a un archivo.
+  let listos = 0;
+  const avance = () => {
+    listos++;
+    if (listos % 10 === 0 || listos === cases.length) {
+      process.stderr.write(`\r  ${listos}/${cases.length} casos${listos === cases.length ? `\n` : ``}`);
+    }
+  };
   await Promise.all(Array.from({ length: CONCURRENCY }, async () => {
     for (let i = siguiente++; i < cases.length; i = siguiente++) {
       const c = cases[i];
@@ -138,6 +148,7 @@ function evaluate(c, items) {
       results[i] = { c, ...(err
         ? { fails: [`ERROR: ${err}`], n: 0, good: 0, bad: 0, top1: false, stockIssue: false }
         : evaluate(c, items)) };
+      avance();
     }
   }));
 

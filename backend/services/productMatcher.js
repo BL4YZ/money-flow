@@ -37,6 +37,9 @@ const SYNONYMS = {
   lapiz: ['pencil', 'stylus'],
   auriculares: ['audifonos', 'headphones'], audifonos: ['auriculares'],
   arveja: ['arvejas', 'guisantes'],
+  // Nombre comercial y nombre quimico de la misma sustancia. El catalogo del MEF
+  // la lista como "Hipoclorito de sodio" y las gondolas la venden como lavandina.
+  lavandina: ['hipoclorito'], hipoclorito: ['lavandina'],
 };
 
 // Quita tildes y unifica abreviaturas de volumen/peso ("3 litros" → "3l"),

@@ -3,6 +3,7 @@ const authMiddleware = require("../middleware/auth");
 const requirePremium = require("../middleware/requirePremium");
 const { scrapeAll, SCRAPE_STORES, CATEGORIES } = require("../services/scraper");
 const searchLog = require("../services/searchLog");
+const productType = require("../services/productType");
 const {
   normalize,
   tokenize,
@@ -78,6 +79,8 @@ router.get("/search", requirePremium, async (req, res) => {
     // el set de resultados de esta búsqueda: la pregunta que importa es qué
     // término discrimina entre ESTOS candidatos.
     const corpus = buildCorpusStats(items);
+    // Se calcula una vez por búsqueda, no por producto.
+    const familiasBuscadas = productType.familiasDeBusqueda(queryKeywords);
 
     if (queryKeywords.length > 0) {
       let scoredItems = items.map((item) => {
@@ -142,12 +145,20 @@ router.get("/search", requirePremium, async (req, res) => {
         // Otra categoría según la taxonomía de la tienda
         if (item._offCategory) score -= 12;
 
+        // Otra FAMILIA de producto según el catálogo oficial del MEF: separa
+        // "Lavandina Agua Jane" de un agua mineral. Castigo, no filtro — la
+        // canasta oficial son 379 productos y las tiendas venden decenas de
+        // miles, así que la señal existe sólo a veces (ver productType.js).
+        const otraFamilia = !!familiasBuscadas
+          && productType.esOtraFamilia(null, item.name, familiasBuscadas);
+        if (otraFamilia) score -= 14;
+
         // Tokens de modelo/generación obligatorios en cualquier filtro,
         // incluso el relajado ("Switch 2" vs "Switch", "i7" vs "i5") —
         // ver productMatcher.hasAllModelTokens.
         const hasAllNumericKeywords = hasAllModelTokens(queryKeywords, itemName);
 
-        return { ...item, _score: score, _matched: matchedKeywords, _isMainNoun: isMainNoun, _matchesFirstKeyword: matchesFirstKeyword, _hasAllNumericKeywords: hasAllNumericKeywords, _itemName: itemName };
+        return { ...item, _score: score, _otraFamilia: otraFamilia, _matched: matchedKeywords, _isMainNoun: isMainNoun, _matchesFirstKeyword: matchesFirstKeyword, _hasAllNumericKeywords: hasAllNumericKeywords, _itemName: itemName };
       });
 
       // Filtro inteligente para búsquedas de 2+ palabras:
@@ -272,6 +283,16 @@ router.get("/search", requirePremium, async (req, res) => {
         (item) => !isAccessoryFor(queryKeywords, item._itemName)
       );
 
+      // Otra FAMILIA de producto según el catálogo oficial del MEF. Es DESCARTE
+      // y no castigo, a diferencia de las reglas que infieren del texto: acá hay
+      // identificación positiva contra un dato del Estado — "Lavandina Agua
+      // Jane" es hipoclorito, punto. Sólo se pronuncia cuando conoce las dos
+      // partes, así que un producto fuera de la canasta oficial nunca se toca.
+      // Con castigo el producto bajaba de puesto pero seguía listado, que para
+      // "agua 2 litros" significa lavandina entre las aguas.
+      const sinOtraFamilia = strictFiltered.filter((item) => !item._otraFamilia);
+      if (sinOtraFamilia.length > 0) strictFiltered = sinOtraFamilia;
+
       // "X de Y": lo buscado aparece como ingrediente, no como producto —
       // "Helado 3 L Dulce De Leche" ganaba la búsqueda "leche 3 litros".
       // La regla ya existía en productMatcher (la usa shopping.js) pero acá
@@ -317,7 +338,7 @@ router.get("/search", requirePremium, async (req, res) => {
       });
 
       // Limpiamos variables temporales
-      items = scoredItems.map(({ _score, _matched, _isMainNoun, _matchesFirstKeyword, _hasAllNumericKeywords, _itemName, _fuzzy, _storeTrust, _offCategory, _offUnit, ...rest }) => rest);
+      items = scoredItems.map(({ _score, _matched, _isMainNoun, _matchesFirstKeyword, _hasAllNumericKeywords, _itemName, _fuzzy, _storeTrust, _offCategory, _offUnit, _otraFamilia, ...rest }) => rest);
     } else {
       items = items.sort((a, b) => a.price - b.price);
     }
