@@ -193,6 +193,7 @@ export default function ShoppingScreen() {
   const [adding, setAdding] = useState(false);
   const [comparing, setComparing] = useState(false);
   const [results, setResults] = useState(null);
+  const [insight, setInsight] = useState(null);
   const loadingMsgs = [
     t('shopping.loadingMsg1'), t('shopping.loadingMsg2'), t('shopping.loadingMsg3'),
     t('shopping.loadingMsg4'), t('shopping.loadingMsg5'),
@@ -357,6 +358,12 @@ export default function ShoppingScreen() {
       clearInterval(loadingInterval.current);
       pollRef.current = null;
       setComparing(false);
+      // El cruce con el gasto bancario se pide DESPUÉS de comparar y aparte:
+      // vuelve a scrapear del lado del servidor y no debe demorar la pantalla
+      // principal. Si falla, la comparación se muestra igual sin la tarjeta.
+      api.get('/shopping/insight')
+        .then(({ data }) => setInsight(data))
+        .catch(() => setInsight(null));
     }
   };
 
@@ -522,6 +529,64 @@ export default function ShoppingScreen() {
             que la animación de entrada deje el contenedor invisible (opacity 0) */}
         {results && results.byStore.length > 0 && (
           <View>
+
+            {/* Tu gasto real — lo único que un comparador puro no puede mostrar,
+                porque necesita el resumen bancario. Ver services/spendingInsight.js */}
+            {insight && insight.perfil && (
+              <View style={styles.insightCard}>
+                <View style={styles.insightHead}>
+                  <Ionicons name="wallet-outline" size={16} color={COLORS.tertiary} />
+                  <Text style={styles.insightTitle}>{t('shopping.insightTitle')}</Text>
+                </View>
+
+                <Text style={styles.insightSpend}>
+                  {t('shopping.insightSpend', {
+                    amount: insight.perfil.promedioMensual.toLocaleString('es-UY'),
+                  })}
+                </Text>
+
+                {insight.perfil.habitual && (
+                  <View style={styles.insightRow}>
+                    <View style={[styles.storeColorDot, { backgroundColor: insight.perfil.habitual.storeColor || COLORS.tertiary }]} />
+                    <Text style={styles.insightHabitual}>
+                      {t('shopping.insightHabitual', { store: insight.perfil.habitual.store })}
+                    </Text>
+                  </View>
+                )}
+
+                {insight.oportunidad && !insight.oportunidad.yaCompraEnLaMejor && (
+                  <View style={styles.insightSavingBox}>
+                    <Ionicons name="trending-down" size={15} color={COLORS.secondary} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.insightSaving}>
+                        {t('shopping.insightSaving', {
+                          store: insight.oportunidad.mejor.store,
+                          amount: insight.oportunidad.ahorroMensual.toLocaleString('es-UY'),
+                        })}
+                      </Text>
+                      <Text style={styles.insightSub}>
+                        {t('shopping.insightSavingList', {
+                          amount: insight.oportunidad.ahorroLista.toLocaleString('es-UY'),
+                          pct: insight.oportunidad.ahorroPct,
+                        })}
+                        {' · '}{t('shopping.insightEstimate')}
+                      </Text>
+                    </View>
+                  </View>
+                )}
+
+                {insight.oportunidad && insight.oportunidad.yaCompraEnLaMejor && (
+                  <View style={styles.insightSavingBox}>
+                    <Ionicons name="checkmark-circle-outline" size={15} color={COLORS.secondary} />
+                    <Text style={styles.insightSaving}>{t('shopping.insightBest')}</Text>
+                  </View>
+                )}
+
+                {insight.estado === 'sin_lista' && (
+                  <Text style={styles.insightSub}>{t('shopping.insightNoList')}</Text>
+                )}
+              </View>
+            )}
 
             {/* Optimal cart summary */}
             <View style={styles.optimalCard}>
@@ -786,6 +851,24 @@ const styles = StyleSheet.create({
   storeExtra: { fontSize: 11, fontWeight: '700', color: COLORS.tertiary, marginTop: 1 },
   optimalMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 6 },
   optimalMetaText: { fontSize: 11, color: COLORS.onSurfaceVariant, fontWeight: '600' },
+
+  // ─── Tu gasto real ───────────────────────────────────────
+  insightCard: {
+    backgroundColor: COLORS.surfaceContainer,
+    borderRadius: RADIUS.lg, padding: SPACING.md, marginBottom: SPACING.md,
+    borderWidth: 1, borderColor: COLORS.tertiary + '40',
+  },
+  insightHead: { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 8 },
+  insightTitle: { fontSize: 12, fontWeight: '700', color: COLORS.tertiary, letterSpacing: 0.4, textTransform: 'uppercase' },
+  insightSpend: { fontSize: 15, fontWeight: '700', color: COLORS.onSurface, marginBottom: 6 },
+  insightRow: { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 4 },
+  insightHabitual: { fontSize: 13, color: COLORS.onSurfaceVariant, fontWeight: '600' },
+  insightSavingBox: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginTop: 10,
+    paddingTop: 10, borderTopWidth: 1, borderTopColor: COLORS.outlineVariant + '40',
+  },
+  insightSaving: { flex: 1, fontSize: 13, fontWeight: '700', color: COLORS.secondary },
+  insightSub: { fontSize: 11, color: COLORS.onSurfaceVariant, marginTop: 3, lineHeight: 15 },
 
   storeCard: {
     backgroundColor: COLORS.surfaceContainer,

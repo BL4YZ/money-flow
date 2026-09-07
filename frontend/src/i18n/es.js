@@ -274,6 +274,15 @@ export default {
     addPlaceholder: 'Agregar producto...',
     compare: 'Comparar precios',
     clearList: 'Vaciar lista',
+    insightTitle: 'Tu gasto real',
+    insightHabitual: 'Comprás en {{store}}',
+    insightSpend: 'Gastás ${{amount}} por mes en supermercado',
+    insightSaving: 'Cambiando a {{store}} ahorrarías ${{amount}} por mes',
+    insightSavingList: 'Tu lista sale ${{amount}} menos ({{pct}}%)',
+    insightBest: 'Ya comprás en el más barato de tu lista',
+    insightNoData: 'Subí un resumen bancario para ver tu gasto real',
+    insightNoList: 'Armá tu lista para ver cuánto podrías ahorrar',
+    insightEstimate: 'Estimado: tu lista es una muestra de tu compra',
     optimalCart: 'Carrito óptimo',
     // "mejor valor" y no "más barato": entre un arroz de 1 kg a $37 y uno de
     // 5 kg a $159 gana el segundo, porque rinde $31,8/kg contra $37/kg. Por eso

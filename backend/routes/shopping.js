@@ -6,6 +6,7 @@ const db = require('../db');
 const authMiddleware = require('../middleware/auth');
 const requirePremium = require('../middleware/requirePremium');
 const { scrapeAll } = require('../services/scraper');
+const spendingInsight = require('../services/spendingInsight');
 const {
   normalize,
   tokenize,
@@ -601,6 +602,47 @@ router.post('/compare', requirePremium, async (req, res) => {
     res.json(buildComparison(items, itemResults));
   } catch (err) {
     console.error('[shopping/compare]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/shopping/insight — el gasto real cruzado con los precios.
+//
+// Es la funcion que un comparador puro no puede tener: sabe cuanto gasta el
+// usuario por mes y en que supermercado, porque eso viene en la descripcion de
+// cada movimiento del resumen bancario. Ver services/spendingInsight.js.
+//
+// Responde en tres estados, y la UI necesita distinguirlos:
+//   sin datos bancarios  → hay que subir un resumen
+//   con perfil, sin lista → se puede decir cuanto gasta y donde, nada mas
+//   con las dos cosas     → se puede decir cuanto ahorraria cambiando de tienda
+router.get('/insight', requirePremium, async (req, res) => {
+  try {
+    const perfil = await spendingInsight.perfilDeCompra(req.userId);
+    if (!perfil) {
+      return res.json({ estado: 'sin_datos', perfil: null, oportunidad: null });
+    }
+
+    const list = await getOrCreateList(req.userId);
+    const items = (await db.query(
+      'SELECT * FROM shopping_items WHERE list_id = $1',
+      [list.id]
+    )).rows;
+
+    if (items.length === 0) {
+      return res.json({ estado: 'sin_lista', perfil, oportunidad: null });
+    }
+
+    const itemResults = await Promise.all(items.map((item) => scrapeItem(item)));
+    const comparacion = buildComparison(items, itemResults);
+    res.json({
+      estado: 'completo',
+      perfil,
+      oportunidad: spendingInsight.oportunidad(perfil, comparacion),
+      totalItems: comparacion.totalItems,
+    });
+  } catch (err) {
+    console.error('[shopping/insight]', err.message);
     res.status(500).json({ error: err.message });
   }
 });
