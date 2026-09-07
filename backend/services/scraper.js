@@ -1,5 +1,6 @@
 const axios = require("axios");
 const cheerio = require("cheerio");
+const categoryMap = require("./categoryMap");
 const { getUsdToUyuRate, convertUsdToUyu } = require("./exchangeRate");
 
 // Cache en memoria: { key: { data, freshUntil, staleUntil } }
@@ -308,6 +309,14 @@ function parseTata(data, store) {
       const offer = node.offers?.offers?.[0];
       const price = node.offers?.lowPrice ?? offer?.price;
       if (!node.name || !price || price <= 0) return null;
+      // Tata sólo da ids numéricos de categoría. Si ya sabemos a qué nombre
+      // corresponden se adjunta la ruta; si no, se encola para aprenderla en
+      // segundo plano — la búsqueda nunca espera por esto.
+      // Ver services/categoryMap.js.
+      const ids = node.categoriesIds || [];
+      const ruta = categoryMap.rutaDeCategorias(ids);
+      if (!ruta) categoryMap.encolar(ids, node.slug, store.baseUrl);
+
       return {
         store: store.name,
         storeId: store.id,
@@ -317,6 +326,7 @@ function parseTata(data, store) {
         image: node.image?.[0]?.url || null,
         url: `${store.baseUrl}/${node.slug}/p`,
         available: offer ? /InStock/i.test(offer.availability || "") : true,
+        ...(ruta ? { category: ruta } : {}),
       };
     })
     .filter(Boolean)
@@ -885,4 +895,4 @@ async function scrapeAll(query, storeIds = null, category = null) {
   return results;
 }
 
-module.exports = { scrapeAll, scrapeStore, SCRAPE_STORES, CATEGORIES };
+module.exports = { scrapeAll, scrapeStore, SCRAPE_STORES, CATEGORIES, fetchWithRetry };

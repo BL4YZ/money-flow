@@ -526,9 +526,26 @@ function formatTokenQuantities(token, items) {
   return { unit: [...unidades][0], qty: [...valores][0] };
 }
 
-// ¿El producto satisface el token, por nombre o por cantidad equivalente?
-function tokenSatisfied(token, pNorm, productName, equivalencia) {
+// ¿El producto satisface el token — por nombre, por la categoria de la tienda,
+// o por cantidad equivalente?
+//
+// La CATEGORIA es la version principiada de algo que ya fallo por texto. Relajar
+// un token mirando su cobertura en el corpus (requiredTokens, mas arriba)
+// arreglaba "pan de molde" y rompia "pure de tomate", porque desde las letras no
+// se distingue un calificativo prescindible de la esencia del producto. La
+// taxonomia de la tienda si los distingue, y lo hace sin que tengamos que
+// adivinar:
+//
+//   Pan Lacteado TaTa       /Almacen/Panificados/Pan de Molde/  → "molde" OK
+//   Pan Casero Rebanado     /Frescos/Panaderia/                 → "molde" NO
+//   Pure de Papas           (su categoria no dice "tomate")     → "tomate" NO
+//
+// Solo aplica donde hay categoria real (El Dorado y Tata, ver categoryMap.js);
+// para el resto de las tiendas el token se sigue exigiendo en el nombre, asi que
+// esto sólo puede sumar resultados correctos, nunca colar de otras tiendas.
+function tokenSatisfied(token, pNorm, productName, equivalencia, categoria) {
   if (matchesToken(token, pNorm)) return true;
+  if (categoria && matchesToken(token, normalize(categoria))) return true;
   if (!equivalencia) return false;
   const q = parseQuantity(productName);
   return !!q && q.unit === equivalencia.unit && q.qty === equivalencia.qty;

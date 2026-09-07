@@ -175,7 +175,7 @@ router.get("/search", requirePremium, async (req, res) => {
       // los rescataba el fallback de typos, no el filtro principal.
       let strictFiltered = scoredItems.filter(
         (item) => item._matched > 0
-          && obligatorios.every((t) => tokenSatisfied(t, item._itemName, item.name, equivalencias[t]))
+          && obligatorios.every((t) => tokenSatisfied(t, item._itemName, item.name, equivalencias[t], item.category))
           && item._hasAllNumericKeywords,
       );
 

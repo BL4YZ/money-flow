@@ -176,7 +176,11 @@ module.exports = [
   { q: 'galletas', cat: 'supermercado', minResults: 2, allMatch: /galletit|galleta/i, label: 'galletas/galletitas' },
 
   // ─── K. No se vende en Uruguay: debe devolver vacío, no basura ───
-  { q: 'xbox series x', cat: 'hogar', expectEmpty: true, label: 'ninguna tienda tiene la consola' },
+  // Era expectEmpty porque ninguna tienda la stockeaba. ZonaTecno ahora sí la
+  // tiene ($42.214 y $47.848), y una asercion de AUSENCIA envejece con el stock.
+  // Lo que importa se puede afirmar sin congelar el catalogo: que sea la consola
+  // y no un juego ni un accesorio, que es el bug original.
+  { q: 'xbox series x', cat: 'hogar', minResults: 1, allMatch: /xbox series x/i, minPrice: 20000, noneMatch: /juego|volante|control|funda/i, label: 'la consola, no sus accesorios' },
   { q: 'macbook pro m4', cat: 'hogar', minResults: 1, allMatch: /macbook/i, minPrice: 20000 },
   // ─── L. "Sin X" — el producto que NO tiene lo que buscás ─────────
   // "Pulpa de Tomate SIN AZÚCAR" contiene la palabra "azúcar" y matcheaba
