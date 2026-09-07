@@ -4,6 +4,7 @@ const requirePremium = require("../middleware/requirePremium");
 const { scrapeAll, SCRAPE_STORES, CATEGORIES } = require("../services/scraper");
 const searchLog = require("../services/searchLog");
 const productType = require("../services/productType");
+const priceHistory = require("../services/priceHistory");
 const {
   normalize,
   tokenize,
@@ -354,6 +355,15 @@ router.get("/search", requirePremium, async (req, res) => {
     // repetir la misma fila. Se agrupa DESPUÉS de ordenar y limitar, así el
     // orden por relevancia manda y sólo se colapsa lo que se iba a mostrar.
     const groups = groupProducts(items);
+
+    // "¿Está caro o barato?" sobre el precio de cada producto agrupado, contra
+    // su precio habitual según el SIPC (ver services/priceHistory.js). Sólo
+    // opina sobre los 289 productos de la canasta oficial que tienen historial;
+    // para el resto el campo no viaja y la UI no muestra nada.
+    for (const g of groups) {
+      const v = priceHistory.evaluar(g.name, g.minPrice);
+      if (v) g.veredicto = v;
+    }
 
     // 5) Calcular estadísticas (Stats)
     const prices = items.map((i) => i.price);

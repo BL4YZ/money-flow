@@ -116,6 +116,23 @@ const MARCAS_IGNORADAS = new Set(["sin marca", "varias", "generico", "generica"]
       .map(([t, s2]) => [t, [...s2][0]])
   );
 
+  // Catálogo producto por producto, para poder atar un producto scrapeado a su
+  // ficha oficial y comparar contra su precio histórico. Se guardan los tokens
+  // ya calculados y la cantidad del envase: hacerlo en runtime por cada
+  // resultado de cada búsqueda sería trabajo repetido para siempre.
+  const { parseQuantity } = require("../services/productMatcher");
+  const productos = {};
+  for (const [id, producto, marca, especificacion] of filas) {
+    if (!id || !producto) continue;
+    const q = parseQuantity(especificacion || "");
+    productos[id] = {
+      tipo: tokenize(producto),
+      marca: normalize(marca || ""),
+      qty: q ? q.qty : null,
+      unit: q ? q.unit : null,
+    };
+  }
+
   const salidaJson = {
     generado: new Date().toISOString().slice(0, 10),
     fuente: "SIPC / MEF Uruguay - catalogodatos.gub.uy",
@@ -124,6 +141,7 @@ const MARCAS_IGNORADAS = new Set(["sin marca", "varias", "generico", "generica"]
     familias,
     exclusivos,
     tokenFamilias,
+    productos,
     marcas,
   };
 
@@ -135,6 +153,7 @@ const MARCAS_IGNORADAS = new Set(["sin marca", "varias", "generico", "generica"]
   console.log(`marcas inequívocas     : ${Object.keys(marcas).length}`);
   console.log(`familias               : ${new Set(Object.values(familias)).size}`);
   console.log(`tokens exclusivos      : ${Object.keys(exclusivos).length}`);
+  console.log(`con envase parseado    : ${Object.values(productos).filter((x) => x.qty).length} de ${Object.keys(productos).length}`);
   console.log(`marcas descartadas     : ${ambiguas} (abarcan familias distintas)`);
   console.log(`archivo                : ${(fs.statSync(salida).size / 1024).toFixed(0)} KB`);
 

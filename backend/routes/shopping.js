@@ -7,6 +7,7 @@ const authMiddleware = require('../middleware/auth');
 const requirePremium = require('../middleware/requirePremium');
 const { scrapeAll } = require('../services/scraper');
 const spendingInsight = require('../services/spendingInsight');
+const nearbyStores = require('../services/nearbyStores');
 const {
   normalize,
   tokenize,
@@ -635,10 +636,26 @@ router.get('/insight', requirePremium, async (req, res) => {
 
     const itemResults = await Promise.all(items.map((item) => scrapeItem(item)));
     const comparacion = buildComparison(items, itemResults);
+    const oportunidad = spendingInsight.oportunidad(perfil, comparacion);
+
+    // Si el cliente manda su ubicacion, "el mas barato" pasa a ser "el mas
+    // barato, a 600 m". Es opcional: sin coordenadas todo lo demas funciona
+    // igual y no se pide permiso de GPS por una funcion secundaria.
+    const lat = parseFloat(req.query.lat);
+    const lng = parseFloat(req.query.lng);
+    let sucursales = null;
+    if (Number.isFinite(lat) && Number.isFinite(lng)) {
+      const ids = (comparacion.byStore || [])
+        .filter((s2) => s2.found === comparacion.totalItems)
+        .map((s2) => s2.storeId);
+      sucursales = nearbyStores.masCercanaPorCadena(lat, lng, ids);
+    }
+
     res.json({
       estado: 'completo',
       perfil,
-      oportunidad: spendingInsight.oportunidad(perfil, comparacion),
+      oportunidad,
+      sucursales,
       totalItems: comparacion.totalItems,
     });
   } catch (err) {
