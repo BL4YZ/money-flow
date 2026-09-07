@@ -49,7 +49,13 @@ const { startBillNotifier } = require('./services/billNotifier');
 startBillNotifier();
 
 const { initSchema } = require('./db');
-initSchema().catch(err => console.error('Schema init error:', err.message));
+initSchema()
+  .then(() => {
+    // La tabla kv_cache junta una fila por termino buscado y por tienda; sin
+    // esta limpieza crece sin techo. Se hace al arrancar, no en cada busqueda.
+    require('./services/persistentCache').limpiar().catch(() => {});
+  })
+  .catch(err => console.error('Schema init error:', err.message));
 
 const app = express();
 const PORT = process.env.PORT || 3000;

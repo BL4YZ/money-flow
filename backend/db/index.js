@@ -112,6 +112,20 @@ async function initSchema() {
         created_at TIMESTAMP DEFAULT NOW()
       );
 
+      -- Cache que sobrevive al reinicio. En el plan gratuito de Render el
+      -- filesystem es EFIMERO (se borra en cada deploy, reinicio y apagado por
+      -- inactividad) y el servicio duerme a los 15 minutos: con el cache solo en
+      -- memoria, la primera busqueda despues de cada siesta scrapea todo de cero.
+      -- Render mismo recomienda Postgres para esto. Ver services/persistentCache.js.
+      CREATE TABLE IF NOT EXISTS kv_cache (
+        key          TEXT PRIMARY KEY,
+        value        JSONB NOT NULL,
+        fresh_until  TIMESTAMPTZ,
+        stale_until  TIMESTAMPTZ,
+        updated_at   TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS kv_cache_stale_idx ON kv_cache (stale_until);
+
     `);
     console.log('Schema: budgets table ready');
   } catch (err) {

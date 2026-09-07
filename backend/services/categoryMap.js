@@ -30,6 +30,13 @@
 
 const fs = require("fs");
 const path = require("path");
+const l2 = require("./persistentCache");
+
+// Clave única en kv_cache. El mapa entero entra en una fila: son ~200 pares
+// id→nombre, no justifica una tabla propia.
+const CLAVE_L2 = "categorias:tata";
+const TTL_L2 = 180 * 24 * 60 * 60 * 1000;   // las categorías de un super no cambian
+
 
 const CACHE_FILE = path.join(__dirname, "..", ".category-map.json");
 const MAX_ENTRADAS = 5000;      // techo de memoria; el catálogo real es mucho menor
@@ -60,16 +67,32 @@ function guardar() {
   guardadoPendiente = setTimeout(() => {
     guardadoPendiente = null;
     try {
-      fs.writeFileSync(CACHE_FILE, JSON.stringify({
+      const payload = {
         ids: Object.fromEntries(mapa),
         combos: [...combinacionesVistas].slice(-MAX_ENTRADAS),
-      }));
+      };
+      const ahora = Date.now();
+      l2.escribir(CLAVE_L2, payload, ahora + TTL_L2, ahora + TTL_L2);
+      fs.writeFileSync(CACHE_FILE, JSON.stringify(payload));
     } catch (e) { /* idem */ }
   }, 5000);
   if (guardadoPendiente.unref) guardadoPendiente.unref();
 }
 
 cargar();
+
+// El archivo local sólo sirve en desarrollo: en Render el filesystem se borra
+// en cada apagado por inactividad. Postgres es el que de verdad persiste.
+(async () => {
+  const guardado = await l2.leer(CLAVE_L2);
+  if (!guardado || !guardado.data) return;
+  let nuevas = 0;
+  Object.entries(guardado.data.ids || {}).forEach(([id, nombre]) => {
+    if (!mapa.has(id)) { mapa.set(id, nombre); nuevas++; }
+  });
+  (guardado.data.combos || []).forEach((c) => combinacionesVistas.add(c));
+  if (nuevas > 0) console.log(`[categorias] ${nuevas} recuperadas de Postgres`);
+})().catch(() => {});
 
 // ─── Consulta ─────────────────────────────────────────────────────
 

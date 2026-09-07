@@ -1,6 +1,7 @@
 const axios = require("axios");
 const cheerio = require("cheerio");
 const categoryMap = require("./categoryMap");
+const l2 = require("./persistentCache");
 const { getUsdToUyuRate, convertUsdToUyu } = require("./exchangeRate");
 
 // Cache en memoria: { key: { data, freshUntil, staleUntil } }
@@ -23,9 +24,14 @@ function getCacheEntry(key) {
   return entry;
 }
 
+// Escribe en memoria y, sin esperar, en Postgres. Ver services/persistentCache.js:
+// en Render gratuito el proceso se apaga por inactividad y el Map se pierde.
 function setCache(key, data) {
   const now = Date.now();
-  cache.set(key, { data, freshUntil: now + CACHE_TTL, staleUntil: now + STALE_TTL });
+  const freshUntil = now + CACHE_TTL;
+  const staleUntil = now + STALE_TTL;
+  cache.set(key, { data, freshUntil, staleUntil });
+  l2.escribir(key, data, freshUntil, staleUntil);
 }
 
 // ─── Single-flight (evita el cache stampede) ──────────────────────
@@ -853,7 +859,18 @@ async function doScrape(store, query, cacheKey) {
 
 async function scrapeStore(store, query) {
   const cacheKey = `${store.id}:${query.toLowerCase().trim()}`;
-  const entry = getCacheEntry(cacheKey);
+  let entry = getCacheEntry(cacheKey);
+
+  // Sin nada en memoria, preguntar a Postgres antes de darlo por frío: puede
+  // haberlo dejado el proceso anterior, antes de que Render lo durmiera.
+  if (!entry) {
+    const deL2 = await l2.leer(cacheKey);
+    if (deL2 && Date.now() < deL2.staleUntil) {
+      cache.set(cacheKey, deL2);   // se sube a L1 para las próximas
+      entry = deL2;
+      console.log(`[scraper] cache L2: ${store.name} "${query}"`);
+    }
+  }
 
   if (entry && Date.now() < entry.freshUntil) {
     console.log(`[scraper] cache hit: ${store.name} "${query}"`);
