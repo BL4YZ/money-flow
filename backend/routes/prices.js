@@ -134,6 +134,10 @@ router.get("/search", requirePremium, async (req, res) => {
         // Ej: búsqueda "suprema de pollo" → firstKeyword="suprema"
         // "Pollo spiedo" no tiene "suprema" → _matchesFirstKeyword=false
         const matchesFirstKeyword = matchesToken(queryKeywords[0], itemName);
+        // El token DISCRIMINADOR es el último: en "celular motorola", "leche
+        // conaprole" o "apple pencil" la información que distingue está ahí, y
+        // la primera palabra es la categoría genérica que las tiendas omiten.
+        const matchesDiscriminador = matchesToken(queryKeywords[queryKeywords.length - 1], itemName);
 
         // 4. Penalización por accesorio no pedido (lista de palabras +
         // regla gramatical "X para <lo buscado>", ver productMatcher.js).
@@ -159,7 +163,7 @@ router.get("/search", requirePremium, async (req, res) => {
         // ver productMatcher.hasAllModelTokens.
         const hasAllNumericKeywords = hasAllModelTokens(queryKeywords, itemName);
 
-        return { ...item, _score: score, _otraFamilia: otraFamilia, _matched: matchedKeywords, _isMainNoun: isMainNoun, _matchesFirstKeyword: matchesFirstKeyword, _hasAllNumericKeywords: hasAllNumericKeywords, _itemName: itemName };
+        return { ...item, _score: score, _otraFamilia: otraFamilia, _matched: matchedKeywords, _isMainNoun: isMainNoun, _matchesFirstKeyword: matchesFirstKeyword, _matchesDiscriminador: matchesDiscriminador, _hasAllNumericKeywords: hasAllNumericKeywords, _itemName: itemName };
       });
 
       // Filtro inteligente para búsquedas de 2+ palabras:
@@ -192,14 +196,60 @@ router.get("/search", requirePremium, async (req, res) => {
           && item._hasAllNumericKeywords,
       );
 
+      // Rescate por FAMILIA OFICIAL. Las tiendas venden pan de molde con nombres
+      // que no dicen "molde": "Pan blanco en rodajas BIMBO", "Pan PRECIO LÍDER
+      // lactal", "Pan Lacteado LOS SORCHANTES". Disco, Géant, Devoto y Tienda
+      // Inglesa devuelven doce cada una para esa búsqueda y el filtro dejaba
+      // pasar una. Tata ya estaba resuelto porque expone su categoría; estas
+      // cuatro no exponen ninguna.
+      //
+      // Relajar el token mirando el texto ya se probó y se revirtió: devolvía
+      // Puré de PAPAS para "pure de tomate". Lo que cambia ahora es que existe
+      // la familia del catálogo del MEF, y esa sí distingue. Se admite un
+      // producto al que le falta algún token si cumple TRES condiciones:
+      //
+      //   1. matchea el sustantivo de la búsqueda (su primer token),
+      //   2. su familia oficial es CONOCIDA y está entre las que pide la
+      //      búsqueda — dato del Estado, no inferencia nuestra,
+      //   3. algún producto sí matcheó completo, lo que prueba que la búsqueda
+      //      está bien formada y no es un término que nadie stockea.
+      //
+      // Verificado contra los tres casos que mataron la regla de texto:
+      // "Puré de Papas" es familia papa y la búsqueda pide {pulpa, tomate};
+      // "Celular Samsung" y "Aspiradora Samsung" no tienen familia conocida.
+      if (strictFiltered.length > 0 && queryKeywords.length > 1 && familiasBuscadas) {
+        const yaEstan = new Set(strictFiltered.map((i) => i.url || i.name));
+        const rescatados = scoredItems.filter((item) => {
+          if (yaEstan.has(item.url || item.name)) return false;
+          if (item._matched === 0 || !item._hasAllNumericKeywords) return false;
+          if (item._otraFamilia) return false;
+          if (!matchesToken(queryKeywords[0], item._itemName)) return false;
+          const fam = productType.familiaDeProducto(item.name);
+          return !!fam && familiasBuscadas.has(fam);
+        });
+        // Entran con score por debajo de los match completos: nunca le ganan a
+        // un producto que sí trae todas las palabras.
+        strictFiltered = strictFiltered.concat(
+          rescatados.map((i) => ({ ...i, _score: i._score - 20, _porFamilia: true }))
+        );
+      }
+
       // Intento 2 — si el estricto no encuentra nada, relajamos el filtro
       // Esto cubre casos donde la keyword está implícita en el nombre del producto
       // Ej: "suprema de pollo" → ningún producto dice "pollo" → mostramos todas las supremas
       // (los números siguen siendo obligatorios incluso acá)
       if (strictFiltered.length === 0 && queryKeywords.length > 1) {
+        // Se exige el DISCRIMINADOR, no la primera palabra. Exigir la primera
+        // es exigir la categoría genérica, y las tiendas la omiten: buscando
+        // "celular motorola" ningún resultado decía "celular" —el de El Dorado
+        // se llama "MOTOROLA Moto Edge 70 Fusión Azul"— y la búsqueda devolvía
+        // cero teniendo 41 Motorola en el scrape crudo. La misma regla ya
+        // estaba en routes/shopping.js; faltaba acá.
+        const discriminador = queryKeywords[queryKeywords.length - 1];
         strictFiltered = scoredItems.filter((item) => {
-          if (item._score <= 0 || !item._hasAllNumericKeywords) return false;
-          return item._matchesFirstKeyword && item._isMainNoun;
+          if (item._matched === 0 || !item._hasAllNumericKeywords) return false;
+          if (isAccessoryFor(queryKeywords, item._itemName)) return false;
+          return item._matchesDiscriminador;
         });
       }
 
@@ -339,7 +389,7 @@ router.get("/search", requirePremium, async (req, res) => {
       });
 
       // Limpiamos variables temporales
-      items = scoredItems.map(({ _score, _matched, _isMainNoun, _matchesFirstKeyword, _hasAllNumericKeywords, _itemName, _fuzzy, _storeTrust, _offCategory, _offUnit, _otraFamilia, ...rest }) => rest);
+      items = scoredItems.map(({ _score, _matched, _isMainNoun, _matchesFirstKeyword, _hasAllNumericKeywords, _itemName, _fuzzy, _storeTrust, _offCategory, _offUnit, _otraFamilia, _porFamilia, _matchesDiscriminador, ...rest }) => rest);
     } else {
       items = items.sort((a, b) => a.price - b.price);
     }

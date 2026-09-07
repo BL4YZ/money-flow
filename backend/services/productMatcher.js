@@ -184,10 +184,26 @@ function queryAsksFor(word, queryTokens) {
   });
 }
 
+// Palabras que son accesorio cuando encabezan el producto y ESPECIFICACION
+// cuando aparecen al final. "Camara para Nintendo Switch 2" es un accesorio;
+// "Celular Motorola Edge 70 Fusion 5G 8GB 256GB Camara" es un telefono que
+// lista su camara. Sin esta distincion se descartaba todo celular que
+// enumerara sus specs — y son casi todos.
+const PALABRAS_AMBIGUAS = new Set(['camara', 'memoria', 'bateria', 'pantalla', 'auriculares']);
+const POSICION_CABEZA = 3;   // dentro de las 3 primeras palabras = es el producto
+
+function esMencionDeSpec(word, pNorm) {
+  if (!PALABRAS_AMBIGUAS.has(word)) return false;
+  const tokens = pNorm.split(' ').filter(Boolean);
+  const pos = tokens.findIndex((t) => matchesToken(word, t));
+  return pos >= POSICION_CABEZA;   // aparece tarde: describe, no define
+}
+
 function isAccessoryFor(queryTokens, pNorm) {
   // 1. Lista de palabras: menciona un accesorio que la búsqueda no pidió
   const byWord = ACCESSORY_WORDS.some(
     (word) => matchesToken(word, pNorm) && !queryAsksFor(word, queryTokens)
+      && !esMencionDeSpec(word, pNorm)
   );
   if (byWord) return true;
 

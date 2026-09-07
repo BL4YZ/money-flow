@@ -111,8 +111,14 @@ const MARCAS_IGNORADAS = new Set(["sin marca", "varias", "generico", "generica"]
   const tokenFamilias = Object.fromEntries(
     Object.entries(tokenAFamilias).map(([t, s2]) => [t, [...s2]])
   );
+  // Los tokens con digitos NUNCA son exclusivos, por mas que aparezcan en un
+  // solo tipo. "Agua oxigenada 10 volumen" hacia que el "10" quedara marcado
+  // como exclusivo de la familia agua, y con eso cualquier producto que
+  // mencionara un 10 —"Pan para sandwich x 10 un."— se clasificaba como agua.
+  // Un numero describe el envase, nunca el tipo de producto.
   const exclusivos = Object.fromEntries(
-    Object.entries(tokenAFamilias).filter(([, s2]) => s2.size === 1)
+    Object.entries(tokenAFamilias)
+      .filter(([t, s2]) => s2.size === 1 && !/\d/.test(t) && t.length >= 3)
       .map(([t, s2]) => [t, [...s2][0]])
   );
 
