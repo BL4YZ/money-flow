@@ -2,6 +2,7 @@ const express = require("express");
 const authMiddleware = require("../middleware/auth");
 const requirePremium = require("../middleware/requirePremium");
 const { scrapeAll, SCRAPE_STORES, CATEGORIES } = require("../services/scraper");
+const searchLog = require("../services/searchLog");
 const {
   normalize,
   tokenize,
@@ -353,8 +354,18 @@ router.get("/search", requirePremium, async (req, res) => {
     // Devolvemos el mismo formato que ya tenías, el frontend actualizado lo entiende perfecto
     // `items` se mantiene por compatibilidad; `groups` es la vista de
     // comparador (un producto = una fila, con sus ofertas por tienda).
+    // Telemetría para Learning to Rank (ver services/searchLog.js). El id tiene
+    // que viajar en ESTA respuesta para que el click sepa a qué búsqueda
+    // pertenece, así que hay que esperarlo — pero con un techo de 300 ms: sobre
+    // una búsqueda que ya tardó segundos scrapeando es ruido, y si la base está
+    // lenta se sigue sin correlación en vez de hacer esperar al usuario.
+    const searchId = await Promise.race([
+      searchLog.registrarBusqueda({ userId: req.userId, query, category, items }),
+      new Promise((r) => setTimeout(() => r(null), 300)),
+    ]).catch(() => null);
+
     res.json({
-      query, items, groups, stats, stores: storeNames,
+      query, items, groups, stats, stores: storeNames, searchId,
       // La UI lo usa para explicar por qué los nombres no coinciden con lo
       // buscado, y para distinguir "no hay stock" de "escribiste mal".
       substitutes: usoRespaldoDeTienda,
@@ -366,6 +377,22 @@ router.get("/search", requirePremium, async (req, res) => {
     console.error("Prices search error:", err.message);
     res.status(500).json({ error: "Error al buscar precios" });
   }
+});
+
+// POST /api/prices/click — un resultado clickeado.
+// Responde 204 sin cuerpo y sin esperar la escritura: es telemetría, y un
+// usuario que toca un producto no debe esperar a que se registre nada.
+router.post("/click", (req, res) => {
+  const { searchId, position, storeId, productName, price } = req.body || {};
+  searchLog.registrarClick({
+    userId: req.userId,
+    searchLogId: searchId,
+    position,
+    storeId,
+    productName,
+    price,
+  });
+  res.status(204).end();
 });
 
 module.exports = router;

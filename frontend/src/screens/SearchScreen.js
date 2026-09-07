@@ -32,11 +32,25 @@ export function formatUnitPrice(item) {
 // Una fila por tienda dentro de la tarjeta expandida. Es lo que convierte
 // esto en un comparador: sin esto la app calculaba el precio de cada tienda y
 // después mostraba sólo el más barato, tirando la comparación.
-function OfferRow({ offer, esMejor, ahorro, hayDiferencia }) {
+// Avisa al backend qué resultado se abrió. Es telemetría para poder entrenar
+// el ranking más adelante (ver services/searchLog.js): sin historial de lo que
+// la gente elige no hay nada que aprender, y ese dato no se recupera después.
+// No se espera ni se muestra error — abrir la tienda no puede depender de esto.
+function registrarClick({ searchId, position, offer }) {
+  api.post('/prices/click', {
+    searchId,
+    position,
+    storeId: offer.storeId || null,
+    productName: offer.name,
+    price: offer.price,
+  }).catch(() => {});
+}
+
+function OfferRow({ offer, esMejor, ahorro, hayDiferencia, onAbrir }) {
   return (
     <TouchableOpacity
       style={styles.offerRow}
-      onPress={() => offer.url && Linking.openURL(offer.url)}
+      onPress={() => { onAbrir && onAbrir(offer); if (offer.url) Linking.openURL(offer.url); }}
       activeOpacity={0.7}
     >
       <View style={[styles.storeDot, { backgroundColor: offer.storeColor || COLORS.primary }]} />
@@ -58,7 +72,7 @@ function OfferRow({ offer, esMejor, ahorro, hayDiferencia }) {
   );
 }
 
-function ResultCard({ item, index }) {
+function ResultCard({ item, index, searchId }) {
   // `item` es un producto agrupado: una fila = un producto real, con la oferta
   // de cada tienda adentro.
   const [abierto, setAbierto] = useState(false);
@@ -81,7 +95,11 @@ function ResultCard({ item, index }) {
     <View style={styles.resultCard}>
       <TouchableOpacity
         style={styles.resultMain}
-        onPress={() => (enVarias ? setAbierto((v) => !v) : best.url && Linking.openURL(best.url))}
+        onPress={() => {
+          if (enVarias) { setAbierto((v) => !v); return; }
+          registrarClick({ searchId, position: index + 1, offer: best });
+          if (best.url) Linking.openURL(best.url);
+        }}
         activeOpacity={0.82}
       >
         {item.image ? (
@@ -155,6 +173,7 @@ function ResultCard({ item, index }) {
               key={o.url || `${o.store}-${i}`}
               offer={o}
               esMejor={i === 0}
+              onAbrir={(o) => registrarClick({ searchId, position: index + 1, offer: o })}
               hayDiferencia={ahorro > 0}
               ahorro={i === 0 ? 0 : Math.round(o.price - best.price)}
             />
@@ -191,6 +210,7 @@ export default function SearchScreen() {
   const [meta, setMeta]           = useState(null);  // substitutes, storesSearched
   const [orden, setOrden]         = useState('relevancia'); // relevancia | precio | unitario
   const [ultimaBusqueda, setUltima] = useState('');
+  const [searchId, setSearchId] = useState(null);   // correlaciona clicks con su búsqueda
   // Cuántas tiendas cubre cada categoría. Se pide una vez a /prices/categories
   // en vez de hardcodearlo: el backend agrega tiendas y un número escrito a
   // mano acá quedaría mintiendo en la pantalla de carga.
@@ -237,6 +257,7 @@ export default function SearchScreen() {
       })));
       setStats(data.stats);
       setMeta({ substitutes: !!data.substitutes, storesSearched: data.storesSearched || 0 });
+      setSearchId(data.searchId || null);
       setUltima(term);
     } catch (err) {
       setResults([]);
@@ -452,7 +473,7 @@ export default function SearchScreen() {
         )}
 
         {resultadosOrdenados && !loading && resultadosOrdenados.map((item, i) => (
-          <ResultCard key={(item.offers && item.offers[0] && item.offers[0].url) || item.name || i} item={item} index={i} />
+          <ResultCard key={(item.offers && item.offers[0] && item.offers[0].url) || item.name || i} item={item} index={i} searchId={searchId} />
         ))}
 
         {/* Estado inicial */}

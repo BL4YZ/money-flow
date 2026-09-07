@@ -54,6 +54,9 @@ initSchema()
     // La tabla kv_cache junta una fila por termino buscado y por tienda; sin
     // esta limpieza crece sin techo. Se hace al arrancar, no en cada busqueda.
     require('./services/persistentCache').limpiar().catch(() => {});
+    // Historial de busquedas/clicks: 180 dias alcanza de sobra para entrenar y
+    // mantiene chico el free tier de Supabase.
+    require('./services/searchLog').limpiar().catch(() => {});
   })
   .catch(err => console.error('Schema init error:', err.message));
 

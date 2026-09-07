@@ -126,6 +126,38 @@ async function initSchema() {
       );
       CREATE INDEX IF NOT EXISTS kv_cache_stale_idx ON kv_cache (stale_until);
 
+      -- Registro de busquedas y clicks. Es la materia prima de Learning to
+      -- Rank: sin historial de que eligio la gente, no hay nada que aprender, y
+      -- ese dato NO se puede recuperar despues. Loguear ahora cuesta una tabla;
+      -- no loguear cuesta todos los meses que pasen hasta que alguien se acuerde.
+      --
+      -- Se guardan las dos mitades porque una sin la otra no sirve: los clicks
+      -- dicen que se eligio, y "shown" dice contra que competia y en que orden.
+      -- Sin las impresiones no se puede calcular CTR por posicion, que es la
+      -- correccion mas basica (el puesto 1 se clickea mas por ser el puesto 1).
+      CREATE TABLE IF NOT EXISTS search_log (
+        id            SERIAL PRIMARY KEY,
+        user_id       UUID,
+        query         TEXT NOT NULL,
+        category      TEXT,
+        results_count INTEGER NOT NULL DEFAULT 0,
+        shown         JSONB,          -- [{pos, store, name, price}] en el orden mostrado
+        created_at    TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS search_log_created_idx ON search_log (created_at);
+
+      CREATE TABLE IF NOT EXISTS search_click (
+        id            SERIAL PRIMARY KEY,
+        search_log_id INTEGER,
+        user_id       UUID,
+        position      INTEGER,        -- ranking en el que estaba lo clickeado
+        store_id      TEXT,
+        product_name  TEXT,
+        price         NUMERIC(12,2),
+        created_at    TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS search_click_log_idx ON search_click (search_log_id);
+
     `);
     console.log('Schema: budgets table ready');
   } catch (err) {
