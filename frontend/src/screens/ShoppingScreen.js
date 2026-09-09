@@ -437,6 +437,31 @@ export default function ShoppingScreen() {
     ? (results.byStore.find((s) => s.found === results.totalItems) || {}).total
     : undefined;
 
+  // Alternativa de UNA sola tienda. El carrito óptimo puede pedir recorrer
+  // cuatro locales para ahorrar $159, y nadie hace eso: al lado de la cifra
+  // teórica va la que se resuelve en un viaje.
+  //
+  // Sólo aparece cuando AMBOS lados están completos. Comparar un carrito de 8
+  // ítems contra una tienda que tiene 7 haría ver barata a la que vende menos
+  // — el mismo error que la card `partial` existe para evitar — así que si el
+  // óptimo no cubre la lista entera, o ninguna tienda la tiene, no se dice nada.
+  const unaTienda = (() => {
+    if (!results || !(results.storesNeeded > 1)) return null;
+    const cubiertos = results.results.filter((r) => r.cheapest).length;
+    if (cubiertos !== results.totalItems) return null;
+    const completas = results.byStore.filter((st) => st.found === results.totalItems);
+    // Ninguna cadena tiene la lista entera. Eso EXPLICA el "recorriendo N
+    // tiendas" de arriba, así que se dice en vez de callar: el número deja de
+    // parecer un capricho del cálculo.
+    if (completas.length === 0) return { ninguna: true };
+    const mejor = completas.reduce((a, b) => (a.total <= b.total ? a : b));
+    // OJO: el diferencial puede dar NEGATIVO. El carrito óptimo se arma por
+    // mejor valor POR UNIDAD, no por precio absoluto, así que una sola tienda
+    // puede terminar costando menos. Cuando pasa hay que decirlo — esa tienda
+    // es mejor en las dos dimensiones y esconderlo sería vender lo contrario.
+    return { ...mejor, extra: Math.round(mejor.total - results.optimalTotal) };
+  })();
+
   // Reparto del carrito óptimo por cadena, ordenado por cantidad de ítems.
   const reparto = (() => {
     if (!results) return [];
@@ -624,6 +649,31 @@ export default function ShoppingScreen() {
                   </Txt>
                 </View>
               ) : null}
+
+              {unaTienda && unaTienda.ninguna ? (
+                <View style={[styles.reparto, { marginTop: 6 }]}>
+                  <Ionicons name="information-circle-outline" size={14} color={COLORS.textLow} />
+                  <Txt variant="caption" color={COLORS.textLow} style={styles.repartoUno} numberOfLines={2}>
+                    Ninguna cadena tiene la lista completa; por eso hay que recorrer varias.
+                  </Txt>
+                </View>
+              ) : unaTienda ? (
+                <View style={[styles.reparto, { marginTop: 6 }]}>
+                  <StoreDot storeId={unaTienda.storeId} size={8} style={{ marginRight: SPACING.s }} />
+                  <Txt variant="caption" color={COLORS.textMid} style={styles.repartoTxt} numberOfLines={1}>
+                    {unaTienda.extra < 0 ? 'Más barato aún: todo en ' : 'O todo en '}
+                    {unaTienda.name} por {formatUYU(unaTienda.total)}
+                  </Txt>
+                  {unaTienda.extra !== 0 ? (
+                    <Txt style={[
+                      styles.unaTiendaExtra,
+                      unaTienda.extra < 0 && { color: COLORS.income },
+                    ]}>
+                      {unaTienda.extra > 0 ? '+' : '−'}{formatUYU(Math.abs(unaTienda.extra))}
+                    </Txt>
+                  ) : null}
+                </View>
+              ) : null}
             </Card>
 
             {/* Cruce con el banco: lo único que un comparador puro no puede
@@ -781,6 +831,8 @@ const styles = StyleSheet.create({
   },
   repartoDots: { flexDirection: 'row', alignItems: 'center', marginRight: SPACING.s },
   repartoTxt: { flex: 1 },
+  repartoUno: { flex: 1, marginLeft: 7, lineHeight: 16 },
+  unaTiendaExtra: { fontFamily: FONTS.amountBold, fontSize: 12, lineHeight: 15, color: COLORS.textLow, marginLeft: SPACING.s },
   optimalMeta: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 2 },
   ahorroRow: { flexDirection: 'row', alignItems: 'center', marginTop: SPACING.s },
   ahorroTxt: { marginLeft: 6, flex: 1 },
