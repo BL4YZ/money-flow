@@ -196,6 +196,11 @@ module.exports = [
   { q: 'leche', cat: 'supermercado', minResults: 5, noneMatch: /chocolate|baton|alfajor|helado/i, label: 'regresión: "chocolate de leche"' },
   { q: 'agua 2 litros', cat: 'supermercado', minResults: 1, noneMatch: /lavandina|desodorante/i, label: 'regresión: lavandina no es agua' },
   { q: 'leche 3 litros', cat: 'supermercado', minResults: 1, noneMatch: /helado/i, label: 'regresión: helado no es leche' },
+  // El catálogo del MEF tiene UN tipo llamado "Pan de molde lacteado": las dos
+  // palabras nombran el mismo producto. En góndola casi nadie escribe "molde"
+  // —Tata y Tienda Inglesa ponen "Pan Lacteado"— y el carrito reportaba "no lo
+  // tiene" en cadenas que sí lo venden.
+  { q: 'pan de molde', cat: 'supermercado', minResults: 3, allMatch: /pan/i, label: 'regresión: molde = lacteado (tipo del MEF)' },
   { q: 'smart tv', cat: 'hogar', minResults: 5, noneMatch: /soporte|rack|control remoto/i, label: 'regresión: accesorios de TV' },
   { q: 'nintendo switch 2', cat: 'hogar', minResults: 1, noneMatch: /joy.?con|volante/i, label: 'regresión: el bug original' },
   { q: 'notebook i5', cat: 'hogar', minResults: 1, noneMatch: /\bi7\b|\bi3\b/i, label: 'regresión: i5 no es i7' },

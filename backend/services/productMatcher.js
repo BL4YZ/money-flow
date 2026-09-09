@@ -40,6 +40,15 @@ const SYNONYMS = {
   // Nombre comercial y nombre quimico de la misma sustancia. El catalogo del MEF
   // la lista como "Hipoclorito de sodio" y las gondolas la venden como lavandina.
   lavandina: ['hipoclorito'], hipoclorito: ['lavandina'],
+  // Mismo caso, mismo respaldo: el catalogo del MEF tiene UN solo tipo llamado
+  // "Pan de molde lacteado" — las dos palabras nombran el mismo producto en el
+  // dato oficial. En gondola casi nadie escribe "molde": Tata y Tienda Inglesa
+  // ponen "Pan Lacteado", Disco "lactal", Bimbo "blanco en rodajas". Sin esto
+  // el carrito elegia el pan Bimbo mas barato de cada cadena, que resultaba ser
+  // un pan de viena. NO es heuristica: es la misma ficha del Estado.
+  molde: ['lacteado', 'lactal'],
+  lacteado: ['molde', 'lactal'],
+  lactal: ['molde', 'lacteado'],
 };
 
 // Quita tildes y unifica abreviaturas de volumen/peso ("3 litros" → "3l"),
