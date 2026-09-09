@@ -138,8 +138,10 @@ function StoresCard({ byStore, totalItems, mejorTotal, aviso }) {
         <View style={styles.storeAviso}>
           <Ionicons name="alert-circle" size={15} color={COLORS.warning} />
           <Txt variant="caption" color={COLORS.warning} style={styles.storeAvisoTxt}>
-            {incompleta.name} sale menos porque le faltan {totalItems - incompleta.found} ítems.
-            No es un ahorro.
+            {incompleta.name} sale menos porque le
+            {totalItems - incompleta.found === 1
+              ? ' falta 1 ítem'
+              : ` faltan ${totalItems - incompleta.found} ítems`}. No es un ahorro.
           </Txt>
         </View>
       ) : null}
@@ -157,49 +159,94 @@ function StoresCard({ byStore, totalItems, mejorTotal, aviso }) {
   );
 }
 
-/** Mejor precio de un ítem, con las otras dos opciones debajo. */
-function ItemResult({ result }) {
-  if (!result.cheapest) return null;
-  const c = result.cheapest;
+/**
+ * Mejor precio por producto, en UNA card y una fila por ítem.
+ *
+ * Antes cada producto era una card de cuatro o cinco líneas —nombre, precio,
+ * tienda, nombre real del producto, precio por unidad y dos alternativas— y con
+ * una lista de ocho eso son más de mil píxeles de scroll para responder una
+ * pregunta que cabe en un renglón: cuánto sale y dónde.
+ *
+ * El detalle no se pierde, se pide: la fila se abre y ahí aparecen el producto
+ * que la tienda realmente ofrece, el precio por unidad y las otras opciones.
+ */
+function ItemsCard({ results }) {
+  const [abierto, setAbierto] = useState(null);
+  const conPrecio = results.filter((r) => r.cheapest);
+  if (conPrecio.length === 0) return null;
 
   return (
-    <Card style={styles.itemResult}>
-      <View style={styles.itemHead}>
-        <Txt variant="h2" style={styles.itemName} numberOfLines={1}>{result.item}</Txt>
-        <Txt style={styles.itemPrice}>{formatUYU(c.price)}</Txt>
-      </View>
+    <Card style={styles.itemsCard}>
+      {conPrecio.map((r, i) => {
+        const c = r.cheapest;
+        const open = abierto === r.itemId;
 
-      <View style={styles.itemMetaRow}>
-        <StoreDot storeId={c.storeId} size={8} style={{ marginRight: 6 }} />
-        <Txt variant="caption" color={COLORS.textMid} style={styles.itemMeta}>{c.store}</Txt>
-        <Txt variant="caption" color={COLORS.textLow} style={styles.itemMeta} numberOfLines={1}>
-          {' · '}{c.name}
-        </Txt>
-      </View>
-      {c.unitPrice != null ? (
-        <Txt variant="caption" color={COLORS.textLow} style={styles.itemUnit}>{formatUnitPrice(c)}</Txt>
-      ) : null}
-
-      {result.options.length > 1 ? (
-        <View style={styles.otras}>
-          {result.options.slice(1, 3).map((opt, i) => {
-            // El delta sólo se muestra si el envase es equivalente: comparar un
-            // 5 kg contra un 1 kg como si fuera "más caro" es exactamente la
-            // trampa que el precio por unidad existe para evitar.
-            const comparable = opt.unitLabel && opt.unitLabel === c.unitLabel;
-            const dif = Math.round(opt.price - c.price);
-            return (
-              <View key={i} style={styles.otraRow}>
-                <StoreDot storeId={opt.storeId} size={6} style={{ marginRight: 6 }} />
-                <Txt variant="caption" color={COLORS.textLow} style={styles.otraTxt}>
-                  {opt.store} {formatUYU(opt.price)}
-                  {comparable && dif > 0 ? ` (+${formatUYU(dif)})` : ''}
-                </Txt>
+        return (
+          <View key={r.itemId}>
+            <Pressable
+              onPress={() => {
+                LayoutAnimation.configureNext(LayoutAnimation.create(180, 'easeInEaseOut', 'opacity'));
+                setAbierto(open ? null : r.itemId);
+              }}
+              style={({ pressed }) => [
+                styles.itemRow,
+                i > 0 && styles.itemRowBorde,
+                pressed && { opacity: 0.7 },
+              ]}
+            >
+              <StoreDot storeId={c.storeId} size={8} />
+              <View style={styles.itemRowInfo}>
+                <Txt style={styles.itemRowNombre} numberOfLines={1}>{r.item}</Txt>
+                <Txt variant="caption" color={COLORS.textLow} numberOfLines={1}>{c.store}</Txt>
               </View>
-            );
-          })}
-        </View>
-      ) : null}
+              <Txt style={styles.itemRowPrecio}>{formatUYU(c.price)}</Txt>
+              <Ionicons
+                name={open ? 'chevron-up' : 'chevron-down'}
+                size={14}
+                color={COLORS.textLow}
+                style={{ marginLeft: 6 }}
+              />
+            </Pressable>
+
+            {open ? (
+              <View style={styles.itemDetalle}>
+                <Txt variant="caption" color={COLORS.textMid} style={{ marginBottom: 3 }}>
+                  {c.name}
+                </Txt>
+                {c.unitPrice != null ? (
+                  <Txt variant="caption" color={COLORS.textLow}>{formatUnitPrice(c)}</Txt>
+                ) : null}
+                {c.currency === 'USD' && c.originalPrice != null ? (
+                  <Txt variant="caption" color={COLORS.textLow}>
+                    US$ {c.originalPrice.toLocaleString('es-UY')}
+                  </Txt>
+                ) : null}
+
+                {r.options.length > 1 ? (
+                  <View style={styles.otras}>
+                    {r.options.slice(1, 4).map((opt, k) => {
+                      // El delta sólo se muestra si el envase es equivalente:
+                      // comparar un 5 kg contra un 1 kg como si fuera "más caro"
+                      // es la trampa que el precio por unidad existe para evitar.
+                      const comparable = opt.unitLabel && opt.unitLabel === c.unitLabel;
+                      const dif = Math.round(opt.price - c.price);
+                      return (
+                        <View key={k} style={styles.otraRow}>
+                          <StoreDot storeId={opt.storeId} size={6} style={{ marginRight: 6 }} />
+                          <Txt variant="caption" color={COLORS.textLow} style={styles.otraTxt}>
+                            {opt.store} {formatUYU(opt.price)}
+                            {comparable && dif > 0 ? ` (+${formatUYU(dif)})` : ''}
+                          </Txt>
+                        </View>
+                      );
+                    })}
+                  </View>
+                ) : null}
+              </View>
+            ) : null}
+          </View>
+        );
+      })}
     </Card>
   );
 }
@@ -466,7 +513,14 @@ export default function ShoppingScreen() {
 
             {!comparing ? (
               <>
-                <View style={styles.catRow}>
+                {/* Una fila con scroll en vez de dos fijas: seis filtros
+                    apilados comían el alto que necesita el botón de comparar. */}
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.catRow}
+                  style={styles.catScroll}
+                >
                   {CATEGORIES.map((cat) => (
                     <Chip
                       key={String(cat.id)}
@@ -476,7 +530,7 @@ export default function ShoppingScreen() {
                       onPress={() => setCategory(cat.id)}
                     />
                   ))}
-                </View>
+                </ScrollView>
 
                 <Button
                   label={canShopping
@@ -657,7 +711,7 @@ export default function ShoppingScreen() {
             <Txt variant="overline" color={COLORS.textLow} style={styles.seccion}>
               {t('shopping.bestPrice')}
             </Txt>
-            {results.results.map((r) => <ItemResult key={r.itemId} result={r} />)}
+            <ItemsCard results={results.results} />
 
             <Txt variant="overline" color={COLORS.textLow} style={styles.seccion}>
               {t('shopping.storesRanked')}
@@ -711,7 +765,8 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.full, paddingVertical: 7, paddingHorizontal: 12,
   },
   masChipTxt: { fontFamily: FONTS.semibold, fontSize: 12.5, marginLeft: 5 },
-  catRow: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.s, marginTop: SPACING.m },
+  catScroll: { marginTop: SPACING.m, marginHorizontal: -SPACING.m },
+  catRow: { flexDirection: 'row', gap: SPACING.s, paddingHorizontal: SPACING.m },
 
   optimalRow: { flexDirection: 'row', alignItems: 'flex-end' },
   optimalTotal: { fontFamily: FONTS.amountBold, fontSize: 32, lineHeight: 34, letterSpacing: -0.6, color: COLORS.textHigh },
@@ -751,14 +806,14 @@ const styles = StyleSheet.create({
   },
   insightSaving: { fontFamily: FONTS.semibold },
 
-  itemResult: { marginTop: SPACING.s },
-  itemHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  itemName: { flex: 1, marginRight: SPACING.s },
-  itemPrice: { fontFamily: FONTS.amountBold, fontSize: 16, lineHeight: 19, color: COLORS.income },
-  itemMetaRow: { flexDirection: 'row', alignItems: 'center', marginTop: 5 },
-  itemMeta: { fontFamily: FONTS.medium, fontSize: 12.5, flexShrink: 1 },
-  itemUnit: { marginTop: 3, fontSize: 12 },
-  otras: { marginTop: SPACING.s, borderTopWidth: 1, borderTopColor: COLORS.borderSubtle, paddingTop: SPACING.s },
+  itemsCard: { paddingVertical: 4 },
+  itemRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10 },
+  itemRowBorde: { borderTopWidth: 1, borderTopColor: COLORS.borderSubtle },
+  itemRowInfo: { flex: 1, minWidth: 0, marginLeft: SPACING.s },
+  itemRowNombre: { fontFamily: FONTS.semibold, fontSize: 13.5, lineHeight: 17, color: COLORS.textHigh },
+  itemRowPrecio: { fontFamily: FONTS.amountBold, fontSize: 14, lineHeight: 17, color: COLORS.income, marginLeft: SPACING.s },
+  itemDetalle: { paddingLeft: 16, paddingBottom: SPACING.s },
+  otras: { marginTop: SPACING.s },
   otraRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 3 },
   otraTxt: { fontSize: 12 },
 
