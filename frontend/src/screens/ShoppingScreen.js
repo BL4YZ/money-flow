@@ -599,10 +599,19 @@ export default function ShoppingScreen() {
                 debajo: son las dos cifras que se comparan y leerlas en la misma
                 línea es lo que hace la card. */}
             <Card variant="best" label={t('shopping.optimalCart')} style={styles.bloque}>
+              {/* La frase larga es el subtítulo de la card, no el pie de una
+                  cifra: puesta a la derecha del total le comía el ancho a la
+                  columna del monto y "$1.169" se partía en dos renglones. */}
+              <Txt variant="caption" color={COLORS.textMid} style={{ marginBottom: 6 }}>
+                {t('shopping.optimalSub')}
+              </Txt>
+
               <View style={styles.optimalRow}>
-                <View style={{ flex: 1 }}>
-                  <Txt style={styles.optimalTotal}>{formatUYU(results.optimalTotal)}</Txt>
-                  <Txt variant="caption" color={COLORS.textMid} style={{ marginTop: 4 }}>
+                <View style={styles.optimalIzq}>
+                  <Txt style={styles.optimalTotal} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+                    {formatUYU(results.optimalTotal)}
+                  </Txt>
+                  <Txt variant="caption" color={COLORS.textMid} style={{ marginTop: 4 }} numberOfLines={2}>
                     {results.results.filter((r) => r.cheapest).length} de {results.totalItems} ítems
                     {/* Un total que exige ir a cuatro lugares es aspiracional; el
                         usuario decide con este dato. */}
@@ -620,11 +629,11 @@ export default function ShoppingScreen() {
                     sin explicación. */}
                 {(results.itemSavings > 0 || results.optimalSavings > 0) ? (
                   <View style={styles.optimalAhorro}>
-                    <Txt style={styles.ahorroMonto}>
+                    <Txt style={styles.ahorroMonto} numberOfLines={1}>
                       −{formatUYU(results.itemSavings || results.optimalSavings)}
                     </Txt>
-                    <Txt variant="caption" color={COLORS.textLow} style={{ marginTop: 4 }}>
-                      {t('shopping.optimalSub')}
+                    <Txt variant="caption" color={COLORS.textLow} style={{ marginTop: 4 }} numberOfLines={1}>
+                      {t('shopping.optimalSavingsLabel')}
                     </Txt>
                   </View>
                 ) : null}
@@ -645,7 +654,8 @@ export default function ShoppingScreen() {
                     ))}
                   </View>
                   <Txt variant="caption" color={COLORS.textMid} style={styles.repartoTxt} numberOfLines={1}>
-                    {reparto.map((r) => `${r.n} en ${r.store}`).join(' · ')}
+                    {reparto.slice(0, 3).map((r) => `${r.n} en ${r.store}`).join(' · ')}
+                    {reparto.length > 3 ? ` · y ${reparto.length - 3} más` : ''}
                   </Txt>
                 </View>
               ) : null}
@@ -819,8 +829,11 @@ const styles = StyleSheet.create({
   catRow: { flexDirection: 'row', gap: SPACING.s, paddingHorizontal: SPACING.m },
 
   optimalRow: { flexDirection: 'row', alignItems: 'flex-end' },
+  // minWidth:0 es lo que deja que la columna izquierda se encoja de verdad; sin
+  // eso flex:1 no impide que el contenido la empuje más ancha que el espacio.
+  optimalIzq: { flex: 1, minWidth: 0 },
   optimalTotal: { fontFamily: FONTS.amountBold, fontSize: 32, lineHeight: 34, letterSpacing: -0.6, color: COLORS.textHigh },
-  optimalAhorro: { alignItems: 'flex-end', marginLeft: SPACING.s },
+  optimalAhorro: { alignItems: 'flex-end', marginLeft: SPACING.m, flexShrink: 0 },
   ahorroMonto: { fontFamily: FONTS.amountBold, fontSize: 18, lineHeight: 21, color: COLORS.income },
   reparto: {
     flexDirection: 'row', alignItems: 'center',

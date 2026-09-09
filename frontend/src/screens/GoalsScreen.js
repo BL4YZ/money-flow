@@ -252,7 +252,9 @@ export default function GoalsScreen() {
               <ProgressRing value={overall} size="lg" color={COLORS.accent} label="ahorrado" />
               <View style={styles.resumenInfo}>
                 <Txt variant="overline" color={COLORS.textLow}>{t('goals.totalSaved')}</Txt>
-                <Txt style={styles.resumenTotal}>{formatUYU(totalSaved)}</Txt>
+                <Txt style={styles.resumenTotal} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+                  {formatUYU(totalSaved)}
+                </Txt>
                 <View style={styles.resumenMetas}>
                   <View style={styles.resumenMeta}>
                     <Txt variant="caption" color={COLORS.textLow}>{t('goals.target')}</Txt>
@@ -425,7 +427,7 @@ const styles = StyleSheet.create({
   seccion: { marginTop: SPACING.l, marginBottom: SPACING.s },
 
   resumen: { flexDirection: 'row', alignItems: 'center' },
-  resumenInfo: { flex: 1, marginLeft: SPACING.m },
+  resumenInfo: { flex: 1, minWidth: 0, marginLeft: SPACING.m },
   resumenTotal: { fontFamily: FONTS.amountBold, fontSize: 26, lineHeight: 32, color: COLORS.textHigh, marginVertical: 2 },
   resumenMetas: { flexDirection: 'row', gap: SPACING.l, marginTop: SPACING.xs },
   resumenMeta: {},

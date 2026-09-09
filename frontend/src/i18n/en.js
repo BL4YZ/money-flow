@@ -285,6 +285,7 @@ export default {
     insightEstimate: 'Estimate: your list is a sample of your shop',
     optimalCart: 'Optimal cart',
     optimalSub: 'The best value per unit for each product',
+    optimalSavingsLabel: 'saved',
     savings: 'Save ${{amount}} by picking the right option',
     storesNeeded_one: 'All in 1 store',
     storesNeeded_other: 'Across {{n}} stores',

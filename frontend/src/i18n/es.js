@@ -288,6 +288,7 @@ export default {
     // 5 kg a $159 gana el segundo, porque rinde $31,8/kg contra $37/kg. Por eso
     // el total puede superar al de una sola tienda — son canastas distintas.
     optimalSub: 'El mejor valor por unidad de cada producto',
+    optimalSavingsLabel: 'de ahorro',
     // El ahorro compara sólo envases equivalentes (ver itemSavings en el
     // backend); decir "vs una sola tienda" comparaba 5 kg contra 1 kg.
     savings: 'Ahorrás ${{amount}} eligiendo bien cada producto',
