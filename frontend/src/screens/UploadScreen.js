@@ -6,7 +6,7 @@ import {
 import { useEntrance, usePressScale, usePulse } from '../utils/animations';
 import * as DocumentPicker from 'expo-document-picker';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import Toast from 'react-native-toast-message';
 import api from '../api/client';
 import { encryptFile } from '../utils/encryption';

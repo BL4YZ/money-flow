@@ -1,0 +1,1071 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="_ds/the-self-design-system-c2bec695-a256-477d-8392-597fabc0375c/tokens/fonts.css">
+<link rel="stylesheet" href="_ds/the-self-design-system-c2bec695-a256-477d-8392-597fabc0375c/tokens/colors.css">
+<link rel="stylesheet" href="_ds/the-self-design-system-c2bec695-a256-477d-8392-597fabc0375c/tokens/typography.css">
+<link rel="stylesheet" href="_ds/the-self-design-system-c2bec695-a256-477d-8392-597fabc0375c/tokens/spacing.css">
+<link rel="stylesheet" href="_ds/the-self-design-system-c2bec695-a256-477d-8392-597fabc0375c/styles.css">
+<script src="_ds/the-self-design-system-c2bec695-a256-477d-8392-597fabc0375c/_ds_bundle.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<script type="module" src="https://cdn.jsdelivr.net/npm/ionicons@7.2.2/dist/ionicons/ionicons.esm.js"></script>
+<style>
+body { margin: 0; background: #0b0a09; }
+a { color: #ece8e3; text-decoration: none; }
+a:hover { color: #e2d7ff; }
+::selection { background: #ece8e3; color: #fff; }
+</style>
+</helmet>
+
+<div style="font-family:Manrope,system-ui,sans-serif;background:#0b0a09;color:#ece8e3;padding:0 0 96px">
+
+<div style="max-width:1180px;margin:0 auto;padding:72px 40px 0">
+<div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-bottom:28px">
+<span style="font:700 11px/1 JetBrains Mono,monospace;letter-spacing:.12em;text-transform:uppercase;color:#ece8e3;background:rgba(236,232,227,.10);border:1.5px solid #57504a;padding:7px 10px;border-radius:999px">Rediseño v1</span>
+<span style="font:500 12px/1 Manrope,sans-serif;color:#78716b">React Native · Expo SDK 57 · solo dark · es-UY</span>
+</div>
+<h1 style="font:800 clamp(38px,5vw,66px)/1.02 Manrope,sans-serif;letter-spacing:-.03em;margin:0 0 20px;max-width:15ch;text-wrap:balance">MoneyFlow, ordenado en un sistema</h1>
+<p style="font:400 18px/1.6 Manrope,sans-serif;color:#a9a29b;max-width:62ch;margin:0 0 40px;text-wrap:pretty">Un set de componentes con estados definidos, tokens con nombres semánticos y tres pantallas armadas solo con esas piezas. Nada acá se dibuja dos veces: los 15 botones primarios, los 4 bottom sheets y los 5 empty states de hoy colapsan a uno de cada uno.</p>
+
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:24px">
+<div style="background:#191817;border:1.5px solid #34302c;border-radius:16px;padding:18px 20px">
+<div style="font:700 30px/1 JetBrains Mono,monospace;color:#5fe0a8;margin-bottom:6px">66 → 34</div>
+<div style="font:500 13px/1.4 Manrope,sans-serif;color:#a9a29b">hex sueltos → tokens. Cero color fuera de <span style="font-family:JetBrains Mono,monospace;font-size:12px;color:#ece8e3">COLORS</span>.</div>
+</div>
+<div style="background:#191817;border:1.5px solid #34302c;border-radius:16px;padding:18px 20px">
+<div style="font:700 30px/1 JetBrains Mono,monospace;color:#ece8e3;margin-bottom:6px">12</div>
+<div style="font:500 13px/1.4 Manrope,sans-serif;color:#a9a29b">componentes que cubren los 11 patrones duplicados del brief.</div>
+</div>
+<div style="background:#191817;border:1.5px solid #34302c;border-radius:16px;padding:18px 20px">
+<div style="font:700 30px/1 JetBrains Mono,monospace;color:#3fd7bd;margin-bottom:6px">~2.350</div>
+<div style="font:500 13px/1.4 Manrope,sans-serif;color:#a9a29b">líneas de StyleSheet inline que dejan de existir al portar.</div>
+</div>
+<div style="background:#191817;border:1.5px solid #34302c;border-radius:16px;padding:18px 20px">
+<div style="font:700 30px/1 JetBrains Mono,monospace;color:#f0c073;margin-bottom:6px">2</div>
+<div style="font:500 13px/1.4 Manrope,sans-serif;color:#a9a29b">features pendientes (veredicto MEF, sucursal) → ronda 2, como pediste.</div>
+</div>
+</div>
+
+<sc-if value="{{ notes }}" hint-placeholder-val="{{ true }}">
+<div style="background:#191817;border:1.5px solid #34302c;border-left:none;border-radius:16px;padding:24px 26px;margin-bottom:12px">
+<div style="font:700 11px/1 JetBrains Mono,monospace;letter-spacing:.12em;text-transform:uppercase;color:#78716b;margin-bottom:16px">Premisas que tomé</div>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:22px">
+<div>
+<div style="font:700 15px/1.3 Manrope,sans-serif;margin-bottom:6px">Paleta: evolución, no reemplazo</div>
+<p style="font:400 14px/1.6 Manrope,sans-serif;color:#a9a29b;margin:0">El violeta se va: el primary pasa a hueso sobre negro cálido, y el turquesa queda como único acento cromático. Lo que cambia: <strong style="color:#ece8e3;font-weight:600">un</strong> primary, <strong style="color:#ece8e3;font-weight:600">un</strong> accent, y los semánticos separados de los de dato. Hoy turquesa es accent + success + income a la vez; eso se corta.</p>
+</div>
+<div>
+<div style="font:700 15px/1.3 Manrope,sans-serif;margin-bottom:6px">Negro cálido</div>
+<p style="font:400 14px/1.6 Manrope,sans-serif;color:#a9a29b;margin:0">Las superficies pasan de neutro frío a neutro cálido (#121110 en vez de #131313). Es sutil pero hace que el hueso y el dorado dejen de verse sucios encima, y alinea con el sistema de marca atado al proyecto.</p>
+</div>
+<div>
+<div style="font:700 15px/1.3 Manrope,sans-serif;margin-bottom:6px">Dos fuentes, ambas por expo-font</div>
+<p style="font:400 14px/1.6 Manrope,sans-serif;color:#a9a29b;margin:0"><strong style="color:#ece8e3;font-weight:600">Manrope</strong> para toda la UI y <strong style="color:#ece8e3;font-weight:600">JetBrains Mono</strong> solo para montos. El mono es funcional, no estético: <span style="font-family:JetBrains Mono,monospace">$127.450</span> y <span style="font-family:JetBrains Mono,monospace">$8.400</span> alinean en columna, que es lo que una app de plata necesita.</p>
+</div>
+<div>
+<div style="font:700 15px/1.3 Manrope,sans-serif;margin-bottom:6px">Gradientes: se quedan</div>
+<p style="font:400 14px/1.6 Manrope,sans-serif;color:#a9a29b;margin:0">Con una regla: solo tres — <em>premium</em> (dorado), <em>comparar</em> (lavanda→violeta) y <em>glow</em> de fondo. Los otros 25 usos se reemplazan por color plano y borde.</p>
+</div>
+<div>
+<div style="font:700 15px/1.3 Manrope,sans-serif;margin-bottom:6px">Sombras nombradas por función</div>
+<p style="font:400 14px/1.6 Manrope,sans-serif;color:#a9a29b;margin:0"><span style="font-family:JetBrains Mono,monospace;font-size:12.5px;color:#ece8e3">ambient</span> (elevación real), <span style="font-family:JetBrains Mono,monospace;font-size:12.5px;color:#ece8e3">glow</span> (foco, halo hueso) y <span style="font-family:JetBrains Mono,monospace;font-size:12.5px;color:#f0c073">gold</span> (bloqueado por premium). Cada una viene con su par iOS/Android.</p>
+</div>
+<div>
+<div style="font:700 15px/1.3 Manrope,sans-serif;margin-bottom:6px">Lo que no toqué</div>
+<p style="font:400 14px/1.6 Manrope,sans-serif;color:#a9a29b;margin:0">Los 6 tabs y su orden, los colores de marca de las cadenas, y las aclaraciones de honestidad (estimación, parcial, promedio sobre meses con dato). Las tres están tratadas como componente, no como texto chico al final.</p>
+</div>
+</div>
+</div>
+</sc-if>
+</div>
+
+<div style="max-width:1180px;margin:0 auto;padding:64px 40px 0">
+<div style="display:flex;align-items:baseline;gap:14px;border-bottom:1.5px solid #34302c;padding-bottom:14px;margin-bottom:36px">
+<span style="font:700 12px/1 JetBrains Mono,monospace;color:#121110;background:#ece8e3;padding:6px 9px;border-radius:6px">01</span>
+<h2 style="font:800 26px/1 Manrope,sans-serif;letter-spacing:-.02em;margin:0">Tokens</h2>
+<span style="font:500 13px/1.4 Manrope,sans-serif;color:#78716b">mapeables 1:1 a COLORS / SPACING / RADIUS / SHADOWS</span>
+</div>
+
+<div style="font:700 11px/1 JetBrains Mono,monospace;letter-spacing:.12em;text-transform:uppercase;color:#78716b;margin-bottom:14px">Superficies · 5 escalones + bordes</div>
+<div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:32px">
+<div style="width:150px;border:1.5px solid #34302c;border-radius:12px;overflow:hidden">
+<div style="height:66px;background:#121110"></div>
+<div style="padding:10px 12px;background:#191817"><div style="font:700 12px/1.3 Manrope,sans-serif">bg</div><div style="font:400 11px/1.4 JetBrains Mono,monospace;color:#78716b">#121110</div></div>
+</div>
+<div style="width:150px;border:1.5px solid #34302c;border-radius:12px;overflow:hidden">
+<div style="height:66px;background:#191817"></div>
+<div style="padding:10px 12px;background:#191817"><div style="font:700 12px/1.3 Manrope,sans-serif">surface</div><div style="font:400 11px/1.4 JetBrains Mono,monospace;color:#78716b">#191817</div></div>
+</div>
+<div style="width:150px;border:1.5px solid #34302c;border-radius:12px;overflow:hidden">
+<div style="height:66px;background:#201e1c"></div>
+<div style="padding:10px 12px;background:#191817"><div style="font:700 12px/1.3 Manrope,sans-serif">surfaceRaised</div><div style="font:400 11px/1.4 JetBrains Mono,monospace;color:#78716b">#201e1c</div></div>
+</div>
+<div style="width:150px;border:1.5px solid #34302c;border-radius:12px;overflow:hidden">
+<div style="height:66px;background:#292725"></div>
+<div style="padding:10px 12px;background:#191817"><div style="font:700 12px/1.3 Manrope,sans-serif">surfaceSunken</div><div style="font:400 11px/1.4 JetBrains Mono,monospace;color:#78716b">#292725</div></div>
+</div>
+<div style="width:150px;border:1.5px solid #34302c;border-radius:12px;overflow:hidden">
+<div style="height:66px;background:#332f2c"></div>
+<div style="padding:10px 12px;background:#191817"><div style="font:700 12px/1.3 Manrope,sans-serif">surfaceOverlay</div><div style="font:400 11px/1.4 JetBrains Mono,monospace;color:#78716b">#332f2c</div></div>
+</div>
+<div style="width:150px;border:1.5px solid #34302c;border-radius:12px;overflow:hidden">
+<div style="height:66px;background:#262421"></div>
+<div style="padding:10px 12px;background:#191817"><div style="font:700 12px/1.3 Manrope,sans-serif">borderSubtle</div><div style="font:400 11px/1.4 JetBrains Mono,monospace;color:#78716b">#262421</div></div>
+</div>
+<div style="width:150px;border:1.5px solid #34302c;border-radius:12px;overflow:hidden">
+<div style="height:66px;background:#34302c"></div>
+<div style="padding:10px 12px;background:#191817"><div style="font:700 12px/1.3 Manrope,sans-serif">border</div><div style="font:400 11px/1.4 JetBrains Mono,monospace;color:#78716b">#34302c</div></div>
+</div>
+<div style="width:150px;border:1.5px solid #34302c;border-radius:12px;overflow:hidden">
+<div style="height:66px;background:#46403a"></div>
+<div style="padding:10px 12px;background:#191817"><div style="font:700 12px/1.3 Manrope,sans-serif">borderStrong</div><div style="font:400 11px/1.4 JetBrains Mono,monospace;color:#78716b">#46403a</div></div>
+</div>
+</div>
+
+<div style="font:700 11px/1 JetBrains Mono,monospace;letter-spacing:.12em;text-transform:uppercase;color:#78716b;margin-bottom:14px">Marca · un primary, un accent</div>
+<div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:32px">
+<div style="width:186px;border:1.5px solid #34302c;border-radius:12px;overflow:hidden">
+<div style="height:80px;background:#ece8e3"></div>
+<div style="padding:11px 13px;background:#191817"><div style="font:700 12.5px/1.3 Manrope,sans-serif">primary</div><div style="font:400 11px/1.5 JetBrains Mono,monospace;color:#78716b">#ece8e3 · texto/icono sobre oscuro</div></div>
+</div>
+<div style="width:186px;border:1.5px solid #34302c;border-radius:12px;overflow:hidden">
+<div style="height:80px;background:#ece8e3"></div>
+<div style="padding:11px 13px;background:#191817"><div style="font:700 12.5px/1.3 Manrope,sans-serif">primaryFill</div><div style="font:400 11px/1.5 JetBrains Mono,monospace;color:#78716b">#ece8e3 · relleno de botón</div></div>
+</div>
+<div style="width:186px;border:1.5px solid #34302c;border-radius:12px;overflow:hidden">
+<div style="height:80px;background:#cfc9c2"></div>
+<div style="padding:11px 13px;background:#191817"><div style="font:700 12.5px/1.3 Manrope,sans-serif">primaryPressed</div><div style="font:400 11px/1.5 JetBrains Mono,monospace;color:#78716b">#cfc9c2 · oscurece, no aclara</div></div>
+</div>
+<div style="width:186px;border:1.5px solid #34302c;border-radius:12px;overflow:hidden">
+<div style="height:80px;background:#2b2825"></div>
+<div style="padding:11px 13px;background:#191817"><div style="font:700 12.5px/1.3 Manrope,sans-serif">primarySoft</div><div style="font:400 11px/1.5 JetBrains Mono,monospace;color:#78716b">#2b2825 · chip activo, pill de tab</div></div>
+</div>
+<div style="width:186px;border:1.5px solid #34302c;border-radius:12px;overflow:hidden">
+<div style="height:80px;background:#3fd7bd"></div>
+<div style="padding:11px 13px;background:#191817"><div style="font:700 12.5px/1.3 Manrope,sans-serif">accent</div><div style="font:400 11px/1.5 JetBrains Mono,monospace;color:#78716b">#3fd7bd · dato destacado, gráfico</div></div>
+</div>
+<div style="width:186px;border:1.5px solid #34302c;border-radius:12px;overflow:hidden">
+<div style="height:80px;background:linear-gradient(120deg,#f7d79a,#c9922f)"></div>
+<div style="padding:11px 13px;background:#191817"><div style="font:700 12.5px/1.3 Manrope,sans-serif">premium</div><div style="font:400 11px/1.5 JetBrains Mono,monospace;color:#78716b">#f0c073 · gradiente + sombra gold</div></div>
+</div>
+</div>
+
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:24px;margin-bottom:34px">
+<div style="background:#191817;border:1.5px solid #34302c;border-radius:16px;padding:22px">
+<div style="font:700 11px/1 JetBrains Mono,monospace;letter-spacing:.12em;text-transform:uppercase;color:#78716b;margin-bottom:6px">Dato financiero</div>
+<p style="font:400 12.5px/1.5 Manrope,sans-serif;color:#78716b;margin:0 0 16px">Signo del dinero. Nunca se usa para feedback de UI.</p>
+<div style="display:flex;flex-direction:column;gap:12px">
+<div style="display:flex;align-items:center;gap:12px"><span style="width:34px;height:34px;border-radius:8px;background:#5fe0a8;flex:none"></span><span style="font:700 13px/1.3 Manrope,sans-serif;flex:1">income</span><span style="font:500 12px/1.3 JetBrains Mono,monospace;color:#78716b">#5fe0a8</span></div>
+<div style="display:flex;align-items:center;gap:12px"><span style="width:34px;height:34px;border-radius:8px;background:#ff8f7a;flex:none"></span><span style="font:700 13px/1.3 Manrope,sans-serif;flex:1">expense</span><span style="font:500 12px/1.3 JetBrains Mono,monospace;color:#78716b">#ff8f7a</span></div>
+<div style="display:flex;align-items:center;gap:12px"><span style="width:34px;height:34px;border-radius:8px;background:#a9a29b;flex:none"></span><span style="font:700 13px/1.3 Manrope,sans-serif;flex:1">neutralData</span><span style="font:500 12px/1.3 JetBrains Mono,monospace;color:#78716b">#a9a29b</span></div>
+</div>
+</div>
+<div style="background:#191817;border:1.5px solid #34302c;border-radius:16px;padding:22px">
+<div style="font:700 11px/1 JetBrains Mono,monospace;letter-spacing:.12em;text-transform:uppercase;color:#78716b;margin-bottom:6px">Feedback</div>
+<p style="font:400 12.5px/1.5 Manrope,sans-serif;color:#78716b;margin:0 0 16px">Estado del sistema. Cálidos y desaturados para no gritar.</p>
+<div style="display:flex;flex-direction:column;gap:12px">
+<div style="display:flex;align-items:center;gap:12px"><span style="width:34px;height:34px;border-radius:8px;background:#46c98f;flex:none"></span><span style="font:700 13px/1.3 Manrope,sans-serif;flex:1">success</span><span style="font:500 12px/1.3 JetBrains Mono,monospace;color:#78716b">#46c98f</span></div>
+<div style="display:flex;align-items:center;gap:12px"><span style="width:34px;height:34px;border-radius:8px;background:#e8b25f;flex:none"></span><span style="font:700 13px/1.3 Manrope,sans-serif;flex:1">warning</span><span style="font:500 12px/1.3 JetBrains Mono,monospace;color:#78716b">#e8b25f</span></div>
+<div style="display:flex;align-items:center;gap:12px"><span style="width:34px;height:34px;border-radius:8px;background:#e5594a;flex:none"></span><span style="font:700 13px/1.3 Manrope,sans-serif;flex:1">error</span><span style="font:500 12px/1.3 JetBrains Mono,monospace;color:#78716b">#e5594a</span></div>
+</div>
+</div>
+<div style="background:#191817;border:1.5px solid #34302c;border-radius:16px;padding:22px">
+<div style="font:700 11px/1 JetBrains Mono,monospace;letter-spacing:.12em;text-transform:uppercase;color:#78716b;margin-bottom:6px">Texto</div>
+<p style="font:400 12.5px/1.5 Manrope,sans-serif;color:#78716b;margin:0 0 16px">Tres niveles. El cuarto (disabled) es textLow al 45%.</p>
+<div style="display:flex;flex-direction:column;gap:10px">
+<div style="display:flex;align-items:baseline;gap:12px"><span style="font:700 18px/1.3 Manrope,sans-serif;color:#ece8e3;flex:1">textHigh</span><span style="font:500 12px/1.3 JetBrains Mono,monospace;color:#78716b">#ece8e3</span></div>
+<div style="display:flex;align-items:baseline;gap:12px"><span style="font:600 16px/1.3 Manrope,sans-serif;color:#a9a29b;flex:1">textMid</span><span style="font:500 12px/1.3 JetBrains Mono,monospace;color:#78716b">#a9a29b</span></div>
+<div style="display:flex;align-items:baseline;gap:12px"><span style="font:600 15px/1.3 Manrope,sans-serif;color:#78716b;flex:1">textLow</span><span style="font:500 12px/1.3 JetBrains Mono,monospace;color:#78716b">#78716b</span></div>
+<div style="display:flex;align-items:baseline;gap:12px"><span style="font:600 15px/1.3 Manrope,sans-serif;color:#0b0a09;background:#ece8e3;padding:2px 8px;border-radius:5px">onPrimary</span><span style="font:500 12px/1.3 JetBrains Mono,monospace;color:#78716b">#0b0a09</span></div>
+</div>
+</div>
+</div>
+
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:24px;margin-bottom:34px">
+<div style="background:#191817;border:1.5px solid #34302c;border-radius:16px;padding:22px">
+<div style="font:700 11px/1 JetBrains Mono,monospace;letter-spacing:.12em;text-transform:uppercase;color:#78716b;margin-bottom:18px">Escala tipográfica</div>
+<div style="display:flex;flex-direction:column;gap:14px">
+<div><div style="font:800 40px/1.05 Manrope,sans-serif;letter-spacing:-.03em">Balance</div><div style="font:400 11px/1.4 JetBrains Mono,monospace;color:#78716b">display · 40/42 · 800 · -3%</div></div>
+<div><div style="font:800 27px/1.15 Manrope,sans-serif;letter-spacing:-.02em">Título de pantalla</div><div style="font:400 11px/1.4 JetBrains Mono,monospace;color:#78716b">h1 · 27/31 · 800</div></div>
+<div><div style="font:700 19px/1.25 Manrope,sans-serif">Título de sección</div><div style="font:400 11px/1.4 JetBrains Mono,monospace;color:#78716b">h2 · 19/24 · 700</div></div>
+<div><div style="font:600 15px/1.45 Manrope,sans-serif">Cuerpo y labels de fila</div><div style="font:400 11px/1.4 JetBrains Mono,monospace;color:#78716b">body · 15/22 · 400–600</div></div>
+<div><div style="font:500 13px/1.45 Manrope,sans-serif;color:#a9a29b">Secundario, subtítulo, ayuda</div><div style="font:400 11px/1.4 JetBrains Mono,monospace;color:#78716b">caption · 13/19 · 500</div></div>
+<div><div style="font:700 11px/1 Manrope,sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#a9a29b">OVERLINE / BADGE</div><div style="font:400 11px/1.4 JetBrains Mono,monospace;color:#78716b">overline · 11 · 700 · +10%</div></div>
+<div style="border-top:1.5px solid #262421;padding-top:14px"><div style="font:700 28px/1.1 JetBrains Mono,monospace;letter-spacing:-.02em">$127.450</div><div style="font:400 11px/1.4 JetBrains Mono,monospace;color:#78716b">amountXL · mono tabular · 28 · 700</div></div>
+<div><div style="font:500 15px/1.2 JetBrains Mono,monospace">$8.400</div><div style="font:400 11px/1.4 JetBrains Mono,monospace;color:#78716b">amount · mono tabular · 15 · 500</div></div>
+</div>
+</div>
+<div style="background:#191817;border:1.5px solid #34302c;border-radius:16px;padding:22px">
+<div style="font:700 11px/1 JetBrains Mono,monospace;letter-spacing:.12em;text-transform:uppercase;color:#78716b;margin-bottom:18px">Espaciado · radios · sombras</div>
+<div style="display:flex;align-items:flex-end;gap:10px;margin-bottom:8px">
+<div style="text-align:center"><div style="width:4px;height:4px;background:#ece8e3;border-radius:2px;margin:0 auto 7px"></div><span style="font:500 10px/1 JetBrains Mono,monospace;color:#78716b">xs 4</span></div>
+<div style="text-align:center"><div style="width:8px;height:8px;background:#ece8e3;border-radius:2px;margin:0 auto 7px"></div><span style="font:500 10px/1 JetBrains Mono,monospace;color:#78716b">s 8</span></div>
+<div style="text-align:center"><div style="width:16px;height:16px;background:#ece8e3;border-radius:3px;margin:0 auto 7px"></div><span style="font:500 10px/1 JetBrains Mono,monospace;color:#78716b">m 16</span></div>
+<div style="text-align:center"><div style="width:24px;height:24px;background:#ece8e3;border-radius:4px;margin:0 auto 7px"></div><span style="font:500 10px/1 JetBrains Mono,monospace;color:#78716b">l 24</span></div>
+<div style="text-align:center"><div style="width:32px;height:32px;background:#ece8e3;border-radius:5px;margin:0 auto 7px"></div><span style="font:500 10px/1 JetBrains Mono,monospace;color:#78716b">xl 32</span></div>
+<div style="text-align:center"><div style="width:48px;height:48px;background:#ece8e3;border-radius:6px;margin:0 auto 7px"></div><span style="font:500 10px/1 JetBrains Mono,monospace;color:#78716b">xxl 48</span></div>
+</div>
+<p style="font:400 12.5px/1.5 Manrope,sans-serif;color:#78716b;margin:0 0 20px">Sin cambios respecto de hoy. Regla nueva: padding de card = <span style="font-family:JetBrains Mono,monospace;color:#ece8e3">m</span>, gap entre cards = <span style="font-family:JetBrains Mono,monospace;color:#ece8e3">s</span>, margen de pantalla = <span style="font-family:JetBrains Mono,monospace;color:#ece8e3">m</span>, aire entre secciones = <span style="font-family:JetBrains Mono,monospace;color:#ece8e3">l</span>.</p>
+<div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:20px">
+<div style="width:56px;height:56px;background:#292725;border:1.5px solid #46403a;border-radius:8px;display:flex;align-items:flex-end;justify-content:center;padding-bottom:5px;font:500 10px/1 JetBrains Mono,monospace;color:#78716b">8</div>
+<div style="width:56px;height:56px;background:#292725;border:1.5px solid #46403a;border-radius:12px;display:flex;align-items:flex-end;justify-content:center;padding-bottom:5px;font:500 10px/1 JetBrains Mono,monospace;color:#78716b">12</div>
+<div style="width:56px;height:56px;background:#292725;border:1.5px solid #46403a;border-radius:16px;display:flex;align-items:flex-end;justify-content:center;padding-bottom:5px;font:500 10px/1 JetBrains Mono,monospace;color:#78716b">16</div>
+<div style="width:56px;height:56px;background:#292725;border:1.5px solid #46403a;border-radius:20px;display:flex;align-items:flex-end;justify-content:center;padding-bottom:5px;font:500 10px/1 JetBrains Mono,monospace;color:#78716b">20</div>
+<div style="width:56px;height:56px;background:#292725;border:1.5px solid #46403a;border-radius:24px;display:flex;align-items:flex-end;justify-content:center;padding-bottom:5px;font:500 10px/1 JetBrains Mono,monospace;color:#78716b">24</div>
+<div style="width:56px;height:56px;background:#292725;border:1.5px solid #46403a;border-radius:999px;display:flex;align-items:flex-end;justify-content:center;padding-bottom:5px;font:500 10px/1 JetBrains Mono,monospace;color:#78716b">full</div>
+</div>
+<div style="display:flex;flex-wrap:wrap;gap:12px">
+<div style="flex:1;min-width:88px;height:76px;background:#201e1c;border-radius:14px;box-shadow:0 10px 24px rgba(0,0,0,.55);display:flex;align-items:flex-end;padding:10px;font:600 11px/1.3 Manrope,sans-serif;color:#a9a29b">ambient</div>
+<div style="flex:1;min-width:88px;height:76px;background:#201e1c;border-radius:14px;box-shadow:0 8px 26px rgba(0,0,0,.5);display:flex;align-items:flex-end;padding:10px;font:600 11px/1.3 Manrope,sans-serif;color:#ece8e3">glow</div>
+<div style="flex:1;min-width:88px;height:76px;background:#201e1c;border-radius:14px;box-shadow:0 8px 26px rgba(240,192,115,.34);display:flex;align-items:flex-end;padding:10px;font:600 11px/1.3 Manrope,sans-serif;color:#f0c073">gold</div>
+</div>
+</div>
+</div>
+
+<sc-if value="{{ tokenCode }}" hint-placeholder-val="{{ true }}">
+<div style="background:#0e0d0c;border:1.5px solid #34302c;border-radius:16px;overflow:hidden;margin-bottom:8px">
+<div style="display:flex;align-items:center;gap:10px;padding:13px 18px;border-bottom:1.5px solid #262421;background:#161514">
+<span style="width:9px;height:9px;border-radius:50%;background:#3fd7bd"></span>
+<span style="font:600 12.5px/1 JetBrains Mono,monospace;color:#a9a29b">frontend/src/theme.js</span>
+<span style="font:500 11px/1 Manrope,sans-serif;color:#78716b;margin-left:auto">pegar tal cual</span>
+</div>
+<pre style="margin:0;padding:20px 18px;overflow-x:auto;font:400 12.5px/1.75 JetBrains Mono,monospace;color:#c9c2ba">export const COLORS = <span style="color:#78716b">{</span>
+  bg: <span style="color:#5fe0a8">'#121110'</span>, surface: <span style="color:#5fe0a8">'#191817'</span>, surfaceRaised: <span style="color:#5fe0a8">'#201e1c'</span>,
+  surfaceSunken: <span style="color:#5fe0a8">'#292725'</span>, surfaceOverlay: <span style="color:#5fe0a8">'#332f2c'</span>,
+  borderSubtle: <span style="color:#5fe0a8">'#262421'</span>, border: <span style="color:#5fe0a8">'#34302c'</span>, borderStrong: <span style="color:#5fe0a8">'#46403a'</span>,
+
+  primary: <span style="color:#5fe0a8">'#ece8e3'</span>, primaryFill: <span style="color:#5fe0a8">'#ece8e3'</span>,
+  primaryPressed: <span style="color:#5fe0a8">'#cfc9c2'</span>, primarySoft: <span style="color:#5fe0a8">'#2b2825'</span>,
+  accent: <span style="color:#5fe0a8">'#3fd7bd'</span>, accentSoft: <span style="color:#5fe0a8">'#132a27'</span>,
+  premium: <span style="color:#5fe0a8">'#f0c073'</span>, premiumSoft: <span style="color:#5fe0a8">'#2a2216'</span>,
+
+  <span style="color:#78716b">// dato: signo del dinero</span>
+  income: <span style="color:#5fe0a8">'#5fe0a8'</span>, expense: <span style="color:#5fe0a8">'#ff8f7a'</span>, neutralData: <span style="color:#5fe0a8">'#a9a29b'</span>,
+  <span style="color:#78716b">// feedback: estado del sistema</span>
+  success: <span style="color:#5fe0a8">'#46c98f'</span>, warning: <span style="color:#5fe0a8">'#e8b25f'</span>, error: <span style="color:#5fe0a8">'#e5594a'</span>,
+  successSoft: <span style="color:#5fe0a8">'#14251d'</span>, warningSoft: <span style="color:#5fe0a8">'#2a2216'</span>, errorSoft: <span style="color:#5fe0a8">'#2b1815'</span>,
+
+  textHigh: <span style="color:#5fe0a8">'#ece8e3'</span>, textMid: <span style="color:#5fe0a8">'#a9a29b'</span>, textLow: <span style="color:#5fe0a8">'#78716b'</span>,
+  textDisabled: <span style="color:#5fe0a8">'rgba(120,113,107,0.45)'</span>, onPrimary: <span style="color:#5fe0a8">'#0b0a09'</span>,
+  scrim: <span style="color:#5fe0a8">'rgba(8,7,6,0.72)'</span>,
+<span style="color:#78716b">};</span>
+
+export const GRADIENTS = <span style="color:#78716b">{</span>
+  premium: [<span style="color:#5fe0a8">'#f7d79a'</span>, <span style="color:#5fe0a8">'#c9922f'</span>],
+  action: [<span style="color:#5fe0a8">'#ffffff'</span>, <span style="color:#5fe0a8">'#d9d2c9'</span>],
+  glow: [<span style="color:#5fe0a8">'rgba(63,215,189,0.20)'</span>, <span style="color:#5fe0a8">'rgba(18,17,16,0)'</span>],
+<span style="color:#78716b">};</span>
+
+export const SPACING = <span style="color:#78716b">{</span> xs: 4, s: 8, m: 16, l: 24, xl: 32, xxl: 48 <span style="color:#78716b">};</span>
+export const RADIUS  = <span style="color:#78716b">{</span> s: 8, m: 12, l: 16, xl: 20, xxl: 24, full: 999 <span style="color:#78716b">};</span>
+
+export const FONTS = <span style="color:#78716b">{</span>
+  ui: <span style="color:#5fe0a8">'Manrope'</span>,      <span style="color:#78716b">// 400 500 600 700 800 — expo-font</span>
+  amount: <span style="color:#5fe0a8">'JetBrainsMono'</span>, <span style="color:#78716b">// 400 500 700 — solo montos, tabular</span>
+<span style="color:#78716b">};</span>
+
+export const TYPE = <span style="color:#78716b">{</span>
+  display:   <span style="color:#78716b">{</span> fontFamily: FONTS.ui, fontSize: 40, lineHeight: 42, fontWeight: <span style="color:#5fe0a8">'800'</span>, letterSpacing: -1.2 <span style="color:#78716b">}</span>,
+  h1:        <span style="color:#78716b">{</span> fontFamily: FONTS.ui, fontSize: 27, lineHeight: 31, fontWeight: <span style="color:#5fe0a8">'800'</span>, letterSpacing: -0.5 <span style="color:#78716b">}</span>,
+  h2:        <span style="color:#78716b">{</span> fontFamily: FONTS.ui, fontSize: 19, lineHeight: 24, fontWeight: <span style="color:#5fe0a8">'700'</span> <span style="color:#78716b">}</span>,
+  body:      <span style="color:#78716b">{</span> fontFamily: FONTS.ui, fontSize: 15, lineHeight: 22 <span style="color:#78716b">}</span>,
+  caption:   <span style="color:#78716b">{</span> fontFamily: FONTS.ui, fontSize: 13, lineHeight: 19, fontWeight: <span style="color:#5fe0a8">'500'</span> <span style="color:#78716b">}</span>,
+  overline:  <span style="color:#78716b">{</span> fontFamily: FONTS.ui, fontSize: 11, fontWeight: <span style="color:#5fe0a8">'700'</span>, letterSpacing: 1.1, textTransform: <span style="color:#5fe0a8">'uppercase'</span> <span style="color:#78716b">}</span>,
+  amountXL:  <span style="color:#78716b">{</span> fontFamily: FONTS.amount, fontSize: 28, lineHeight: 31, fontWeight: <span style="color:#5fe0a8">'700'</span> <span style="color:#78716b">}</span>,
+  amount:    <span style="color:#78716b">{</span> fontFamily: FONTS.amount, fontSize: 15, lineHeight: 18, fontWeight: <span style="color:#5fe0a8">'500'</span> <span style="color:#78716b">}</span>,
+<span style="color:#78716b">};</span>
+
+<span style="color:#78716b">// iOS + Android en el mismo token: gastar spread, no elegir</span>
+export const SHADOWS = <span style="color:#78716b">{</span>
+  ambient: <span style="color:#78716b">{</span> shadowColor: <span style="color:#5fe0a8">'#000'</span>, shadowOffset: <span style="color:#78716b">{</span> width: 0, height: 8 <span style="color:#78716b">}</span>, shadowOpacity: 0.55, shadowRadius: 16, elevation: 8 <span style="color:#78716b">}</span>,
+  glow:    <span style="color:#78716b">{</span> shadowColor: <span style="color:#5fe0a8">'#ece8e3'</span>, shadowOffset: <span style="color:#78716b">{</span> width: 0, height: 6 <span style="color:#78716b">}</span>, shadowOpacity: 0.42, shadowRadius: 18, elevation: 10 <span style="color:#78716b">}</span>,
+  gold:    <span style="color:#78716b">{</span> shadowColor: <span style="color:#5fe0a8">'#f0c073'</span>, shadowOffset: <span style="color:#78716b">{</span> width: 0, height: 6 <span style="color:#78716b">}</span>, shadowOpacity: 0.34, shadowRadius: 18, elevation: 10 <span style="color:#78716b">}</span>,
+<span style="color:#78716b">};</span>
+
+export const MOTION = <span style="color:#78716b">{</span>
+  <span style="color:#78716b">// Animated.spring — sin overshoot exagerado</span>
+  press:  <span style="color:#78716b">{</span> friction: 9,  tension: 220 <span style="color:#78716b">}</span>,
+  sheet:  <span style="color:#78716b">{</span> friction: 12, tension: 140 <span style="color:#78716b">}</span>,
+  tabPill:<span style="color:#78716b">{</span> friction: 10, tension: 180 <span style="color:#78716b">}</span>,
+<span style="color:#78716b">};</span></pre>
+</div>
+</sc-if>
+</div>
+
+<div style="max-width:1180px;margin:0 auto;padding:64px 40px 0">
+<div style="display:flex;align-items:baseline;gap:14px;border-bottom:1.5px solid #34302c;padding-bottom:14px;margin-bottom:14px">
+<span style="font:700 12px/1 JetBrains Mono,monospace;color:#121110;background:#ece8e3;padding:6px 9px;border-radius:6px">02</span>
+<h2 style="font:800 26px/1 Manrope,sans-serif;letter-spacing:-.02em;margin:0">Componentes</h2>
+<span style="font:500 13px/1.4 Manrope,sans-serif;color:#78716b">12 piezas · todos los estados</span>
+</div>
+<p style="font:400 14px/1.6 Manrope,sans-serif;color:#78716b;max-width:70ch;margin:0 0 34px">Cada bloque de abajo es un componente con nombre propio y sus variantes. La columna derecha dice a qué nombres actuales reemplaza, para que el port sea buscar-y-reemplazar.</p>
+
+<div style="display:flex;flex-direction:column;gap:14px">
+
+<div style="background:#121110;border:1.5px solid #34302c;border-radius:20px;overflow:hidden">
+<div style="display:flex;flex-wrap:wrap;gap:16px;align-items:baseline;padding:20px 24px;border-bottom:1.5px solid #262421;background:#191817">
+<span style="font:700 17px/1 Manrope,sans-serif">Button</span>
+<span style="font:500 13px/1.4 Manrope,sans-serif;color:#a9a29b;flex:1;min-width:220px">4 variantes · 3 tamaños · 5 estados · con o sin icono</span>
+<span style="font:500 11px/1.5 JetBrains Mono,monospace;color:#78716b;max-width:44ch">reemplaza signInBtn · ctaBtn · saveBtn · confirmBtn · depositBtn · generateBtn · compareBtn · addBtn · searchBtn · detectAddBtn · refreshBtn · restoreBtn · lockedCta · clearBtn · addCatBtn</span>
+</div>
+<div style="padding:26px 24px">
+<div style="display:flex;flex-wrap:wrap;gap:26px">
+<div>
+<div style="font:700 11px/1 JetBrains Mono,monospace;letter-spacing:.1em;text-transform:uppercase;color:#78716b;margin-bottom:14px">primary</div>
+<div style="display:flex;flex-direction:column;gap:12px;align-items:flex-start">
+<div style="display:flex;align-items:center;gap:8px;background:#ece8e3;border-radius:12px;padding:14px 22px;box-shadow:0 6px 18px rgba(0,0,0,.5);cursor:pointer" style-hover="background:#ffffff"><span style="font:700 15px/1 Manrope,sans-serif;color:#121110">Comparar precios</span></div>
+<div style="display:flex;align-items:center;gap:8px;background:#cfc9c2;border-radius:12px;padding:14px 22px;transform:scale(.98)"><span style="font:700 15px/1 Manrope,sans-serif;color:#121110">Presionado</span></div>
+<div style="display:flex;align-items:center;gap:9px;background:#ece8e3;border-radius:12px;padding:14px 22px;opacity:.9"><span style="width:15px;height:15px;border-radius:50%;border:2.5px solid rgba(18,17,16,.28);border-top-color:#121110;display:inline-block;animation:none"></span><span style="font:700 15px/1 Manrope,sans-serif;color:#121110">Cargando…</span></div>
+<div style="display:flex;align-items:center;gap:8px;background:#292725;border-radius:12px;padding:14px 22px"><span style="font:700 15px/1 Manrope,sans-serif;color:rgba(120,113,107,.75)">Deshabilitado</span></div>
+</div>
+</div>
+<div>
+<div style="font:700 11px/1 JetBrains Mono,monospace;letter-spacing:.1em;text-transform:uppercase;color:#78716b;margin-bottom:14px">secondary · ghost · destructive</div>
+<div style="display:flex;flex-direction:column;gap:12px;align-items:flex-start">
+<div style="display:flex;align-items:center;gap:8px;background:#2b2825;border:1.5px solid #57504a;border-radius:12px;padding:13px 21px;cursor:pointer" style-hover="background:#332f2b"><ion-icon name="add-outline" style="font-size:18px;color:#ece8e3"></ion-icon><span style="font:700 15px/1 Manrope,sans-serif;color:#ece8e3">Agregar meta</span></div>
+<div style="display:flex;align-items:center;gap:8px;border-radius:12px;padding:13px 15px;cursor:pointer" style-hover="background:#201e1c"><span style="font:700 15px/1 Manrope,sans-serif;color:#a9a29b">Descartar</span></div>
+<div style="display:flex;align-items:center;gap:8px;background:#2b1815;border:1.5px solid #6b2b23;border-radius:12px;padding:13px 21px;cursor:pointer" style-hover="background:#341c18"><ion-icon name="trash-outline" style="font-size:17px;color:#e5594a"></ion-icon><span style="font:700 15px/1 Manrope,sans-serif;color:#ff8f7a">Borrar lista</span></div>
+</div>
+</div>
+<div>
+<div style="font:700 11px/1 JetBrains Mono,monospace;letter-spacing:.1em;text-transform:uppercase;color:#78716b;margin-bottom:14px">premium-locked · tamaños</div>
+<div style="display:flex;flex-direction:column;gap:12px;align-items:flex-start">
+<div style="display:flex;align-items:center;gap:9px;background:linear-gradient(120deg,#f7d79a,#c9922f);border-radius:12px;padding:14px 22px;box-shadow:0 6px 18px rgba(240,192,115,.34);cursor:pointer"><ion-icon name="lock-closed" style="font-size:16px;color:#2a2216"></ion-icon><span style="font:800 15px/1 Manrope,sans-serif;color:#2a2216">Desbloquear</span></div>
+<div style="display:flex;align-items:center;gap:8px;background:#ece8e3;border-radius:14px;padding:17px 26px"><span style="font:700 17px/1 Manrope,sans-serif;color:#121110">lg · 56</span></div>
+<div style="display:flex;align-items:center;gap:8px;background:#ece8e3;border-radius:12px;padding:14px 22px"><span style="font:700 15px/1 Manrope,sans-serif;color:#121110">md · 48</span></div>
+<div style="display:flex;align-items:center;gap:6px;background:#ece8e3;border-radius:10px;padding:10px 15px"><span style="font:700 13px/1 Manrope,sans-serif;color:#121110">sm · 36</span></div>
+</div>
+</div>
+</div>
+<p style="font:400 13px/1.6 Manrope,sans-serif;color:#78716b;margin:22px 0 0;max-width:74ch">Todos con alto mínimo 44 y ancho <span style="font-family:JetBrains Mono,monospace;font-size:12px;color:#ece8e3">full</span> opcional. El estado bloqueado es dorado y no gris: gris se leía como roto, y además acá comunica valor, no falta de permiso.</p>
+</div>
+</div>
+
+<div style="background:#121110;border:1.5px solid #34302c;border-radius:20px;overflow:hidden">
+<div style="display:flex;flex-wrap:wrap;gap:16px;align-items:baseline;padding:20px 24px;border-bottom:1.5px solid #262421;background:#191817">
+<span style="font:700 17px/1 Manrope,sans-serif">Card</span>
+<span style="font:500 13px/1.4 Manrope,sans-serif;color:#a9a29b;flex:1;min-width:220px">base · raised · selected · best · partial/warning · locked</span>
+<span style="font:500 11px/1.5 JetBrains Mono,monospace;color:#78716b;max-width:44ch">reemplaza emptyCard · insightCard · storeCard · resultCard · productCard · bentoCell</span>
+</div>
+<div style="padding:26px 24px;display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px">
+<div style="background:#191817;border:1.5px solid #34302c;border-radius:16px;padding:18px">
+<div style="font:700 11px/1 Manrope,sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#78716b;margin-bottom:10px">base</div>
+<div style="font:700 16px/1.3 Manrope,sans-serif;margin-bottom:5px">Tienda Inglesa</div>
+<div style="font:500 13px/1.4 Manrope,sans-serif;color:#a9a29b">12 de 12 ítems</div>
+</div>
+<div style="background:#201e1c;border:1.5px solid #34302c;border-radius:16px;padding:18px;box-shadow:0 10px 24px rgba(0,0,0,.55)">
+<div style="font:700 11px/1 Manrope,sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#78716b;margin-bottom:10px">raised</div>
+<div style="font:700 16px/1.3 Manrope,sans-serif;margin-bottom:5px">Balance de agosto</div>
+<div style="font:500 13px/1.4 Manrope,sans-serif;color:#a9a29b">sombra ambient</div>
+</div>
+<div style="background:#2b2825;border:1.5px solid #ece8e3;border-radius:16px;padding:18px">
+<div style="font:700 11px/1 Manrope,sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#ece8e3;margin-bottom:10px">selected</div>
+<div style="font:700 16px/1.3 Manrope,sans-serif;margin-bottom:5px">Supermercado</div>
+<div style="font:500 13px/1.4 Manrope,sans-serif;color:#a9a29b">filtro activo</div>
+</div>
+<div style="background:#14251d;border:1.5px solid #46c98f;border-radius:16px;padding:18px">
+<div style="display:flex;align-items:center;gap:7px;margin-bottom:10px"><ion-icon name="checkmark-circle" style="font-size:15px;color:#46c98f"></ion-icon><span style="font:700 11px/1 Manrope,sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#46c98f">best</span></div>
+<div style="font:700 16px/1.3 Manrope,sans-serif;margin-bottom:5px">Tata · <span style="font-family:JetBrains Mono,monospace;font-weight:700">$7.300</span></div>
+<div style="font:500 13px/1.4 Manrope,sans-serif;color:#a9a29b">carrito más barato</div>
+</div>
+<div style="background:#2a2216;border:1.5px solid #e8b25f;border-radius:16px;padding:18px">
+<div style="display:flex;align-items:center;gap:7px;margin-bottom:10px"><ion-icon name="alert-circle" style="font-size:15px;color:#e8b25f"></ion-icon><span style="font:700 11px/1 Manrope,sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#e8b25f">partial</span></div>
+<div style="font:700 16px/1.3 Manrope,sans-serif;margin-bottom:5px">Devoto · 9 de 12</div>
+<div style="font:500 13px/1.4 Manrope,sans-serif;color:#e8b25f">total menor por tener menos ítems</div>
+</div>
+<div style="background:#191817;border:1.5px solid #6b5326;border-radius:16px;padding:18px;box-shadow:0 8px 26px rgba(240,192,115,.18);position:relative;overflow:hidden">
+<div style="position:absolute;inset:0;background:linear-gradient(140deg,rgba(240,192,115,.14),rgba(25,24,23,0) 62%)"></div>
+<div style="position:relative">
+<div style="display:flex;align-items:center;gap:7px;margin-bottom:10px"><ion-icon name="lock-closed" style="font-size:14px;color:#f0c073"></ion-icon><span style="font:700 11px/1 Manrope,sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#f0c073">locked</span></div>
+<div style="font:700 16px/1.3 Manrope,sans-serif;margin-bottom:5px">3 sugerencias más</div>
+<div style="font:500 13px/1.4 Manrope,sans-serif;color:#a9a29b">teaser premium</div>
+</div>
+</div>
+</div>
+</div>
+
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(400px,1fr));gap:14px">
+
+<div style="background:#121110;border:1.5px solid #34302c;border-radius:20px;overflow:hidden">
+<div style="padding:20px 24px;border-bottom:1.5px solid #262421;background:#191817">
+<span style="font:700 17px/1 Manrope,sans-serif">Input</span>
+<div style="font:500 12px/1.5 JetBrains Mono,monospace;color:#78716b;margin-top:7px">reemplaza input · inputRow · inputIcon · searchInput</div>
+</div>
+<div style="padding:24px;display:flex;flex-direction:column;gap:14px">
+<div style="background:#201e1c;border:1.5px solid #34302c;border-radius:12px;padding:14px 16px;font:400 15px/1 Manrope,sans-serif;color:#78716b">Nombre de la meta</div>
+<div style="display:flex;align-items:center;gap:10px;background:#201e1c;border:1.5px solid #ece8e3;border-radius:12px;padding:14px 16px;box-shadow:0 0 0 3px rgba(236,232,227,.16)">
+<ion-icon name="search-outline" style="font-size:19px;color:#ece8e3"></ion-icon>
+<span style="font:500 15px/1 Manrope,sans-serif;color:#ece8e3;flex:1">aceite girasol</span>
+<span style="width:20px;height:20px;border-radius:50%;background:#34302c;display:flex;align-items:center;justify-content:center"><ion-icon name="close" style="font-size:13px;color:#a9a29b"></ion-icon></span>
+</div>
+<div style="display:flex;align-items:center;gap:10px;background:#201e1c;border:1.5px solid #34302c;border-radius:12px;padding:0 16px 0 0">
+<span style="font:700 17px/1 JetBrains Mono,monospace;color:#a9a29b;background:#292725;align-self:stretch;display:flex;align-items:center;padding:0 15px;border-radius:11px 0 0 11px">$</span>
+<span style="font:500 17px/1 JetBrains Mono,monospace;color:#ece8e3;padding:15px 0">127.450</span>
+</div>
+<div>
+<div style="display:flex;align-items:center;gap:10px;background:#201e1c;border:1.5px solid #e5594a;border-radius:12px;padding:14px 16px">
+<span style="font:500 15px/1 Manrope,sans-serif;color:#ece8e3;flex:1">0</span>
+<ion-icon name="alert-circle" style="font-size:19px;color:#e5594a"></ion-icon>
+</div>
+<div style="font:500 12.5px/1.4 Manrope,sans-serif;color:#ff8f7a;margin-top:7px">El objetivo tiene que ser mayor a lo que ya ahorraste.</div>
+</div>
+<div>
+<div style="display:flex;align-items:center;gap:10px;background:#201e1c;border:1.5px solid #34302c;border-radius:12px 12px 0 0;padding:14px 16px;border-bottom-color:#262421">
+<span style="font:500 15px/1 Manrope,sans-serif;color:#ece8e3;flex:1">lech</span>
+</div>
+<div style="background:#201e1c;border:1.5px solid #34302c;border-top:none;border-radius:0 0 12px 12px;overflow:hidden">
+<div style="padding:12px 16px;font:500 14px/1 Manrope,sans-serif;color:#ece8e3;border-bottom:1px solid #262421;cursor:pointer" style-hover="background:#292725">Leche entera 1 L</div>
+<div style="padding:12px 16px;font:500 14px/1 Manrope,sans-serif;color:#ece8e3;border-bottom:1px solid #262421;cursor:pointer" style-hover="background:#292725">Leche descremada 1 L</div>
+<div style="padding:12px 16px;font:500 14px/1 Manrope,sans-serif;color:#ece8e3;cursor:pointer" style-hover="background:#292725">Lechuga mantecosa</div>
+</div>
+</div>
+</div>
+</div>
+
+<div style="background:#121110;border:1.5px solid #34302c;border-radius:20px;overflow:hidden">
+<div style="padding:20px 24px;border-bottom:1.5px solid #262421;background:#191817">
+<span style="font:700 17px/1 Manrope,sans-serif">Chip</span>
+<div style="font:500 12px/1.5 JetBrains Mono,monospace;color:#78716b;margin-top:7px">reemplaza catChip · chip · sortChip · itemChip · freqBtn · chartToggleBtn</div>
+</div>
+<div style="padding:24px;display:flex;flex-direction:column;gap:22px">
+<div>
+<div style="font:700 11px/1 JetBrains Mono,monospace;letter-spacing:.1em;text-transform:uppercase;color:#78716b;margin-bottom:12px">filtro · tocá para probar</div>
+<div style="display:flex;flex-wrap:wrap;gap:8px">
+<sc-for list="{{ cats }}" as="c" hint-placeholder-count="5">
+<div onClick="{{ c.onPress }}" style="{{ c.style }}" hint-placeholder-val="">{{ c.label }}</div>
+</sc-for>
+</div>
+</div>
+<div>
+<div style="font:700 11px/1 JetBrains Mono,monospace;letter-spacing:.1em;text-transform:uppercase;color:#78716b;margin-bottom:12px">segmented</div>
+<div style="display:inline-flex;background:#201e1c;border:1.5px solid #34302c;border-radius:999px;padding:4px">
+<div style="background:#ece8e3;border-radius:999px;padding:9px 18px;font:700 13px/1 Manrope,sans-serif;color:#121110">Mes</div>
+<div style="border-radius:999px;padding:9px 18px;font:600 13px/1 Manrope,sans-serif;color:#a9a29b;cursor:pointer">Semana</div>
+<div style="border-radius:999px;padding:9px 18px;font:600 13px/1 Manrope,sans-serif;color:#a9a29b;cursor:pointer">Año</div>
+</div>
+</div>
+<div>
+<div style="font:700 11px/1 JetBrains Mono,monospace;letter-spacing:.1em;text-transform:uppercase;color:#78716b;margin-bottom:12px">orden</div>
+<div style="display:flex;flex-wrap:wrap;gap:8px">
+<div style="display:flex;align-items:center;gap:6px;background:#2b2825;border:1.5px solid #57504a;border-radius:999px;padding:8px 14px"><ion-icon name="arrow-down" style="font-size:13px;color:#ece8e3"></ion-icon><span style="font:700 13px/1 Manrope,sans-serif;color:#ece8e3">Precio</span></div>
+<div style="background:#201e1c;border:1.5px solid #34302c;border-radius:999px;padding:8px 14px;font:600 13px/1 Manrope,sans-serif;color:#a9a29b;cursor:pointer">Ahorro</div>
+<div style="background:#201e1c;border:1.5px solid #34302c;border-radius:999px;padding:8px 14px;font:600 13px/1 Manrope,sans-serif;color:#a9a29b;cursor:pointer">Tiendas</div>
+</div>
+</div>
+<div>
+<div style="font:700 11px/1 JetBrains Mono,monospace;letter-spacing:.1em;text-transform:uppercase;color:#78716b;margin-bottom:12px">ítem de lista · cantidad + borrar</div>
+<div style="display:flex;flex-wrap:wrap;gap:8px">
+<div style="display:flex;align-items:center;gap:9px;background:#201e1c;border:1.5px solid #34302c;border-radius:999px;padding:7px 8px 7px 14px">
+<span style="font:600 13.5px/1 Manrope,sans-serif;color:#ece8e3">Leche 1 L</span>
+<span style="font:700 12px/1 JetBrains Mono,monospace;color:#ece8e3;background:#2b2825;border-radius:999px;padding:4px 7px">×2</span>
+<span style="width:22px;height:22px;border-radius:50%;background:#34302c;display:flex;align-items:center;justify-content:center;cursor:pointer"><ion-icon name="close" style="font-size:13px;color:#a9a29b"></ion-icon></span>
+</div>
+<div style="display:flex;align-items:center;gap:9px;background:#201e1c;border:1.5px solid #34302c;border-radius:999px;padding:7px 8px 7px 14px">
+<span style="font:600 13.5px/1 Manrope,sans-serif;color:#ece8e3">Arroz 1 kg</span>
+<span style="font:700 12px/1 JetBrains Mono,monospace;color:#ece8e3;background:#2b2825;border-radius:999px;padding:4px 7px">×1</span>
+<span style="width:22px;height:22px;border-radius:50%;background:#34302c;display:flex;align-items:center;justify-content:center;cursor:pointer"><ion-icon name="close" style="font-size:13px;color:#a9a29b"></ion-icon></span>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+<div style="background:#121110;border:1.5px solid #34302c;border-radius:20px;overflow:hidden">
+<div style="padding:20px 24px;border-bottom:1.5px solid #262421;background:#191817">
+<span style="font:700 17px/1 Manrope,sans-serif">Badge / Pill</span>
+<div style="font:500 12px/1.5 JetBrains Mono,monospace;color:#78716b;margin-top:7px">reemplaza bestBadge ×3 · storeDot · discountBadge · streakPill · autoDebitBadge</div>
+</div>
+<div style="padding:24px;display:flex;flex-direction:column;gap:20px">
+<div>
+<div style="font:700 11px/1 JetBrains Mono,monospace;letter-spacing:.1em;text-transform:uppercase;color:#78716b;margin-bottom:12px">tienda · el color de marca no se toca</div>
+<div style="display:flex;flex-wrap:wrap;gap:8px">
+<div style="display:flex;align-items:center;gap:7px;background:#201e1c;border:1.5px solid #34302c;border-radius:999px;padding:7px 13px"><span style="width:9px;height:9px;border-radius:50%;background:#e30613"></span><span style="font:600 13px/1 Manrope,sans-serif;color:#ece8e3">Disco</span></div>
+<div style="display:flex;align-items:center;gap:7px;background:#201e1c;border:1.5px solid #34302c;border-radius:999px;padding:7px 13px"><span style="width:9px;height:9px;border-radius:50%;background:#00a651"></span><span style="font:600 13px/1 Manrope,sans-serif;color:#ece8e3">Devoto</span></div>
+<div style="display:flex;align-items:center;gap:7px;background:#201e1c;border:1.5px solid #34302c;border-radius:999px;padding:7px 13px"><span style="width:9px;height:9px;border-radius:50%;background:#f7941d"></span><span style="font:600 13px/1 Manrope,sans-serif;color:#ece8e3">Tata</span></div>
+<div style="display:flex;align-items:center;gap:7px;background:#201e1c;border:1.5px solid #34302c;border-radius:999px;padding:7px 13px"><span style="width:9px;height:9px;border-radius:50%;background:#003da5"></span><span style="font:600 13px/1 Manrope,sans-serif;color:#ece8e3">T. Inglesa</span></div>
+</div>
+<div style="font:400 12px/1.5 Manrope,sans-serif;color:#78716b;margin-top:10px">Los hex de arriba son placeholders: van los que ya están en el código, sin cambio.</div>
+</div>
+<div>
+<div style="font:700 11px/1 JetBrains Mono,monospace;letter-spacing:.1em;text-transform:uppercase;color:#78716b;margin-bottom:12px">estado y dato</div>
+<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+<span style="display:flex;align-items:center;gap:5px;background:#14251d;border:1.5px solid #46c98f;border-radius:999px;padding:6px 11px;font:800 11px/1 Manrope,sans-serif;letter-spacing:.06em;text-transform:uppercase;color:#46c98f"><ion-icon name="pricetag" style="font-size:12px"></ion-icon>Mejor precio</span>
+<span style="background:#2b1815;border:1.5px solid #6b2b23;border-radius:999px;padding:6px 11px;font:800 11px/1 Manrope,sans-serif;letter-spacing:.06em;color:#ff8f7a">−28%</span>
+<span style="display:flex;align-items:center;gap:5px;background:linear-gradient(120deg,#f7d79a,#c9922f);border-radius:999px;padding:6px 11px;font:800 11px/1 Manrope,sans-serif;letter-spacing:.06em;text-transform:uppercase;color:#2a2216"><ion-icon name="diamond" style="font-size:12px"></ion-icon>Premium</span>
+<span style="display:flex;align-items:center;gap:5px;background:#2a2216;border:1.5px solid #6b5326;border-radius:999px;padding:6px 11px;font:800 11px/1 Manrope,sans-serif;letter-spacing:.06em;color:#e8b25f"><ion-icon name="flame" style="font-size:12px"></ion-icon>7 semanas</span>
+<span style="background:#2b2825;border:1.5px solid #57504a;border-radius:999px;padding:6px 11px;font:800 11px/1 Manrope,sans-serif;letter-spacing:.06em;color:#ece8e3">Débito automático</span>
+<span style="background:#292725;border:1.5px solid #46403a;border-radius:999px;padding:6px 11px;font:800 11px/1 Manrope,sans-serif;letter-spacing:.06em;color:#a9a29b">Inactiva</span>
+<span style="display:flex;align-items:center;gap:5px;background:#2a2216;border:1.5px solid #6b5326;border-radius:999px;padding:6px 11px;font:800 11px/1 Manrope,sans-serif;letter-spacing:.06em;color:#e8b25f"><ion-icon name="information-circle" style="font-size:12px"></ion-icon>Estimación</span>
+</div>
+<div style="font:400 12px/1.5 Manrope,sans-serif;color:#78716b;margin-top:10px">El badge <em>Estimación</em> es componente, no letra chica: es la pieza que sostiene la regla de honestidad de los números.</div>
+</div>
+</div>
+</div>
+
+<div style="background:#121110;border:1.5px solid #34302c;border-radius:20px;overflow:hidden">
+<div style="padding:20px 24px;border-bottom:1.5px solid #262421;background:#191817">
+<span style="font:700 17px/1 Manrope,sans-serif">Progress</span>
+<div style="font:500 12px/1.5 JetBrains Mono,monospace;color:#78716b;margin-top:7px">reemplaza progressBar/Track/Fill ×3 · ringOverlay · ringContainer · ringOuter/Inner</div>
+</div>
+<div style="padding:24px">
+<div style="display:flex;flex-direction:column;gap:16px;margin-bottom:24px">
+<div>
+<div style="display:flex;justify-content:space-between;margin-bottom:7px"><span style="font:600 13px/1 Manrope,sans-serif;color:#a9a29b">Supermercado</span><span style="font:500 13px/1 JetBrains Mono,monospace;color:#a9a29b">$8.400 / $12.000</span></div>
+<div style="height:8px;background:#292725;border-radius:999px;overflow:hidden"><div style="width:70%;height:100%;background:#ece8e3;border-radius:999px"></div></div>
+</div>
+<div>
+<div style="display:flex;justify-content:space-between;margin-bottom:7px"><span style="font:600 13px/1 Manrope,sans-serif;color:#ff8f7a">Delivery · sobregiro</span><span style="font:500 13px/1 JetBrains Mono,monospace;color:#ff8f7a">$6.900 / $5.000</span></div>
+<div style="height:8px;background:#292725;border-radius:999px;overflow:hidden;display:flex"><div style="width:72%;height:100%;background:#ff8f7a"></div><div style="width:28%;height:100%;background:#e5594a"></div></div>
+<div style="font:500 12px/1.4 Manrope,sans-serif;color:#ff8f7a;margin-top:6px">$1.900 por encima del presupuesto</div>
+</div>
+</div>
+<div style="display:flex;flex-wrap:wrap;gap:26px;align-items:center">
+<div style="text-align:center">
+<div style="width:112px;height:112px;border-radius:50%;background:conic-gradient(#3fd7bd 0% 64%,#292725 64% 100%);display:flex;align-items:center;justify-content:center;margin-bottom:9px">
+<div style="width:88px;height:88px;border-radius:50%;background:#121110;display:flex;flex-direction:column;align-items:center;justify-content:center"><span style="font:700 22px/1 JetBrains Mono,monospace;color:#ece8e3">64%</span><span style="font:600 10px/1 Manrope,sans-serif;color:#78716b;margin-top:4px">ahorrado</span></div>
+</div>
+<span style="font:500 11px/1 JetBrains Mono,monospace;color:#78716b">ring lg · 112</span>
+</div>
+<div style="text-align:center">
+<div style="width:72px;height:72px;border-radius:50%;background:conic-gradient(#ece8e3 0% 41%,#292725 41% 100%);display:flex;align-items:center;justify-content:center;margin-bottom:9px">
+<div style="width:56px;height:56px;border-radius:50%;background:#121110;display:flex;align-items:center;justify-content:center"><span style="font:700 15px/1 JetBrains Mono,monospace;color:#ece8e3">41%</span></div>
+</div>
+<span style="font:500 11px/1 JetBrains Mono,monospace;color:#78716b">ring md · 72</span>
+</div>
+<div style="text-align:center">
+<div style="width:44px;height:44px;border-radius:50%;background:conic-gradient(#e8b25f 0% 88%,#292725 88% 100%);display:flex;align-items:center;justify-content:center;margin-bottom:9px">
+<div style="width:33px;height:33px;border-radius:50%;background:#121110"></div>
+</div>
+<span style="font:500 11px/1 JetBrains Mono,monospace;color:#78716b">ring sm · 44</span>
+</div>
+</div>
+<p style="font:400 13px/1.6 Manrope,sans-serif;color:#78716b;margin:20px 0 0;max-width:70ch">En RN el anillo es un SVG (<span style="font-family:JetBrains Mono,monospace;font-size:12px;color:#ece8e3">react-native-svg</span>) con <span style="font-family:JetBrains Mono,monospace;font-size:12px;color:#ece8e3">strokeDasharray</span> animado por <span style="font-family:JetBrains Mono,monospace;font-size:12px;color:#ece8e3">Animated</span>; acá está simulado con conic-gradient.</p>
+</div>
+</div>
+
+<div style="background:#121110;border:1.5px solid #34302c;border-radius:20px;overflow:hidden">
+<div style="padding:20px 24px;border-bottom:1.5px solid #262421;background:#191817">
+<span style="font:700 17px/1 Manrope,sans-serif">OfferRow + Skeleton</span>
+<div style="font:500 12px/1.5 JetBrains Mono,monospace;color:#78716b;margin-top:7px">reemplaza resultCard/resultImg y productCard/productImage — eran el mismo componente</div>
+</div>
+<div style="padding:24px;display:flex;flex-direction:column;gap:10px">
+<div style="display:flex;gap:13px;align-items:center;background:#191817;border:1.5px solid #34302c;border-radius:14px;padding:13px">
+<div style="width:60px;height:60px;border-radius:10px;background:#292725;border:1.5px solid #34302c;display:flex;align-items:center;justify-content:center;flex:none"><ion-icon name="image-outline" style="font-size:22px;color:#78716b"></ion-icon></div>
+<div style="flex:1;min-width:0">
+<div style="font:600 14.5px/1.35 Manrope,sans-serif;margin-bottom:5px">Aceite de girasol Óptimo 900 ml</div>
+<div style="display:flex;align-items:center;gap:7px"><span style="width:8px;height:8px;border-radius:50%;background:#f7941d"></span><span style="font:500 12.5px/1 Manrope,sans-serif;color:#a9a29b">Tata</span><span style="font:500 12.5px/1 Manrope,sans-serif;color:#78716b">· $103 / 100 ml</span></div>
+</div>
+<div style="text-align:right;flex:none">
+<div style="font:700 16px/1.2 JetBrains Mono,monospace;color:#5fe0a8">$929</div>
+<div style="font:400 12px/1.3 JetBrains Mono,monospace;color:#78716b;text-decoration:line-through">$1.290</div>
+</div>
+</div>
+<div style="display:flex;gap:13px;align-items:center;background:#191817;border:1.5px solid #34302c;border-radius:14px;padding:13px">
+<div style="width:60px;height:60px;border-radius:10px;background:#292725;border:1.5px solid #34302c;flex:none"></div>
+<div style="flex:1;min-width:0">
+<div style="font:600 14.5px/1.35 Manrope,sans-serif;margin-bottom:5px">Aceite de girasol Óptimo 900 ml</div>
+<div style="display:flex;align-items:center;gap:7px"><span style="width:8px;height:8px;border-radius:50%;background:#e30613"></span><span style="font:500 12.5px/1 Manrope,sans-serif;color:#a9a29b">Disco</span></div>
+</div>
+<div style="text-align:right;flex:none">
+<div style="font:700 16px/1.2 JetBrains Mono,monospace;color:#ece8e3">$1.145</div>
+<div style="font:600 12px/1.3 Manrope,sans-serif;color:#ff8f7a">+$216</div>
+</div>
+</div>
+<div style="display:flex;gap:13px;align-items:center;background:#191817;border:1.5px solid #262421;border-radius:14px;padding:13px">
+<div style="width:60px;height:60px;border-radius:10px;background:#201e1c;flex:none"></div>
+<div style="flex:1;min-width:0">
+<div style="height:12px;width:78%;border-radius:6px;background:#262421;margin-bottom:9px"></div>
+<div style="height:10px;width:44%;border-radius:5px;background:#201e1c"></div>
+</div>
+<div style="flex:none;display:flex;flex-direction:column;align-items:flex-end;gap:7px">
+<div style="height:14px;width:62px;border-radius:6px;background:#262421"></div>
+<div style="height:9px;width:40px;border-radius:5px;background:#201e1c"></div>
+</div>
+</div>
+<div style="font:400 12.5px/1.5 Manrope,sans-serif;color:#78716b">Skeleton = la misma geometría de la fila, en <span style="font-family:JetBrains Mono,monospace;font-size:12px">borderSubtle</span>, con pulso de opacidad 0.4→1 en loop. Nada de spinners sueltos para listas.</div>
+</div>
+</div>
+
+<div style="background:#121110;border:1.5px solid #34302c;border-radius:20px;overflow:hidden">
+<div style="padding:20px 24px;border-bottom:1.5px solid #262421;background:#191817">
+<span style="font:700 17px/1 Manrope,sans-serif">EmptyState · ScreenHeader · Switch</span>
+<div style="font:500 12px/1.5 JetBrains Mono,monospace;color:#78716b;margin-top:7px">reemplaza emptyCard · empty · emptyResults · topBar ×5 · hero ×6</div>
+</div>
+<div style="padding:24px;display:flex;flex-direction:column;gap:18px">
+<div style="background:#191817;border:1.5px solid #34302c;border-radius:16px;padding:16px">
+<div style="display:flex;align-items:center;gap:12px">
+<div style="width:42px;height:42px;border-radius:999px;background:#2b2825;border:1.5px solid #57504a;display:flex;align-items:center;justify-content:center;font:800 14px/1 Manrope,sans-serif;color:#ece8e3">VF</div>
+<div style="flex:1;min-width:0">
+<div style="font:800 20px/1.15 Manrope,sans-serif;letter-spacing:-.02em">Buscar</div>
+<div style="font:500 12.5px/1.3 Manrope,sans-serif;color:#78716b">6 cadenas · precios de hoy</div>
+</div>
+<div style="width:40px;height:40px;border-radius:999px;background:#201e1c;border:1.5px solid #34302c;display:flex;align-items:center;justify-content:center"><ion-icon name="options-outline" style="font-size:19px;color:#a9a29b"></ion-icon></div>
+</div>
+</div>
+<div style="background:#191817;border:1.5px solid #34302c;border-radius:16px;padding:30px 22px;text-align:center">
+<div style="width:56px;height:56px;border-radius:999px;background:#201e1c;border:1.5px solid #34302c;display:flex;align-items:center;justify-content:center;margin:0 auto 14px"><ion-icon name="document-text-outline" style="font-size:26px;color:#78716b"></ion-icon></div>
+<div style="font:700 17px/1.3 Manrope,sans-serif;margin-bottom:7px">Todavía no subiste un resumen</div>
+<p style="font:400 14px/1.55 Manrope,sans-serif;color:#a9a29b;max-width:34ch;margin:0 auto 18px">Subí el PDF del banco y armamos las categorías, las suscripciones y las metas solos.</p>
+<div style="display:inline-flex;align-items:center;gap:8px;background:#ece8e3;border-radius:12px;padding:13px 20px;box-shadow:0 6px 18px rgba(0,0,0,.5);cursor:pointer"><ion-icon name="cloud-upload-outline" style="font-size:18px;color:#121110"></ion-icon><span style="font:700 14.5px/1 Manrope,sans-serif;color:#121110">Subir resumen</span></div>
+</div>
+<div style="display:flex;align-items:center;gap:14px;background:#191817;border:1.5px solid #34302c;border-radius:16px;padding:16px">
+<div style="flex:1"><div style="font:600 14.5px/1.3 Manrope,sans-serif;margin-bottom:3px">Recordarme antes del cobro</div><div style="font:500 12.5px/1.3 Manrope,sans-serif;color:#78716b">2 días antes</div></div>
+<div onClick="{{ toggleSw }}" style="{{ swTrack }}" hint-placeholder-val=""><div style="{{ swKnob }}" hint-placeholder-val=""></div></div>
+</div>
+</div>
+</div>
+
+</div>
+
+<div style="background:#121110;border:1.5px solid #34302c;border-radius:20px;overflow:hidden">
+<div style="display:flex;flex-wrap:wrap;gap:16px;align-items:baseline;padding:20px 24px;border-bottom:1.5px solid #262421;background:#191817">
+<span style="font:700 17px/1 Manrope,sans-serif">BottomSheet + TabBar</span>
+<span style="font:500 13px/1.4 Manrope,sans-serif;color:#a9a29b;flex:1;min-width:220px">uno solo, no cuatro · tab bar flotante de 6, activo con pill y spring</span>
+<span style="font:500 11px/1.5 JetBrains Mono,monospace;color:#78716b">modalOverlay/modalCard/modalHandle ×3 + backdrop/sheet/handle</span>
+</div>
+<div style="padding:26px 24px;display:flex;flex-wrap:wrap;gap:28px;align-items:flex-start">
+<div style="width:340px;max-width:100%;background:#121110;border:1.5px solid #262421;border-radius:20px;overflow:hidden">
+<div style="height:120px;background:linear-gradient(180deg,#1a1917,rgba(11,10,9,.72));display:flex;align-items:flex-end;padding:14px;font:500 12px/1.4 Manrope,sans-serif;color:#78716b">scrim · rgba(8,7,6,.72)</div>
+<div style="background:#201e1c;border-top:1.5px solid #34302c;border-radius:24px 24px 0 0;padding:12px 20px 20px">
+<div style="width:40px;height:4px;border-radius:999px;background:#46403a;margin:0 auto 16px"></div>
+<div style="font:800 20px/1.2 Manrope,sans-serif;letter-spacing:-.02em;margin-bottom:5px">Nuevo movimiento</div>
+<div style="font:500 13px/1.4 Manrope,sans-serif;color:#78716b;margin-bottom:18px">Se suma al mes que estás viendo</div>
+<div style="display:inline-flex;background:#292725;border:1.5px solid #34302c;border-radius:999px;padding:4px;margin-bottom:14px">
+<div style="border-radius:999px;padding:8px 16px;font:700 13px/1 Manrope,sans-serif;color:#a9a29b;cursor:pointer">Ingreso</div>
+<div style="background:#ff8f7a;border-radius:999px;padding:8px 16px;font:700 13px/1 Manrope,sans-serif;color:#2b1815">Egreso</div>
+</div>
+<div style="display:flex;align-items:center;background:#292725;border:1.5px solid #34302c;border-radius:12px;margin-bottom:14px">
+<span style="font:700 17px/1 JetBrains Mono,monospace;color:#a9a29b;padding:0 14px">$</span>
+<span style="font:500 17px/1 JetBrains Mono,monospace;color:#ece8e3;padding:15px 0">3.290</span>
+</div>
+<div style="display:flex;flex-wrap:wrap;gap:7px;margin-bottom:20px">
+<span style="background:#2b2825;border:1.5px solid #ece8e3;border-radius:999px;padding:7px 12px;font:700 12.5px/1 Manrope,sans-serif;color:#ece8e3">Supermercado</span>
+<span style="background:#292725;border:1.5px solid #34302c;border-radius:999px;padding:7px 12px;font:600 12.5px/1 Manrope,sans-serif;color:#a9a29b">Transporte</span>
+<span style="background:#292725;border:1.5px solid #34302c;border-radius:999px;padding:7px 12px;font:600 12.5px/1 Manrope,sans-serif;color:#a9a29b">Delivery</span>
+<span style="display:flex;align-items:center;gap:5px;border:1.5px dashed #46403a;border-radius:999px;padding:7px 12px;font:600 12.5px/1 Manrope,sans-serif;color:#78716b"><ion-icon name="add" style="font-size:13px"></ion-icon>Nueva</span>
+</div>
+<div style="display:flex;gap:10px">
+<div style="flex:1;text-align:center;border-radius:12px;padding:14px;font:700 15px/1 Manrope,sans-serif;color:#a9a29b;cursor:pointer">Cancelar</div>
+<div style="flex:1.4;text-align:center;background:#ece8e3;border-radius:12px;padding:14px;font:700 15px/1 Manrope,sans-serif;color:#121110;box-shadow:0 6px 18px rgba(0,0,0,.5);cursor:pointer">Guardar</div>
+</div>
+</div>
+</div>
+<div style="flex:1;min-width:300px">
+<div style="font:700 11px/1 JetBrains Mono,monospace;letter-spacing:.1em;text-transform:uppercase;color:#78716b;margin-bottom:14px">tab bar · tocá para ver el pill</div>
+<div style="background:#121110;border-radius:24px;padding:26px 14px">
+<div onClick="{{ noop }}" style="display:flex;gap:2px;background:#201e1c;border:1.5px solid #34302c;border-radius:999px;padding:7px 8px;box-shadow:0 10px 24px rgba(0,0,0,.55)">
+<sc-for list="{{ tabs }}" as="t" hint-placeholder-count="6">
+<div onClick="{{ t.onPress }}" style="{{ t.wrap }}" hint-placeholder-val="">
+<ion-icon name="{{ t.icon }}" style="{{ t.iconStyle }}" hint-placeholder-val=""></ion-icon>
+<span style="{{ t.labelStyle }}" hint-placeholder-val="">{{ t.label }}</span>
+</div>
+</sc-for>
+</div>
+</div>
+<p style="font:400 13px/1.6 Manrope,sans-serif;color:#78716b;margin:16px 0 0">6 items, mismo orden que hoy. El pill se mueve con <span style="font-family:JetBrains Mono,monospace;font-size:12px;color:#ece8e3">MOTION.tabPill</span> y el icono cambia de <span style="font-family:JetBrains Mono,monospace;font-size:12px">-outline</span> a filled, que es la convención que ya usa la app.</p>
+</div>
+</div>
+</div>
+
+</div>
+</div>
+
+<div style="max-width:1180px;margin:0 auto;padding:64px 40px 0">
+<div style="display:flex;align-items:baseline;gap:14px;border-bottom:1.5px solid #34302c;padding-bottom:14px;margin-bottom:14px">
+<span style="font:700 12px/1 JetBrains Mono,monospace;color:#121110;background:#ece8e3;padding:6px 9px;border-radius:6px">03</span>
+<h2 style="font:800 26px/1 Manrope,sans-serif;letter-spacing:-.02em;margin:0">Pantallas</h2>
+<span style="font:500 13px/1.4 Manrope,sans-serif;color:#78716b">armadas 100% con las piezas de arriba</span>
+</div>
+<p style="font:400 14px/1.6 Manrope,sans-serif;color:#78716b;max-width:70ch;margin:0 0 34px">390 × 844. Ninguna pantalla introduce un estilo nuevo; si algo faltaba, se volvió componente.</p>
+
+<div style="display:flex;flex-wrap:wrap;gap:34px;align-items:flex-start">
+
+<div data-screen-label="Dashboard" style="flex:none">
+<div style="display:flex;align-items:baseline;gap:10px;margin-bottom:12px"><span style="font:700 11px/1 JetBrains Mono,monospace;color:#ece8e3;background:#2b2825;border:1.5px solid #57504a;padding:6px 9px;border-radius:6px">01</span><span style="font:700 15px/1 Manrope,sans-serif">Dashboard</span><span style="font:500 12.5px/1 Manrope,sans-serif;color:#78716b">Wealth</span></div>
+<div style="padding:9px;background:#26231f;border-radius:50px;box-shadow:0 24px 60px rgba(0,0,0,.6)">
+<div style="width:390px;height:844px;background:#121110;border-radius:42px;overflow:hidden;position:relative;display:flex;flex-direction:column">
+<div style="position:absolute;top:-90px;left:-40px;width:300px;height:300px;background:radial-gradient(circle,rgba(63,215,189,.14),rgba(18,17,16,0) 70%);pointer-events:none"></div>
+<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 24px 4px;position:relative"><span style="font:700 13px/1 Manrope,sans-serif">9:41</span><div style="display:flex;gap:6px;align-items:center"><ion-icon name="cellular" style="font-size:14px;color:#ece8e3"></ion-icon><ion-icon name="wifi" style="font-size:15px;color:#ece8e3"></ion-icon><ion-icon name="battery-full" style="font-size:19px;color:#ece8e3"></ion-icon></div></div>
+<div style="flex:1;overflow:hidden;position:relative;padding:8px 16px 0">
+<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+<div style="width:42px;height:42px;border-radius:999px;background:#2b2825;border:1.5px solid #57504a;display:flex;align-items:center;justify-content:center;font:800 14px/1 Manrope,sans-serif;color:#ece8e3">VF</div>
+<div style="flex:1"><div style="font:800 21px/1.15 Manrope,sans-serif;letter-spacing:-.02em">Hola, Valentina</div><div style="font:500 12.5px/1.3 Manrope,sans-serif;color:#78716b">Resumen al 31 de agosto</div></div>
+<div style="width:40px;height:40px;border-radius:999px;background:#201e1c;border:1.5px solid #34302c;display:flex;align-items:center;justify-content:center"><ion-icon name="notifications-outline" style="font-size:19px;color:#a9a29b"></ion-icon></div>
+</div>
+<div style="display:flex;align-items:center;justify-content:space-between;background:#201e1c;border:1.5px solid #34302c;border-radius:999px;padding:5px 6px;margin-bottom:12px">
+<div style="width:30px;height:30px;border-radius:999px;background:#292725;display:flex;align-items:center;justify-content:center"><ion-icon name="chevron-back" style="font-size:16px;color:#a9a29b"></ion-icon></div>
+<span style="font:700 13.5px/1 Manrope,sans-serif">Agosto 2026</span>
+<div style="width:30px;height:30px;border-radius:999px;background:#292725;display:flex;align-items:center;justify-content:center"><ion-icon name="chevron-forward" style="font-size:16px;color:#78716b"></ion-icon></div>
+</div>
+<sc-if value="{{ dashEmpty }}" hint-placeholder-val="">
+<div style="background:#191817;border:1.5px solid #34302c;border-radius:16px;padding:30px 22px;text-align:center;margin-bottom:12px">
+<div style="width:56px;height:56px;border-radius:999px;background:#201e1c;border:1.5px solid #34302c;display:flex;align-items:center;justify-content:center;margin:0 auto 14px"><ion-icon name="document-text-outline" style="font-size:26px;color:#78716b"></ion-icon></div>
+<div style="font:700 17px/1.3 Manrope,sans-serif;margin-bottom:7px">Todavía no subiste un resumen</div>
+<p style="font:400 14px/1.55 Manrope,sans-serif;color:#a9a29b;margin:0 auto 18px;max-width:30ch">Subí el PDF del banco y armamos las categorías, las suscripciones y las metas solos.</p>
+<div style="display:inline-flex;align-items:center;gap:8px;background:#ece8e3;border-radius:12px;padding:13px 20px;box-shadow:0 6px 18px rgba(0,0,0,.5)"><ion-icon name="cloud-upload-outline" style="font-size:18px;color:#121110"></ion-icon><span style="font:700 14.5px/1 Manrope,sans-serif;color:#121110">Subir resumen</span></div>
+</div>
+</sc-if>
+<sc-if value="{{ dashLoading }}" hint-placeholder-val="">
+<div style="background:#201e1c;border:1.5px solid #34302c;border-radius:20px;padding:20px;margin-bottom:12px">
+<div style="height:11px;width:38%;border-radius:6px;background:#292725;margin-bottom:16px"></div>
+<div style="height:30px;width:64%;border-radius:8px;background:#292725;margin-bottom:18px"></div>
+<div style="display:flex;gap:10px"><div style="flex:1;height:58px;border-radius:12px;background:#262421"></div><div style="flex:1;height:58px;border-radius:12px;background:#262421"></div></div>
+</div>
+<div style="background:#191817;border:1.5px solid #262421;border-radius:16px;padding:16px;margin-bottom:10px"><div style="height:10px;width:50%;border-radius:5px;background:#262421;margin-bottom:12px"></div><div style="height:8px;width:100%;border-radius:5px;background:#201e1c"></div></div>
+<div style="background:#191817;border:1.5px solid #262421;border-radius:16px;padding:16px"><div style="height:10px;width:42%;border-radius:5px;background:#262421;margin-bottom:12px"></div><div style="height:8px;width:100%;border-radius:5px;background:#201e1c"></div></div>
+</sc-if>
+<sc-if value="{{ dashNormal }}" hint-placeholder-val="{{ true }}">
+<div style="background:#201e1c;border:1.5px solid #34302c;border-radius:20px;padding:20px;margin-bottom:12px;box-shadow:0 10px 24px rgba(0,0,0,.55)">
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+<span style="font:700 11px/1 Manrope,sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#78716b">Balance del mes</span>
+<span style="display:flex;align-items:center;gap:4px;background:#14251d;border:1.5px solid #46c98f;border-radius:999px;padding:4px 8px;font:800 10px/1 Manrope,sans-serif;letter-spacing:.06em;color:#46c98f"><ion-icon name="trending-up" style="font-size:11px"></ion-icon>+8,4%</span>
+</div>
+<div style="font:700 38px/1.05 JetBrains Mono,monospace;letter-spacing:-.03em;margin-bottom:18px">$127.450</div>
+<div style="display:flex;gap:10px">
+<div style="flex:1;background:#191817;border:1.5px solid #262421;border-radius:12px;padding:12px">
+<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px"><ion-icon name="arrow-down-circle" style="font-size:14px;color:#5fe0a8"></ion-icon><span style="font:600 11.5px/1 Manrope,sans-serif;color:#78716b">Ingresos</span></div>
+<div style="font:700 16px/1 JetBrains Mono,monospace;color:#5fe0a8">$164.200</div>
+</div>
+<div style="flex:1;background:#191817;border:1.5px solid #262421;border-radius:12px;padding:12px">
+<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px"><ion-icon name="arrow-up-circle" style="font-size:14px;color:#ff8f7a"></ion-icon><span style="font:600 11.5px/1 Manrope,sans-serif;color:#78716b">Egresos</span></div>
+<div style="font:700 16px/1 JetBrains Mono,monospace;color:#ff8f7a">$36.750</div>
+</div>
+</div>
+</div>
+<div style="display:flex;align-items:flex-end;justify-content:space-between;gap:6px;background:#191817;border:1.5px solid #34302c;border-radius:16px;padding:14px 14px 12px;margin-bottom:12px;height:104px">
+<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px"><div style="width:100%;max-width:20px;height:38px;background:#34302c;border-radius:5px"></div><span style="font:500 9.5px/1 Manrope,sans-serif;color:#78716b">Abr</span></div>
+<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px"><div style="width:100%;max-width:20px;height:54px;background:#34302c;border-radius:5px"></div><span style="font:500 9.5px/1 Manrope,sans-serif;color:#78716b">May</span></div>
+<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px"><div style="width:100%;max-width:20px;height:30px;background:#34302c;border-radius:5px"></div><span style="font:500 9.5px/1 Manrope,sans-serif;color:#78716b">Jun</span></div>
+<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px"><div style="width:100%;max-width:20px;height:46px;background:#34302c;border-radius:5px"></div><span style="font:500 9.5px/1 Manrope,sans-serif;color:#78716b">Jul</span></div>
+<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px"><div style="width:100%;max-width:20px;height:64px;background:#ece8e3;border-radius:5px"></div><span style="font:700 9.5px/1 Manrope,sans-serif;color:#ece8e3">Ago</span></div>
+<div style="display:flex;flex-direction:column;justify-content:flex-end;gap:4px;padding-left:6px;border-left:1.5px solid #262421;align-self:stretch">
+<span style="font:700 9.5px/1 Manrope,sans-serif;color:#0b0a09;background:#ece8e3;padding:5px 7px;border-radius:6px">Mes</span>
+<span style="font:600 9.5px/1 Manrope,sans-serif;color:#78716b;padding:5px 7px">Cat</span>
+</div>
+</div>
+<div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:9px"><span style="font:700 15px/1 Manrope,sans-serif">Categorías</span><span style="font:600 12px/1 Manrope,sans-serif;color:#ece8e3">Ver todas</span></div>
+<div style="background:#191817;border:1.5px solid #34302c;border-radius:16px;padding:14px;margin-bottom:12px;display:flex;flex-direction:column;gap:13px">
+<div>
+<div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="font:600 13px/1 Manrope,sans-serif;color:#ece8e3">Supermercado</span><span style="font:500 12.5px/1 JetBrains Mono,monospace;color:#a9a29b">$8.400 / $12.000</span></div>
+<div style="height:7px;background:#292725;border-radius:999px;overflow:hidden"><div style="width:70%;height:100%;background:#ece8e3;border-radius:999px"></div></div>
+</div>
+<div>
+<div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="font:600 13px/1 Manrope,sans-serif;color:#ff8f7a">Delivery</span><span style="font:500 12.5px/1 JetBrains Mono,monospace;color:#ff8f7a">$6.900 / $5.000</span></div>
+<div style="height:7px;background:#292725;border-radius:999px;overflow:hidden;display:flex"><div style="width:72%;height:100%;background:#ff8f7a"></div><div style="width:28%;height:100%;background:#e5594a"></div></div>
+<div style="font:600 11.5px/1.3 Manrope,sans-serif;color:#ff8f7a;margin-top:5px">$1.900 por encima</div>
+</div>
+</div>
+<div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:9px"><span style="font:700 15px/1 Manrope,sans-serif">Movimientos</span><span style="font:600 12px/1 Manrope,sans-serif;color:#ece8e3">Agosto</span></div>
+<div style="display:flex;flex-direction:column;gap:8px">
+<div style="display:flex;align-items:center;gap:12px;background:#191817;border:1.5px solid #34302c;border-radius:14px;padding:12px 13px">
+<div style="width:38px;height:38px;border-radius:11px;background:#2b2825;display:flex;align-items:center;justify-content:center;flex:none"><ion-icon name="cart" style="font-size:18px;color:#ece8e3"></ion-icon></div>
+<div style="flex:1;min-width:0"><div style="font:600 14px/1.3 Manrope,sans-serif">Disco Punta Carretas</div><div style="font:500 12px/1.3 Manrope,sans-serif;color:#78716b">Supermercado · 28 ago</div></div>
+<span style="font:700 14.5px/1 JetBrains Mono,monospace;color:#ff8f7a">−$3.290</span>
+</div>
+<div style="display:flex;align-items:center;gap:12px;background:#191817;border:1.5px solid #34302c;border-radius:14px;padding:12px 13px">
+<div style="width:38px;height:38px;border-radius:11px;background:#14251d;display:flex;align-items:center;justify-content:center;flex:none"><ion-icon name="briefcase" style="font-size:17px;color:#5fe0a8"></ion-icon></div>
+<div style="flex:1;min-width:0"><div style="font:600 14px/1.3 Manrope,sans-serif">Sueldo</div><div style="font:500 12px/1.3 Manrope,sans-serif;color:#78716b">Ingreso · 26 ago</div></div>
+<span style="font:700 14.5px/1 JetBrains Mono,monospace;color:#5fe0a8">+$82.100</span>
+</div>
+</div>
+</sc-if>
+</div>
+<div style="position:absolute;left:0;right:0;bottom:0;height:96px;background:linear-gradient(180deg,rgba(18,17,16,0),#121110 55%);pointer-events:none"></div>
+<div style="position:absolute;left:14px;right:14px;bottom:26px">
+<div style="display:flex;gap:2px;background:#201e1c;border:1.5px solid #34302c;border-radius:999px;padding:7px 8px;box-shadow:0 10px 24px rgba(0,0,0,.55)">
+<sc-for list="{{ tabs }}" as="t" hint-placeholder-count="6">
+<div onClick="{{ t.onPress }}" style="{{ t.wrap }}" hint-placeholder-val="">
+<ion-icon name="{{ t.icon }}" style="{{ t.iconStyle }}" hint-placeholder-val=""></ion-icon>
+<span style="{{ t.labelStyle }}" hint-placeholder-val="">{{ t.label }}</span>
+</div>
+</sc-for>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+<div data-screen-label="Search" style="flex:none">
+<div style="display:flex;align-items:baseline;gap:10px;margin-bottom:12px"><span style="font:700 11px/1 JetBrains Mono,monospace;color:#ece8e3;background:#2b2825;border:1.5px solid #57504a;padding:6px 9px;border-radius:6px">02</span><span style="font:700 15px/1 Manrope,sans-serif">Search</span><span style="font:500 12.5px/1 Manrope,sans-serif;color:#78716b">grupo expandible · tocá una fila</span></div>
+<div style="padding:9px;background:#26231f;border-radius:50px;box-shadow:0 24px 60px rgba(0,0,0,.6)">
+<div style="width:390px;height:844px;background:#121110;border-radius:42px;overflow:hidden;position:relative;display:flex;flex-direction:column">
+<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 24px 4px"><span style="font:700 13px/1 Manrope,sans-serif">9:41</span><div style="display:flex;gap:6px;align-items:center"><ion-icon name="cellular" style="font-size:14px;color:#ece8e3"></ion-icon><ion-icon name="wifi" style="font-size:15px;color:#ece8e3"></ion-icon><ion-icon name="battery-full" style="font-size:19px;color:#ece8e3"></ion-icon></div></div>
+<div style="flex:1;overflow:hidden;padding:8px 16px 0">
+<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+<div style="flex:1"><div style="font:800 21px/1.15 Manrope,sans-serif;letter-spacing:-.02em">Buscar</div><div style="font:500 12.5px/1.3 Manrope,sans-serif;color:#78716b">6 cadenas · precios de hoy</div></div>
+<div style="width:40px;height:40px;border-radius:999px;background:#201e1c;border:1.5px solid #34302c;display:flex;align-items:center;justify-content:center"><ion-icon name="options-outline" style="font-size:19px;color:#a9a29b"></ion-icon></div>
+</div>
+<div style="position:relative;margin:0 -16px 12px">
+<div style="display:flex;gap:7px;padding:0 16px;overflow:hidden">
+<sc-for list="{{ cats }}" as="c" hint-placeholder-count="5">
+<div onClick="{{ c.onPress }}" style="{{ c.styleSm }}" hint-placeholder-val="">{{ c.label }}</div>
+</sc-for>
+</div>
+<div style="position:absolute;top:0;bottom:0;right:0;width:44px;background:linear-gradient(90deg,rgba(18,17,16,0),#121110 70%);pointer-events:none"></div>
+</div>
+<div style="display:flex;gap:9px;margin-bottom:12px">
+<div style="flex:1;display:flex;align-items:center;gap:9px;background:#201e1c;border:1.5px solid #ece8e3;border-radius:12px;padding:13px 14px;box-shadow:0 0 0 3px rgba(236,232,227,.16)">
+<ion-icon name="search-outline" style="font-size:18px;color:#ece8e3"></ion-icon>
+<span style="font:500 14.5px/1 Manrope,sans-serif;flex:1">aceite girasol</span>
+</div>
+<div style="width:48px;background:#ece8e3;border-radius:12px;display:flex;align-items:center;justify-content:center;box-shadow:0 6px 18px rgba(0,0,0,.5)"><ion-icon name="arrow-forward" style="font-size:20px;color:#121110"></ion-icon></div>
+</div>
+<div style="display:flex;align-items:center;justify-content:space-between;padding:0 2px;margin-bottom:9px">
+<span style="font:600 12.5px/1 Manrope,sans-serif;color:#a9a29b"><span style="color:#ece8e3;font-weight:700">14</span> productos en <span style="color:#ece8e3;font-weight:700">6</span> tiendas</span>
+<span style="display:flex;align-items:center;gap:5px;font:600 12px/1 Manrope,sans-serif;color:#ece8e3"><ion-icon name="swap-vertical" style="font-size:14px"></ion-icon>Precio</span>
+</div>
+<div style="background:#191817;border:1.5px solid #34302c;border-radius:16px;overflow:hidden;margin-bottom:10px">
+<div onClick="{{ toggleGroup }}" style="display:flex;gap:13px;align-items:center;padding:14px;cursor:pointer">
+<div style="width:62px;height:62px;border-radius:12px;background:#292725;border:1.5px solid #34302c;display:flex;align-items:center;justify-content:center;flex:none"><ion-icon name="image-outline" style="font-size:22px;color:#78716b"></ion-icon></div>
+<div style="flex:1;min-width:0">
+<div style="font:700 14.5px/1.3 Manrope,sans-serif;margin-bottom:5px">Aceite de girasol Óptimo 900 ml</div>
+<div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">
+<span style="font:500 12px/1 Manrope,sans-serif;color:#78716b">6 tiendas</span>
+<span style="font:500 12px/1 JetBrains Mono,monospace;color:#a9a29b">$929 – $1.290</span>
+</div>
+</div>
+<div style="text-align:right;flex:none">
+<div style="font:700 17px/1.2 JetBrains Mono,monospace;color:#5fe0a8;margin-bottom:4px">$929</div>
+<div style="display:flex;align-items:center;justify-content:flex-end;gap:4px;font:600 11.5px/1 Manrope,sans-serif;color:#ece8e3"><span>{{ groupCta }}</span><ion-icon name="{{ groupIcon }}" style="font-size:13px"></ion-icon></div>
+</div>
+</div>
+<sc-if value="{{ expanded }}" hint-placeholder-val="{{ true }}">
+<div style="border-top:1.5px solid #262421;padding:6px 14px 14px">
+<div style="display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid #262421">
+<span style="width:9px;height:9px;border-radius:50%;background:#f7941d;flex:none"></span>
+<span style="font:600 13.5px/1.3 Manrope,sans-serif;flex:1">Tata</span>
+<span style="background:#14251d;border:1.5px solid #46c98f;border-radius:999px;padding:4px 8px;font:800 10px/1 Manrope,sans-serif;letter-spacing:.05em;text-transform:uppercase;color:#46c98f">Mejor</span>
+<span style="font:700 14px/1 JetBrains Mono,monospace;color:#5fe0a8;min-width:64px;text-align:right">$929</span>
+</div>
+<div style="display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid #262421">
+<span style="width:9px;height:9px;border-radius:50%;background:#00a651;flex:none"></span>
+<span style="font:600 13.5px/1.3 Manrope,sans-serif;flex:1">Devoto</span>
+<span style="font:600 11.5px/1 Manrope,sans-serif;color:#ff8f7a">+$96</span>
+<span style="font:700 14px/1 JetBrains Mono,monospace;min-width:64px;text-align:right">$1.025</span>
+</div>
+<div style="display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid #262421">
+<span style="width:9px;height:9px;border-radius:50%;background:#e30613;flex:none"></span>
+<span style="font:600 13.5px/1.3 Manrope,sans-serif;flex:1">Disco</span>
+<span style="display:flex;align-items:center;gap:6px"><span style="font:400 11.5px/1 JetBrains Mono,monospace;color:#78716b;text-decoration:line-through">$1.290</span><span style="background:#2b1815;border:1.5px solid #6b2b23;border-radius:999px;padding:3px 7px;font:800 10px/1 Manrope,sans-serif;color:#ff8f7a">−11%</span></span>
+<span style="font:700 14px/1 JetBrains Mono,monospace;min-width:64px;text-align:right">$1.145</span>
+</div>
+<div style="display:flex;align-items:center;gap:10px;padding:11px 0">
+<span style="width:9px;height:9px;border-radius:50%;background:#003da5;flex:none"></span>
+<span style="font:600 13.5px/1.3 Manrope,sans-serif;flex:1">T. Inglesa</span>
+<span style="font:600 11.5px/1 Manrope,sans-serif;color:#78716b">mismo precio</span>
+<span style="font:700 14px/1 JetBrains Mono,monospace;min-width:64px;text-align:right">$1.145</span>
+</div>
+<div style="display:flex;align-items:center;gap:7px;margin-top:9px">
+<ion-icon name="information-circle-outline" style="font-size:15px;color:#78716b;flex:none"></ion-icon>
+<span style="font:500 11.5px/1.35 Manrope,sans-serif;color:#78716b">2 tiendas ofrecen un sustituto, no el mismo producto.</span>
+</div>
+</div>
+</sc-if>
+</div>
+<div style="background:#191817;border:1.5px solid #6b5326;border-radius:16px;padding:16px;position:relative;overflow:hidden">
+<div style="position:absolute;inset:0;background:linear-gradient(140deg,rgba(240,192,115,.16),rgba(25,24,23,0) 65%)"></div>
+<div style="position:relative;display:flex;gap:13px;align-items:center">
+<div style="width:44px;height:44px;border-radius:12px;background:#2a2216;border:1.5px solid #6b5326;display:flex;align-items:center;justify-content:center;flex:none"><ion-icon name="lock-closed" style="font-size:19px;color:#f0c073"></ion-icon></div>
+<div style="flex:1;min-width:0"><div style="font:700 14.5px/1.3 Manrope,sans-serif;margin-bottom:3px">11 resultados más</div><div style="font:500 12.5px/1.35 Manrope,sans-serif;color:#a9a29b">Con premium ves todas las cadenas y el historial de precios.</div></div>
+</div>
+<div style="position:relative;display:flex;align-items:center;justify-content:center;gap:8px;background:linear-gradient(120deg,#f7d79a,#c9922f);border-radius:12px;padding:13px;margin-top:14px;box-shadow:0 6px 18px rgba(240,192,115,.34)"><ion-icon name="diamond" style="font-size:15px;color:#2a2216"></ion-icon><span style="font:800 14.5px/1 Manrope,sans-serif;color:#2a2216">Ver todo con premium</span></div>
+</div>
+</div>
+<div style="position:absolute;left:0;right:0;bottom:0;height:96px;background:linear-gradient(180deg,rgba(18,17,16,0),#121110 55%);pointer-events:none"></div>
+<div style="position:absolute;left:14px;right:14px;bottom:26px">
+<div style="display:flex;gap:2px;background:#201e1c;border:1.5px solid #34302c;border-radius:999px;padding:7px 8px;box-shadow:0 10px 24px rgba(0,0,0,.55)">
+<sc-for list="{{ tabsSearch }}" as="t" hint-placeholder-count="6">
+<div onClick="{{ t.onPress }}" style="{{ t.wrap }}" hint-placeholder-val="">
+<ion-icon name="{{ t.icon }}" style="{{ t.iconStyle }}" hint-placeholder-val=""></ion-icon>
+<span style="{{ t.labelStyle }}" hint-placeholder-val="">{{ t.label }}</span>
+</div>
+</sc-for>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+<div data-screen-label="Shopping" style="flex:none">
+<div style="display:flex;align-items:baseline;gap:10px;margin-bottom:12px"><span style="font:700 11px/1 JetBrains Mono,monospace;color:#ece8e3;background:#2b2825;border:1.5px solid #57504a;padding:6px 9px;border-radius:6px">03</span><span style="font:700 15px/1 Manrope,sans-serif">Shopping</span><span style="font:500 12.5px/1 Manrope,sans-serif;color:#78716b">carrito óptimo + cruce con el banco</span></div>
+<div style="padding:9px;background:#26231f;border-radius:50px;box-shadow:0 24px 60px rgba(0,0,0,.6)">
+<div style="width:390px;height:844px;background:#121110;border-radius:42px;overflow:hidden;position:relative;display:flex;flex-direction:column">
+<div style="position:absolute;top:-70px;right:-60px;width:280px;height:280px;background:radial-gradient(circle,rgba(63,215,189,.16),rgba(18,17,16,0) 70%);pointer-events:none"></div>
+<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 24px 4px;position:relative"><span style="font:700 13px/1 Manrope,sans-serif">9:41</span><div style="display:flex;gap:6px;align-items:center"><ion-icon name="cellular" style="font-size:14px;color:#ece8e3"></ion-icon><ion-icon name="wifi" style="font-size:15px;color:#ece8e3"></ion-icon><ion-icon name="battery-full" style="font-size:19px;color:#ece8e3"></ion-icon></div></div>
+<div style="flex:1;overflow:hidden;padding:8px 16px 0;position:relative">
+<div style="margin-bottom:11px"><div style="font:800 21px/1.15 Manrope,sans-serif;letter-spacing:-.02em">Mi lista</div><div style="font:500 12.5px/1.3 Manrope,sans-serif;color:#78716b">12 ítems · cotizada en 6 cadenas</div></div>
+<div style="background:#191817;border:1.5px solid #34302c;border-radius:16px;padding:12px;margin-bottom:10px">
+<div style="display:flex;flex-wrap:wrap;gap:7px;margin-bottom:12px">
+<div style="display:flex;align-items:center;gap:8px;background:#201e1c;border:1.5px solid #34302c;border-radius:999px;padding:6px 7px 6px 12px"><span style="font:600 12.5px/1 Manrope,sans-serif">Leche 1 L</span><span style="font:700 11px/1 JetBrains Mono,monospace;color:#ece8e3;background:#2b2825;border-radius:999px;padding:3px 6px">×2</span><span style="width:20px;height:20px;border-radius:50%;background:#34302c;display:flex;align-items:center;justify-content:center"><ion-icon name="close" style="font-size:12px;color:#a9a29b"></ion-icon></span></div>
+<div style="display:flex;align-items:center;gap:8px;background:#201e1c;border:1.5px solid #34302c;border-radius:999px;padding:6px 7px 6px 12px"><span style="font:600 12.5px/1 Manrope,sans-serif">Arroz 1 kg</span><span style="font:700 11px/1 JetBrains Mono,monospace;color:#ece8e3;background:#2b2825;border-radius:999px;padding:3px 6px">×1</span><span style="width:20px;height:20px;border-radius:50%;background:#34302c;display:flex;align-items:center;justify-content:center"><ion-icon name="close" style="font-size:12px;color:#a9a29b"></ion-icon></span></div>
+<div style="display:flex;align-items:center;gap:5px;border:1.5px dashed #46403a;border-radius:999px;padding:7px 12px;font:600 12.5px/1 Manrope,sans-serif;color:#78716b"><ion-icon name="add" style="font-size:13px"></ion-icon>10 más</div>
+</div>
+<div style="display:flex;align-items:center;justify-content:center;gap:8px;background:linear-gradient(120deg,#ffffff,#d9d2c9);border-radius:12px;padding:12px;box-shadow:0 6px 18px rgba(0,0,0,.5)"><ion-icon name="git-compare-outline" style="font-size:17px;color:#121110"></ion-icon><span style="font:800 14.5px/1 Manrope,sans-serif;color:#121110">Comparar 12 ítems</span></div>
+</div>
+<div style="background:#14251d;border:1.5px solid #46c98f;border-radius:18px;padding:14px;margin-bottom:10px">
+<div style="display:flex;align-items:center;gap:7px;margin-bottom:8px"><ion-icon name="pricetag" style="font-size:14px;color:#46c98f"></ion-icon><span style="font:800 11px/1 Manrope,sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#46c98f">Carrito óptimo</span></div>
+<div style="display:flex;align-items:flex-end;gap:12px;margin-bottom:10px">
+<div style="flex:1"><div style="font:700 32px/1.05 JetBrains Mono,monospace;letter-spacing:-.02em">$7.310</div><div style="font:500 12.5px/1.3 Manrope,sans-serif;color:#a9a29b;margin-top:4px">12 de 12 ítems, repartidos en 2 cadenas</div></div>
+<div style="text-align:right"><div style="font:700 18px/1 JetBrains Mono,monospace;color:#5fe0a8">−$1.100</div><div style="font:600 11.5px/1.3 Manrope,sans-serif;color:#78716b;margin-top:4px">vs. tu habitual</div></div>
+</div>
+<div style="display:flex;align-items:center;gap:8px;background:#121110;border:1.5px solid #262421;border-radius:12px;padding:10px 12px">
+<span style="width:8px;height:8px;border-radius:50%;background:#f7941d;flex:none"></span>
+<span style="width:8px;height:8px;border-radius:50%;background:#003da5;flex:none;margin-left:-4px"></span>
+<span style="font:500 12px/1.3 Manrope,sans-serif;color:#a9a29b;flex:1">9 en Tata · 3 en T. Inglesa</span>
+<span style="font:600 12px/1 Manrope,sans-serif;color:#ece8e3">Ver ítems</span>
+</div>
+</div>
+<div style="background:#191817;border:1.5px solid #34302c;border-radius:14px;padding:12px 13px;margin-bottom:10px">
+<div style="display:flex;align-items:center;gap:8px;margin-bottom:9px">
+<span style="width:8px;height:8px;border-radius:50%;background:#f7941d;flex:none"></span>
+<span style="font:700 12.5px/1 Manrope,sans-serif;flex:1">Tata</span>
+<span style="font:700 10px/1 Manrope,sans-serif;letter-spacing:.06em;text-transform:uppercase;color:#46c98f">12/12</span>
+<span style="font:700 14px/1 JetBrains Mono,monospace;min-width:60px;text-align:right">$7.480</span>
+</div>
+<div style="display:flex;align-items:center;gap:8px;padding-top:9px;border-top:1px solid #262421">
+<span style="width:8px;height:8px;border-radius:50%;background:#00a651;flex:none"></span>
+<span style="font:700 12.5px/1 Manrope,sans-serif;flex:1">Devoto</span>
+<span style="font:700 10px/1 Manrope,sans-serif;letter-spacing:.06em;text-transform:uppercase;color:#e8b25f">Parcial 9/12</span>
+<span style="font:700 14px/1 JetBrains Mono,monospace;color:#a9a29b;min-width:60px;text-align:right">$6.940</span>
+</div>
+<div style="display:flex;align-items:flex-start;gap:7px;margin-top:9px;padding-top:9px;border-top:1px solid #262421">
+<ion-icon name="alert-circle" style="font-size:15px;color:#e8b25f;flex:none"></ion-icon>
+<span style="font:500 11.5px/1.4 Manrope,sans-serif;color:#e8b25f">Devoto sale menos porque le faltan 3 ítems. No es un ahorro.</span>
+</div>
+</div>
+<div style="background:#201e1c;border:1.5px solid #34302c;border-radius:18px;padding:16px">
+<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+<ion-icon name="analytics-outline" style="font-size:17px;color:#3fd7bd"></ion-icon>
+<span style="font:800 11px/1 Manrope,sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#3fd7bd;flex:1">Cruce con tu banco</span>
+<span style="display:flex;align-items:center;gap:4px;background:#2a2216;border:1.5px solid #6b5326;border-radius:999px;padding:4px 8px;font:800 10px/1 Manrope,sans-serif;letter-spacing:.05em;color:#e8b25f"><ion-icon name="information-circle" style="font-size:11px"></ion-icon>Estimación</span>
+</div>
+<p style="font:400 13.5px/1.5 Manrope,sans-serif;color:#ece8e3;margin:0 0 11px">Comprás en <strong style="font-weight:800">Disco</strong> y gastás <strong style="font-weight:800;font-family:JetBrains Mono,monospace">$8.400</strong> por mes. Esta lista sale <strong style="font-weight:800;font-family:JetBrains Mono,monospace;color:#5fe0a8">$1.100</strong> menos en Tata.</p>
+<div style="display:flex;gap:9px;margin-bottom:11px">
+<div style="flex:1;background:#191817;border:1.5px solid #262421;border-radius:12px;padding:11px"><div style="font:600 11px/1 Manrope,sans-serif;color:#78716b;margin-bottom:6px">Al mes</div><div style="font:700 15px/1 JetBrains Mono,monospace;color:#5fe0a8">−$1.100</div></div>
+<div style="flex:1;background:#191817;border:1.5px solid #262421;border-radius:12px;padding:11px"><div style="font:600 11px/1 Manrope,sans-serif;color:#78716b;margin-bottom:6px">Al año</div><div style="font:700 15px/1 JetBrains Mono,monospace;color:#5fe0a8">−$13.200</div></div>
+</div>
+<div style="font:400 11.5px/1.45 Manrope,sans-serif;color:#78716b">Proyección sobre 4 meses con datos; puede variar por promos y faltantes.</div>
+</div>
+</div>
+<div style="position:absolute;left:0;right:0;bottom:0;height:96px;background:linear-gradient(180deg,rgba(18,17,16,0),#121110 55%);pointer-events:none"></div>
+<div style="position:absolute;left:14px;right:14px;bottom:26px">
+<div style="display:flex;gap:2px;background:#201e1c;border:1.5px solid #34302c;border-radius:999px;padding:7px 8px;box-shadow:0 10px 24px rgba(0,0,0,.55)">
+<sc-for list="{{ tabsShop }}" as="t" hint-placeholder-count="6">
+<div onClick="{{ t.onPress }}" style="{{ t.wrap }}" hint-placeholder-val="">
+<ion-icon name="{{ t.icon }}" style="{{ t.iconStyle }}" hint-placeholder-val=""></ion-icon>
+<span style="{{ t.labelStyle }}" hint-placeholder-val="">{{ t.label }}</span>
+</div>
+</sc-for>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+</div>
+</div>
+
+<div style="max-width:1180px;margin:0 auto;padding:64px 40px 0">
+<div style="display:flex;align-items:baseline;gap:14px;border-bottom:1.5px solid #34302c;padding-bottom:14px;margin-bottom:28px">
+<span style="font:700 12px/1 JetBrains Mono,monospace;color:#121110;background:#ece8e3;padding:6px 9px;border-radius:6px">04</span>
+<h2 style="font:800 26px/1 Manrope,sans-serif;letter-spacing:-.02em;margin:0">Próximos pasos</h2>
+</div>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px">
+<div style="background:#191817;border:1.5px solid #34302c;border-radius:16px;padding:20px">
+<div style="font:700 11px/1 JetBrains Mono,monospace;letter-spacing:.12em;text-transform:uppercase;color:#f0c073;margin-bottom:10px">Ronda 2</div>
+<div style="font:700 15.5px/1.3 Manrope,sans-serif;margin-bottom:7px">Veredicto caro / normal / barato</div>
+<p style="font:400 13.5px/1.55 Manrope,sans-serif;color:#a9a29b;margin:0">3 estados, % de diferencia y rango habitual contra el histórico del MEF. Lo dejamos afuera como pediste, pero el badge ya tiene lugar reservado en la fila de oferta.</p>
+</div>
+<div style="background:#191817;border:1.5px solid #34302c;border-radius:16px;padding:20px">
+<div style="font:700 11px/1 JetBrains Mono,monospace;letter-spacing:.12em;text-transform:uppercase;color:#f0c073;margin-bottom:10px">Ronda 2</div>
+<div style="font:700 15.5px/1.3 Manrope,sans-serif;margin-bottom:7px">Sucursal más cercana</div>
+<p style="font:400 13.5px/1.55 Manrope,sans-serif;color:#a9a29b;margin:0">"Tata es el más barato, a 600 m." Va en la card de tienda; hay que decidir si pide permiso de ubicación al comparar o antes.</p>
+</div>
+<div style="background:#191817;border:1.5px solid #34302c;border-radius:16px;padding:20px">
+<div style="font:700 11px/1 JetBrains Mono,monospace;letter-spacing:.12em;text-transform:uppercase;color:#ece8e3;margin-bottom:10px">Si querés</div>
+<div style="font:700 15.5px/1.3 Manrope,sans-serif;margin-bottom:7px">Las 6 pantallas restantes</div>
+<p style="font:400 13.5px/1.55 Manrope,sans-serif;color:#a9a29b;margin:0">Upload (6 estados), Goals, Subs, Suggestions, Login y Paywall/UpgradeModal compartiendo piezas. Ninguna necesita componentes nuevos.</p>
+</div>
+<div style="background:#191817;border:1.5px solid #34302c;border-radius:16px;padding:20px">
+<div style="font:700 11px/1 JetBrains Mono,monospace;letter-spacing:.12em;text-transform:uppercase;color:#ece8e3;margin-bottom:10px">Para confirmar</div>
+<div style="font:700 15.5px/1.3 Manrope,sans-serif;margin-bottom:7px">Hex de las cadenas</div>
+<p style="font:400 13.5px/1.55 Manrope,sans-serif;color:#a9a29b;margin:0">Usé placeholders para los puntos de marca. Pasame los valores del código y los dejo idénticos.</p>
+</div>
+</div>
+</div>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;dashboardState&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;normal&quot;,&quot;vacío&quot;,&quot;cargando&quot;],&quot;default&quot;:&quot;normal&quot;,&quot;tsType&quot;:&quot;'normal' | 'vacío' | 'cargando'&quot;,&quot;section&quot;:&quot;Pantallas&quot;},&quot;showTokenCode&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Documento&quot;},&quot;showNotes&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Documento&quot;}}">
+class Component extends DCLogic {
+  state = { cat: 0, tab: 0, tabS: 4, tabH: 5, expanded: true, sw: true };
+
+  chip(active, small) {
+    const pad = small ? '9px 14px' : '9px 15px';
+    const base = 'border-radius:999px;padding:' + pad + ';font:700 13px/1 Manrope,sans-serif;cursor:pointer;white-space:nowrap;flex:none;';
+    return active
+      ? base + 'background:#2b2825;border:1.5px solid #6f675f;color:#ece8e3'
+      : base + 'background:#201e1c;border:1.5px solid #34302c;color:#a9a29b;font-weight:600';
+  }
+
+  tabItems(active, onPick) {
+    const defs = [
+      ['Wealth', 'wallet'], ['Movs', 'swap-horizontal'], ['Metas', 'flag'],
+      ['Subs', 'repeat'], ['Buscar', 'search'], ['Lista', 'cart']
+    ];
+    return defs.map((d, i) => {
+      const on = i === active;
+      return {
+        label: d[0],
+        icon: on ? d[1] : d[1] + '-outline',
+        onPress: () => onPick(i),
+        wrap: 'flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 2px;border-radius:999px;cursor:pointer;min-width:0;'
+          + (on ? 'background:#2b2825;' : ''),
+        iconStyle: 'font-size:19px;color:' + (on ? '#ece8e3' : '#78716b'),
+        labelStyle: 'font:' + (on ? '700' : '600') + ' 9.5px/1 Manrope,sans-serif;color:' + (on ? '#ece8e3' : '#78716b')
+      };
+    });
+  }
+
+  renderVals() {
+    const cats = ['Súper', 'Farmacia', 'Belleza', 'Ropa', 'Hogar'].map((label, i) => ({
+      label,
+      onPress: () => this.setState({ cat: i }),
+      style: this.chip(i === this.state.cat, false),
+      styleSm: this.chip(i === this.state.cat, true)
+    }));
+    const st = this.props.dashboardState || 'normal';
+    return {
+      cats,
+      tabs: this.tabItems(this.state.tab, i => this.setState({ tab: i })),
+      tabsSearch: this.tabItems(this.state.tabS, i => this.setState({ tabS: i })),
+      tabsShop: this.tabItems(this.state.tabH, i => this.setState({ tabH: i })),
+      expanded: this.state.expanded,
+      groupCta: this.state.expanded ? 'Cerrar' : '6 tiendas',
+      groupIcon: this.state.expanded ? 'chevron-up' : 'chevron-down',
+      toggleGroup: () => this.setState(s => ({ expanded: !s.expanded })),
+      toggleSw: () => this.setState(s => ({ sw: !s.sw })),
+      swTrack: 'width:52px;height:32px;border-radius:999px;padding:3px;cursor:pointer;display:flex;align-items:center;'
+        + (this.state.sw ? 'background:#ece8e3;justify-content:flex-end' : 'background:#292725;border:1.5px solid #34302c;justify-content:flex-start'),
+      swKnob: 'width:26px;height:26px;border-radius:999px;background:' + (this.state.sw ? '#fff' : '#78716b'),
+      noop: () => {},
+      notes: this.props.showNotes !== false,
+      tokenCode: this.props.showTokenCode !== false,
+      dashNormal: st === 'normal',
+      dashEmpty: st === 'vacío',
+      dashLoading: st === 'cargando'
+    };
+  }
+}
+</script>
+</body>
+</html>

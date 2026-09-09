@@ -7,7 +7,7 @@ import {
 import Svg, { Circle } from 'react-native-svg';
 import { useEntrance, useStaggerEntrance, usePressScale, useCountUp, useRingProgress } from '../utils/animations';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import Toast from 'react-native-toast-message';
 import api from '../api/client';
 import { usePlan } from '../context/PlanContext';

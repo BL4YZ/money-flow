@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { useEntrance, usePressScale } from '../utils/animations';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import Toast from 'react-native-toast-message';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';

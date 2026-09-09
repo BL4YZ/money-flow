@@ -4,7 +4,7 @@ import {
   ScrollView, Animated, Pressable,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, RADIUS, SHADOWS, GRADIENT } from '../theme';
 import { usePlan } from '../context/PlanContext';

@@ -8,7 +8,7 @@ import { useEntrance, usePressScale } from '../utils/animations';
 import { daysUntilDue } from '../utils/notifications';
 import { PieChart, BarChart, LineChart } from 'react-native-chart-kit';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import Toast from 'react-native-toast-message';
 import api from '../api/client';
 import { useAuth } from '../context/AuthContext';

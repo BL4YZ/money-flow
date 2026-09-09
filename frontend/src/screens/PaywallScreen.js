@@ -4,7 +4,7 @@ import {
   ActivityIndicator, Animated,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import Toast from 'react-native-toast-message';
 import { COLORS, SPACING, RADIUS, GRADIENT, SHADOWS } from '../theme';
 import { useLanguage } from '../context/LanguageContext';
