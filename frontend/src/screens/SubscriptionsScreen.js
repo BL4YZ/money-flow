@@ -12,7 +12,7 @@ import { useLanguage } from '../context/LanguageContext';
 import RefreshBadge from '../components/RefreshBadge';
 import {
   Txt, Card, Input, Chip, Segmented, Badge, Button, BottomSheet,
-  EmptyState, ScreenHeader, Toggle, formatUYU,
+  Glow, EmptyState, ScreenHeader, Toggle, formatUYU,
 } from '../components/ui';
 import { COLORS, SPACING, RADIUS, FONTS, serviceMeta } from '../theme';
 
@@ -292,6 +292,7 @@ export default function SubscriptionsScreen() {
 
   return (
     <View style={styles.root}>
+      <Glow />
       <RefreshBadge refreshing={refreshing} />
 
       <ScrollView

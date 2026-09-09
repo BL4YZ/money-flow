@@ -12,7 +12,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { COMMON_PRODUCTS } from '../data/products';
 import {
   Txt, Card, Input, Chip, ListItemChip, Badge, StoreDot, Button,
-  EmptyState, ProgressBar, ScreenHeader, formatUYU, formatUnitPrice,
+  Glow, EmptyState, ProgressBar, ScreenHeader, formatUYU, formatUnitPrice,
 } from '../components/ui';
 import { COLORS, SPACING, RADIUS, FONTS } from '../theme';
 
@@ -370,6 +370,7 @@ export default function ShoppingScreen() {
       style={styles.root}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
+      <Glow />
       <ScrollView
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"

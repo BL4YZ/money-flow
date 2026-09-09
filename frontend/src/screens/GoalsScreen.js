@@ -11,7 +11,7 @@ import { useLanguage } from '../context/LanguageContext';
 import RefreshBadge from '../components/RefreshBadge';
 import {
   Txt, Card, Input, Button, Badge, BottomSheet, EmptyState,
-  ProgressBar, ProgressRing, ScreenHeader, formatUYU,
+  ProgressBar, ProgressRing, ScreenHeader, Glow, formatUYU,
 } from '../components/ui';
 import { COLORS, SPACING, RADIUS, FONTS } from '../theme';
 
@@ -224,6 +224,7 @@ export default function GoalsScreen() {
 
   return (
     <View style={styles.root}>
+      <Glow />
       <RefreshBadge refreshing={refreshing} />
 
       <ScrollView

@@ -32,7 +32,6 @@
     "node-forge": "^1.4.0",
     "react": "19.2.3",
     "react-native": "0.86.3",
-    "react-native-chart-kit": "^6.12.0",
     "react-native-gesture-handler": "~2.32.0",
     "react-native-progress": "^5.0.1",
     "react-native-purchases": "^10.0.0",

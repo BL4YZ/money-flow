@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, ScrollView, StyleSheet, ActivityIndicator, Pressable,
-  RefreshControl, Dimensions, Alert,
+  RefreshControl, Alert,
 } from 'react-native';
-import { PieChart, BarChart, LineChart } from 'react-native-chart-kit';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Toast from 'react-native-toast-message';
 import api from '../api/client';
@@ -14,13 +13,11 @@ import { useLanguage } from '../context/LanguageContext';
 import RefreshBadge from '../components/RefreshBadge';
 import {
   Txt, Card, Input, Chip, Segmented, Badge, Button, BottomSheet,
-  EmptyState, ProgressBar, ScreenHeader, formatUYU,
+  EmptyState, ProgressBar, ScreenHeader, Glow, BarChart, formatUYU,
 } from '../components/ui';
 import {
-  COLORS, SPACING, RADIUS, FONTS, TYPE, categoryColor,
+  COLORS, SPACING, RADIUS, FONTS, categoryColor,
 } from '../theme';
-
-const SCREEN_WIDTH = Dimensions.get('window').width;
 
 const CATEGORY_ICONS = {
   Supermercado: 'cart-outline',
@@ -66,16 +63,6 @@ function formatDate(dateStr) {
   return d.toLocaleDateString('es-UY', { day: '2-digit', month: 'short' });
 }
 
-const chartConfig = {
-  backgroundColor: 'transparent',
-  backgroundGradientFrom: COLORS.surfaceRaised,
-  backgroundGradientTo: COLORS.surfaceRaised,
-  decimalPlaces: 0,
-  color: () => COLORS.primary,
-  labelColor: () => COLORS.textMid,
-  style: { borderRadius: RADIUS.l },
-  propsForDots: { r: '4', strokeWidth: '2', stroke: COLORS.primary },
-};
 
 const EMPTY_FORM = {
   type: 'debit', amount: '', description: '', category: 'Otros',
@@ -169,74 +156,6 @@ function CategoryRow({ cat, total, totalIncome, active, onPress, budget, onSetBu
   );
 }
 
-/** Card de gráfico. El toggle usa Segmented para no ser un cuarto tipo de chip. */
-function ChartCard({ title, accentColor, rows, field, chartType, setChartType, chartW, makePieData, makeBarLineData }) {
-  const pieData = makePieData(rows.map((c) => ({
-    ...c,
-    total_spent: field === 'total_spent' ? c.total_spent : 0,
-    total_income: field === 'total_income' ? c.total_income : 0,
-  })));
-  const barLineData = makeBarLineData(rows, field);
-  const cfg = { ...chartConfig, color: () => accentColor };
-
-  return (
-    <Card variant="raised" style={styles.bloque}>
-      <View style={styles.chartHead}>
-        <View style={styles.chartTitleRow}>
-          <View style={[styles.chartDot, { backgroundColor: accentColor }]} />
-          <Txt variant="h2">{title}</Txt>
-        </View>
-        <Segmented
-          options={[{ value: 'pie', label: 'Torta' }, { value: 'bar', label: 'Barras' }, { value: 'line', label: 'Línea' }]}
-          value={chartType}
-          onChange={setChartType}
-        />
-      </View>
-
-      {chartType === 'pie' ? (
-        <PieChart
-          data={pieData}
-          width={chartW}
-          height={180}
-          chartConfig={chartConfig}
-          accessor="population"
-          backgroundColor="transparent"
-          paddingLeft="10"
-          absolute={false}
-        />
-      ) : null}
-
-      {chartType === 'bar' && barLineData ? (
-        <BarChart
-          data={barLineData}
-          width={chartW}
-          height={200}
-          chartConfig={{ ...cfg, barPercentage: 0.65, fillShadowGradientOpacity: 1 }}
-          style={{ borderRadius: RADIUS.l, marginLeft: -SPACING.m }}
-          showValuesOnTopOfBars
-          withInnerLines={false}
-          fromZero
-          withCustomBarColorFromData
-          flatColor
-        />
-      ) : null}
-
-      {chartType === 'line' && barLineData ? (
-        <LineChart
-          data={barLineData}
-          width={chartW}
-          height={200}
-          chartConfig={cfg}
-          bezier
-          style={{ borderRadius: RADIUS.l, marginLeft: -SPACING.m }}
-          withInnerLines={false}
-          withDots
-        />
-      ) : null}
-    </Card>
-  );
-}
-
 export default function DashboardScreen() {
   const { user, logout } = useAuth();
   const { isPremium, isTrial, trialDays, showUpgrade } = usePlan();
@@ -253,8 +172,7 @@ export default function DashboardScreen() {
   const [editingId, setEditingId] = useState(null);   // null = crear, id = editar
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
-  const [expenseChartType, setExpenseChartType] = useState('pie');
-  const [incomeChartType, setIncomeChartType] = useState('pie');
+  const [chartMode, setChartMode] = useState('mes');   // 'mes' | 'cat'
   const [customCategories, setCustomCategories] = useState([]);
   const [newCatInput, setNewCatInput] = useState('');
   const [showCatInput, setShowCatInput] = useState(false);
@@ -497,29 +415,48 @@ export default function DashboardScreen() {
   const expenseRows = summary?.byCategory?.filter((c) => parseFloat(c.total_spent) > 0)?.slice(0, 8) || [];
   const incomeRows = summary?.byCategory?.filter((c) => parseFloat(c.total_income) > 0)?.slice(0, 8) || [];
 
-  const CHART_W = SCREEN_WIDTH - SPACING.m * 2 - SPACING.m * 2;
+  // ── Datos del gráfico ────────────────────────────────────────────
+  //
+  // `monthlyTrend` ya venía en /transactions/summary y se estaba tirando: la
+  // pantalla mostraba dos tortas del mes actual y nunca la evolución.
+  const trend = (summary?.monthlyTrend || []).slice(-5);
 
-  const makePieData = (rows) => rows.map((c) => ({
-    name: c.category || 'Otros',
-    population: parseFloat(c.total_spent) || parseFloat(c.total_income),
-    color: categoryColor(c.category || 'Otros'),
-    legendFontColor: COLORS.textMid,
-    legendFontSize: 11,
+  const barrasMes = trend.map((m) => {
+    const [y, mm] = m.month.split('-');
+    return {
+      label: new Date(Number(y), Number(mm) - 1, 1)
+        .toLocaleDateString('es-UY', { month: 'short' })
+        .replace('.', ''),
+      value: parseFloat(m.spent) || 0,
+      active: m.month === selectedMonth,
+    };
+  });
+
+  // El modo "Cat" conserva lo que mostraban las tortas: el desglose del mes.
+  const barrasCat = expenseRows.slice(0, 5).map((c) => ({
+    label: (c.category || 'Otros').slice(0, 4),
+    value: parseFloat(c.total_spent) || 0,
+    active: selectedCategory === c.category,
   }));
 
-  const makeBarLineData = (rows, field) => (rows.length > 0 ? {
-    labels: rows.map((c) => (c.category || 'Otros').slice(0, 5)),
-    datasets: [{
-      data: rows.map((c) => parseFloat(c[field]) || 0),
-      colors: rows.map((c) => () => categoryColor(c.category || 'Otros')),
-    }],
-  } : null);
+  const barras = chartMode === 'mes' ? barrasMes : barrasCat;
+
+  // Variación contra el mes anterior. Sólo se muestra cuando hay dos meses con
+  // datos: un "+100%" contra un mes vacío no informa nada.
+  const variacion = (() => {
+    if (trend.length < 2) return null;
+    const actual = parseFloat(trend[trend.length - 1].spent) || 0;
+    const previo = parseFloat(trend[trend.length - 2].spent) || 0;
+    if (previo <= 0) return null;
+    return Math.round(((actual - previo) / previo) * 1000) / 10;
+  })();
 
   const sinDatos = expenseRows.length === 0 && incomeRows.length === 0 && transactions.length === 0;
   const categoriasDisponibles = [...DEFAULT_CATEGORIES, ...customCategories];
 
   return (
     <View style={styles.root}>
+      <Glow />
       <RefreshBadge refreshing={refreshing} />
 
       <ScrollView
@@ -540,6 +477,7 @@ export default function DashboardScreen() {
           initials={iniciales}
           actionIcon="add"
           onActionPress={openCreate}
+          card={false}
         />
 
         <View style={styles.utilRow}>
@@ -572,9 +510,22 @@ export default function DashboardScreen() {
 
         {/* Balance */}
         {totalIncome > 0 ? (
-          <Card variant="raised" label={t('dashboard.monthlyBalance')} style={styles.bloque}>
-            <Txt style={[styles.balance, { color: balance >= 0 ? COLORS.income : COLORS.expense }]}>
-              {balance >= 0 ? '+' : '−'}{formatUYU(Math.abs(balance))}
+          <Card variant="raised" style={styles.bloque}>
+            {/* El monto va en hueso, no en verde: el color del dato se reserva
+                para las cajas de ingresos y egresos, que son las que tienen
+                signo. Un balance positivo pintado de verde compite con ellas. */}
+            <View style={styles.balanceHead}>
+              <Txt variant="overline" color={COLORS.textLow}>{t('dashboard.monthlyBalance')}</Txt>
+              {variacion !== null ? (
+                <Badge
+                  variant={variacion <= 0 ? 'best' : 'discount'}
+                  icon={variacion <= 0 ? 'trending-down' : 'trending-up'}
+                  label={`${variacion > 0 ? '+' : ''}${String(variacion).replace('.', ',')}%`}
+                />
+              ) : null}
+            </View>
+            <Txt style={styles.balance}>
+              {balance >= 0 ? '' : '−'}{formatUYU(Math.abs(balance))}
             </Txt>
             <View style={styles.balanceMetrics}>
               <View style={styles.balanceMetric}>
@@ -593,40 +544,27 @@ export default function DashboardScreen() {
           </Card>
         ) : null}
 
-        {expenseRows.length > 0 ? (
-          <ChartCard
-            title={t('dashboard.expenses')}
-            accentColor={COLORS.expense}
-            rows={expenseRows}
-            field="total_spent"
-            chartType={expenseChartType}
-            setChartType={setExpenseChartType}
-            chartW={CHART_W}
-            makePieData={makePieData}
-            makeBarLineData={makeBarLineData}
+        {barras.length > 0 ? (
+          <BarChart
+            data={barras}
+            mode={chartMode}
+            onModeChange={setChartMode}
+            style={styles.bloque}
           />
         ) : null}
 
-        {incomeRows.length > 0 ? (
-          <ChartCard
-            title={t('dashboard.income')}
-            accentColor={COLORS.income}
-            rows={incomeRows}
-            field="total_income"
-            chartType={incomeChartType}
-            setChartType={setIncomeChartType}
-            chartW={CHART_W}
-            makePieData={makePieData}
-            makeBarLineData={makeBarLineData}
-          />
-        ) : null}
+        <View style={styles.seccionHead}>
+          <Txt variant="h2" style={styles.seccionTitulo}>{t('dashboard.breakdown')}</Txt>
+          {selectedCategory ? (
+            <Pressable onPress={() => handleCategoryTap(selectedCategory)} hitSlop={8}>
+              <Txt variant="caption" color={COLORS.textHigh}>{t('dashboard.clearFilter')}</Txt>
+            </Pressable>
+          ) : null}
+        </View>
 
         {/* Categorías — tocar filtra las transacciones */}
         {expenseRows.length > 0 || incomeRows.length > 0 ? (
-          <Card style={styles.bloque}>
-            <Txt variant="overline" color={COLORS.textLow} style={styles.cardTitle}>
-              {t('dashboard.breakdown')}
-            </Txt>
+          <Card>
             {summary.byCategory.map((cat, i) => (
               <CategoryRow
                 key={i}
@@ -853,7 +791,13 @@ const styles = StyleSheet.create({
   },
   monthTxt: { flex: 1, textAlign: 'center' },
 
-  balance: { ...TYPE.display, fontSize: 38, lineHeight: 44 },
+  balanceHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 },
+  balance: { fontFamily: FONTS.amountBold, fontSize: 38, lineHeight: 40, letterSpacing: -1, color: COLORS.textHigh },
+  seccionHead: {
+    flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between',
+    marginTop: SPACING.l, marginBottom: 9,
+  },
+  seccionTitulo: { fontSize: 15 },
   balanceMetrics: { flexDirection: 'row', marginTop: SPACING.m, gap: SPACING.s },
   balanceMetric: {
     flex: 1,

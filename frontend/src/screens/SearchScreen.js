@@ -10,7 +10,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { usePlan } from '../context/PlanContext';
 import {
   Txt, Card, Input, Chip, SortChip, Badge, StoreDot, Button,
-  EmptyState, OfferRowSkeleton, ScreenHeader, formatUYU, formatUnitPrice,
+  Glow, EmptyState, OfferRowSkeleton, ScreenHeader, formatUYU, formatUnitPrice,
 } from '../components/ui';
 import { COLORS, SPACING, RADIUS, GRADIENTS, FONTS } from '../theme';
 
@@ -295,6 +295,7 @@ export default function SearchScreen() {
       style={styles.root}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
+      <Glow />
       <ScrollView
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"

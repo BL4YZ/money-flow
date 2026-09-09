@@ -8,7 +8,7 @@ import { encryptFile } from '../utils/encryption';
 import { usePlan } from '../context/PlanContext';
 import { useLanguage } from '../context/LanguageContext';
 import {
-  Txt, Card, Badge, Button, ProgressBar, ScreenHeader, formatUYU,
+  Txt, Card, Badge, Button, ProgressBar, ScreenHeader, Glow, formatUYU,
 } from '../components/ui';
 import { COLORS, SPACING, RADIUS, FONTS, SHADOWS } from '../theme';
 
@@ -74,6 +74,7 @@ export default function UploadScreen() {
 
   return (
     <View style={styles.root}>
+      <Glow />
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <ScreenHeader title={t('upload.heroTitle')} subtitle={t('upload.heroSubtitle')} />
 
