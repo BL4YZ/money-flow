@@ -50,7 +50,11 @@ require.cache[require.resolve(dbPath)] = {
 };
 
 const { scrapeAll } = require("../services/scraper");
-const { tokenize, normalize, matchesToken } = require("../services/productMatcher");
+const {
+  tokenize, normalize, matchesToken, parseQuantity,
+  variantSignature, variantConflict, VARIANT_GROUPS,
+} = require("../services/productMatcher");
+const productType = require("../services/productType");
 const CASES = require("./precision-cases");
 
 // ─── Umbrales ─────────────────────────────────────────────────────
@@ -78,7 +82,23 @@ for (const s of require("../services/scraper").SCRAPE_STORES) {
   tokenize(s.name).forEach((t) => MARCAS.add(t));
 }
 
-const esRuido = (t) => t.length < MIN_LARGO || /\d/.test(t) || MARCAS.has(t);
+// Los marcadores de VARIANTE no son sinónimos de la categoría: son la línea
+// del producto. Sin esto se aprende `molde → cero` (por "Pan Blanco Bimbo
+// Cero", n=11), y con eso cualquier producto "cero" satisfaría "molde". Salen
+// de VARIANT_GROUPS, que es la misma lista con la que el agrupador decide qué
+// nunca se fusiona; "cero" se suma a mano porque la lista trae la forma
+// inglesa "zero" y la góndola uruguaya escribe la castellana.
+const VARIANTES = new Set([...VARIANT_GROUPS.flat(), "cero"]);
+
+const esRuido = (t) =>
+  t.length < MIN_LARGO || /\d/.test(t) || MARCAS.has(t) || VARIANTES.has(t);
+
+// Las marcas como frase completa, para poder exigir "misma marca" al emparejar.
+const MARCAS_FRASE = new Set();
+try {
+  const sipc = require("../data/sipc-types.json");
+  Object.keys(sipc.marcas || {}).forEach((m) => { if (m.length >= 4) MARCAS_FRASE.add(m); });
+} catch (e) { /* sin catálogo no se empareja, que es el lado seguro */ }
 
 // Un token que en la ruta viene detrás de "sin" está NEGADO: "Bebidas Sin
 // Alcohol" no habla de alcohol, y "Coca Cola Sin Azucar" no es azúcar.
@@ -100,6 +120,97 @@ console.log = (...a) => {
   origLog(...a);
 };
 
+/**
+ * Le presta la categoría a las tiendas que no publican ninguna, emparejando el
+ * MISMO producto entre cadenas.
+ *
+ * Es lo que rompe el techo del método. Sólo se puede aprender vocabulario que
+ * viva dentro de una categoría etiquetada, y la palabra que falta —"rodajas"—
+ * es de Cencosud, que no etiqueta nada. Pero el producto sí existe de los dos
+ * lados:
+ *
+ *   Tata   "Pan Blanco Bimbo Cero 500 G"           → /Almacén/…/Pan de Molde/
+ *   Disco  "Pan blanco en rodajas BIMBO cero 500 g" → (sin categoría)
+ *
+ * Misma marca, mismo "cero", mismos 500 g: es el mismo pan. Emparejarlos mete
+ * el vocabulario de Cencosud DENTRO de la categoría de Tata, y ahí "rodajas"
+ * pasa a ser aprendible.
+ *
+ * NO SE PUEDE USAR `groupProducts` TAL CUAL, y el motivo es instructivo:
+ * pondera por IDF, así que "rodajas" —rara, y por eso informativa— pesa
+ * muchísimo como término NO compartido y hunde el score bajo el umbral de 0.72.
+ * La palabra que queremos aprender es justo la que impide el emparejamiento.
+ * El umbral que hace segura la agrupación en pantalla la vuelve inútil para
+ * aprender. Verificado: con groupProducts sólo emparejaba Tienda Inglesa, cuya
+ * diferencia era un "Cero" repetido y no vocabulario nuevo.
+ *
+ * Así que acá el parecido no se puntúa: se EXIGE. Cuatro guardas duras —misma
+ * cantidad, misma marca, misma familia del MEF, sin variantes en conflicto— y
+ * entonces la palabra sobrante puede ser cualquiera. Si dos candidatos
+ * etiquetados no coinciden en categoría, no se propaga nada.
+ *
+ * PERO ESTO NO IDENTIFICA EL MISMO SKU, y conviene no creerse otra cosa. Une
+ * "Pan Blanco Bimbo Artesano 500 G" con "Pan blanco en rodajas BIMBO cero
+ * 500 g": misma marca, mismo gramaje, distinta línea. Para lo único que se usa
+ * —prestar la CATEGORÍA— alcanza, porque las dos son pan de molde y es la
+ * categoría lo que viaja, no el precio ni la identidad del producto. Para
+ * cualquier otro uso (comparar precios, deduplicar en pantalla) haría falta
+ * `groupProducts`, que es estricto justamente porque ahí un error se ve.
+ */
+const MIN_TOKENS_COMPARTIDOS = 3;
+
+function mismaCosa(a, b, marcas) {
+  if (a.storeId === b.storeId) return false;
+
+  // 1. Misma CANTIDAD. Un pack de 500 g y uno de 1 kg no son el mismo producto
+  //    por parecido que sea el nombre. (Misma guarda que groupProducts.)
+  const qa = parseQuantity(a.name);
+  const qb = parseQuantity(b.name);
+  if (!qa || !qb || qa.unit !== qb.unit || qa.qty !== qb.qty) return false;
+
+  // 2. Misma MARCA, y tiene que haber una. Es lo que sostiene todo lo demás:
+  //    sin marca compartida, "pan blanco 500 g" matchea con cualquier pan.
+  const ma = [...marcas].filter((m) => normalize(a.name).includes(m));
+  const mb = [...marcas].filter((m) => normalize(b.name).includes(m));
+  if (ma.length === 0 || mb.length === 0) return false;
+  if (!ma.some((m) => mb.includes(m))) return false;
+
+  // 3. Misma FAMILIA oficial del MEF cuando ambas se conocen.
+  const fa = productType.familiaDeProducto(a.name);
+  const fb = productType.familiaDeProducto(b.name);
+  if (fa && fb && fa !== fb) return false;
+
+  // 4. Y variantes excluyentes (entera/descremada, con/sin lactosa) nunca se
+  //    fusionan, más un piso de palabras en común para que la marca sola no
+  //    alcance.
+  const ta = tokenize(a.name);
+  const tb = tokenize(b.name);
+  if (variantConflict(variantSignature(ta), variantSignature(tb))) return false;
+  const comunes = ta.filter((t) => tb.includes(t)).length;
+  return comunes >= MIN_TOKENS_COMPARTIDOS;
+}
+
+function propagarCategorias(productos, auditPares) {
+  const marcas = MARCAS_FRASE;
+  const conCat = productos.filter((p) => p.category);
+  const sinCat = productos.filter((p) => !p.category);
+
+  let prestadas = 0;
+  for (const s of sinCat) {
+    const candidatos = conCat.filter((c) => mismaCosa(c, s, marcas));
+    if (candidatos.length === 0) continue;
+    const cats = [...new Set(candidatos.map((c) => c.category))];
+    if (cats.length !== 1) continue;   // desacuerdo → no se opina
+    s.category = cats[0];
+    s._categoriaPrestada = true;
+    prestadas++;
+    if (auditPares && auditPares.length < 40) {
+      auditPares.push(`${candidatos[0].storeId}: ${candidatos[0].name}\n        ↳ ${s.storeId}: ${s.name}\n        ${cats[0]}`);
+    }
+  }
+  return prestadas;
+}
+
 (async () => {
   const seco = process.argv.includes("--dry");
   const consultas = [...new Set(
@@ -113,6 +224,8 @@ console.log = (...a) => {
   const docsPorCat = {};    // cuántos productos vio cada T
   const global = {};        // frecuencia de W en todo el corpus con categoría
   let totalDocs = 0;
+  let prestadasTotal = 0;
+  const auditPares = [];
   const ejemplos = {};      // T|W → un nombre de producto, para poder auditar
 
   for (let i = 0; i < consultas.length; i++) {
@@ -124,7 +237,9 @@ console.log = (...a) => {
       origLog(`   (falló "${q}": ${e.message})`);
       continue;
     }
-    if ((i + 1) % 10 === 0) origLog(`   ${i + 1}/${consultas.length}`);
+    // Antes de contar: prestarle la categoría a las cadenas que no la publican.
+    prestadasTotal += propagarCategorias(productos, auditPares);
+    if ((i + 1) % 10 === 0) origLog(`   ${i + 1}/${consultas.length}  (${prestadasTotal} categorías prestadas)`);
 
     for (const p of productos) {
       if (!p.category) continue;   // sólo Tata y El Dorado
@@ -188,10 +303,18 @@ console.log = (...a) => {
   // ─── Informe para revisar A MANO antes de confiarle nada ────────
   auditoria.sort((a, b) => b.lift - a.lift);
   origLog(`\n${"═".repeat(72)}`);
-  origLog(`productos con categoría : ${totalDocs}`);
+  origLog(`productos con categoría : ${totalDocs}   (${prestadasTotal} prestadas por emparejamiento)`);
   origLog(`tokens de categoría     : ${Object.keys(docsPorCat).length}`);
   origLog(`entradas del léxico     : ${Object.keys(lexico).length} claves, ${auditoria.length} pares`);
   origLog(`${"═".repeat(72)}\n`);
+
+  // Los emparejamientos van PRIMERO y a propósito: si une mal dos productos,
+  // el vocabulario que salga de ahí no vale nada por más alto que sea el lift.
+  if (auditPares.length) {
+    origLog("EMPAREJAMIENTOS QUE PRESTARON CATEGORÍA (muestra)\n");
+    auditPares.slice(0, 20).forEach((x) => origLog(`     ${x}\n`));
+    origLog("");
+  }
 
   origLog("PARES APRENDIDOS (lift, soporte)\n");
   for (const a of auditoria) {

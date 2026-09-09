@@ -46,7 +46,17 @@ const SYNONYMS = {
   // ponen "Pan Lacteado", Disco "lactal", Bimbo "blanco en rodajas". Sin esto
   // el carrito elegia el pan Bimbo mas barato de cada cadena, que resultaba ser
   // un pan de viena. NO es heuristica: es la misma ficha del Estado.
-  molde: ['lacteado', 'lactal'],
+  // "rodajas" NO esta en la ficha del MEF, pero si en la taxonomia de Tata:
+  // clasifica "Pan blanco en rodajas" bajo /Almacen/Panificados/Pan de Molde/.
+  // Lo encontro scripts/build-category-lexicon.js con lift 62 sobre 6
+  // productos. El lexico completo se midio y se descarto (bajaba el carrito a
+  // 99.3%); lo que sobrevive es este par, agregado a mano con esa evidencia.
+  //
+  // UNA SOLA DIRECCION a proposito: SYNONYMS se consulta por el token de la
+  // BUSQUEDA, asi que "molde" puede satisfacerse con "rodajas", pero buscar
+  // "rodajas" no trae panes de molde — si no, "Duraznos en rodajas" entraria
+  // en cualquier busqueda que mencione molde.
+  molde: ['lacteado', 'lactal', 'rodajas'],
   lacteado: ['molde', 'lactal'],
   lactal: ['molde', 'lacteado'],
 };
@@ -929,6 +939,12 @@ function groupProducts(items) {
 module.exports = {
   GROUPING_THRESHOLD,
   groupProducts,
+  // Se exportan para scripts/build-category-lexicon.js, que necesita la misma
+  // guarda de variantes excluyentes sin arrastrar el resto de groupProducts.
+  // Son funciones puras: exportarlas no cambia ningún comportamiento.
+  variantSignature,
+  variantConflict,
+  VARIANT_GROUPS,
   weightedJaccard,
   STOP_WORDS,
   SYNONYMS,
