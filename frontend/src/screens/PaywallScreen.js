@@ -1,62 +1,40 @@
-import React, { useState, useEffect, useRef } from 'react';
-import {
-  View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  ActivityIndicator, Animated,
-} from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Toast from 'react-native-toast-message';
-import { COLORS, SPACING, RADIUS, GRADIENT, SHADOWS } from '../theme';
+import api from '../api/client';
 import { useLanguage } from '../context/LanguageContext';
 import { usePlan } from '../context/PlanContext';
 import { getOfferings, purchasePackage, restorePurchases } from '../services/purchases';
-import api from '../api/client';
+import { Txt, Card, Button, Badge } from '../components/ui';
+import { COLORS, SPACING, RADIUS, GRADIENTS, FONTS, SHADOWS } from '../theme';
 
 const FEATURES = [
-  { icon: 'flash',          label: 'featureAI' },
-  { icon: 'stats-chart',    label: 'featurePrices' },
-  { icon: 'cart',           label: 'featureShopping' },
-  { icon: 'cloud-upload',   label: 'featureUpload' },
-  { icon: 'trophy',         label: 'featureGoals' },
-  { icon: 'notifications',  label: 'featureBills' },
-  { icon: 'infinite',       label: 'featureTransactions' },
+  { icon: 'flash',         label: 'featureAI' },
+  { icon: 'stats-chart',   label: 'featurePrices' },
+  { icon: 'cart',          label: 'featureShopping' },
+  { icon: 'cloud-upload',  label: 'featureUpload' },
+  { icon: 'trophy',        label: 'featureGoals' },
+  { icon: 'notifications', label: 'featureBills' },
+  { icon: 'infinite',      label: 'featureTransactions' },
 ];
 
 export default function PaywallScreen({ navigation }) {
   const { t } = useLanguage();
   const { refreshPlan } = usePlan();
 
-  const [offering, setOffering]   = useState(null);
-  const [loading, setLoading]     = useState(true);
+  const [offering, setOffering] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [purchasing, setPurchasing] = useState(false);
-  const [restoring, setRestoring]   = useState(false);
+  const [restoring, setRestoring] = useState(false);
 
-  // Entrance animations
-  const headerY  = useRef(new Animated.Value(30)).current;
-  const headerOp = useRef(new Animated.Value(0)).current;
-  const cardY    = useRef(new Animated.Value(40)).current;
-  const cardOp   = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    Animated.parallel([
-      Animated.spring(headerY, { toValue: 0, damping: 18, stiffness: 180, useNativeDriver: true }),
-      Animated.timing(headerOp, { toValue: 1, duration: 300, useNativeDriver: true }),
-    ]).start();
-    setTimeout(() => {
-      Animated.parallel([
-        Animated.spring(cardY, { toValue: 0, damping: 18, stiffness: 160, useNativeDriver: true }),
-        Animated.timing(cardOp, { toValue: 1, duration: 300, useNativeDriver: true }),
-      ]).start();
-    }, 120);
-
-    loadOffering();
-  }, []);
+  useEffect(() => { loadOffering(); }, []);
 
   const loadOffering = async () => {
     setLoading(true);
     try {
-      const o = await getOfferings();
-      setOffering(o);
+      setOffering(await getOfferings());
     } catch (_) {}
     setLoading(false);
   };
@@ -69,9 +47,8 @@ export default function PaywallScreen({ navigation }) {
     }
     setPurchasing(true);
     try {
-      const { customerInfo, isCancelled, isMock } = await purchasePackage(pkg);
+      const { customerInfo, isCancelled } = await purchasePackage(pkg);
       if (isCancelled) return;
-      // Update plan state from RevenueCat customer info (or mock)
       await refreshPlan(customerInfo);
       Toast.show({ type: 'success', text1: '¡Bienvenido a Premium! 🎉' });
       navigation?.goBack();
@@ -82,7 +59,21 @@ export default function PaywallScreen({ navigation }) {
     }
   };
 
-  // ── DEV ONLY ────────────────────────────────────────────────────
+  const handleRestore = async () => {
+    setRestoring(true);
+    try {
+      await refreshPlan(await restorePurchases());
+      Toast.show({ type: 'success', text1: 'Compras restauradas' });
+      navigation?.goBack();
+    } catch (err) {
+      Toast.show({ type: 'error', text1: 'No se encontraron compras anteriores' });
+    } finally {
+      setRestoring(false);
+    }
+  };
+
+  // ── Sólo DEV: gatea con __DEV__ y pega contra routes/dev.js, que a su vez
+  // sólo se monta cuando NODE_ENV === 'development'. ──────────────
   const simulatePurchase = async () => {
     try {
       await api.post('/dev/simulate-premium');
@@ -103,136 +94,114 @@ export default function PaywallScreen({ navigation }) {
       Toast.show({ type: 'error', text1: '[DEV] Error: ' + err.message });
     }
   };
-  // ────────────────────────────────────────────────────────────────
 
-  const handleRestore = async () => {
-    setRestoring(true);
-    try {
-      const customerInfo = await restorePurchases();
-      await refreshPlan(customerInfo);
-      Toast.show({ type: 'success', text1: 'Compras restauradas' });
-      navigation?.goBack();
-    } catch (err) {
-      Toast.show({ type: 'error', text1: 'No se encontraron compras anteriores' });
-    } finally {
-      setRestoring(false);
-    }
-  };
-
-  // Extract price & trial info from the first package
-  const pkg            = offering?.availablePackages?.[0];
-  const priceString    = pkg?.product?.priceString ?? t('premium.price');
-  const trialDuration  = pkg?.product?.introPrice?.periodNumberOfUnits
+  const pkg = offering?.availablePackages?.[0];
+  const priceString = pkg?.product?.priceString ?? t('premium.price');
+  const trialDuration = pkg?.product?.introPrice?.periodNumberOfUnits
     ? `${pkg.product.introPrice.periodNumberOfUnits} ${t('paywall.days')}`
     : '30 ' + t('paywall.days');
 
   return (
     <View style={styles.root}>
-      {/* Close button */}
-      {navigation && (
-        <TouchableOpacity style={styles.closeBtn} onPress={() => navigation.goBack()}>
-          <Ionicons name="close" size={22} color={COLORS.onSurfaceVariant} />
-        </TouchableOpacity>
-      )}
+      {navigation ? (
+        <Pressable
+          style={({ pressed }) => [styles.close, pressed && styles.pressed]}
+          onPress={() => navigation.goBack()}
+        >
+          <Ionicons name="close" size={22} color={COLORS.textMid} />
+        </Pressable>
+      ) : null}
 
-      <ScrollView
-        contentContainerStyle={styles.scroll}
-        showsVerticalScrollIndicator={false}
-        bounces={false}
-      >
-        {/* Hero */}
-        <Animated.View style={[styles.hero, { opacity: headerOp, transform: [{ translateY: headerY }] }]}>
-          <LinearGradient colors={['#7c4dff33', '#7c4dff00']} style={styles.heroBg}>
-            <LinearGradient colors={GRADIENT.primary} style={styles.diamondBg}>
-              <Ionicons name="diamond" size={36} color={COLORS.onPrimary} />
-            </LinearGradient>
-            <Text style={styles.heroTitle}>{t('premium.modalTitle')}</Text>
-            <Text style={styles.heroTrial}>
-              {t('paywall.trialHeadline', { days: trialDuration })}
-            </Text>
-            <Text style={styles.heroSub}>{t('paywall.trialSub')}</Text>
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} bounces={false}>
+        <View style={styles.hero}>
+          <LinearGradient
+            colors={GRADIENTS.premium}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.diamante}
+          >
+            <Ionicons name="diamond" size={34} color={COLORS.onPremium} />
           </LinearGradient>
-        </Animated.View>
+          <Txt variant="h1" center style={styles.heroTitle}>{t('premium.modalTitle')}</Txt>
+          <Txt variant="h2" color={COLORS.premium} center style={styles.heroTrial}>
+            {t('paywall.trialHeadline', { days: trialDuration })}
+          </Txt>
+          <Txt variant="body" color={COLORS.textMid} center>{t('paywall.trialSub')}</Txt>
+        </View>
 
-        {/* Features */}
-        <Animated.View style={[styles.featuresCard, { opacity: cardOp, transform: [{ translateY: cardY }] }]}>
+        <Card variant="raised" style={styles.bloque}>
           {FEATURES.map(({ icon, label }) => (
             <View key={label} style={styles.featureRow}>
-              <View style={styles.featureIconWrap}>
-                <Ionicons name={icon} size={18} color={COLORS.primary} />
+              <View style={styles.featureIcon}>
+                <Ionicons name={icon} size={18} color={COLORS.premium} />
               </View>
-              <Text style={styles.featureText}>{t(`premium.${label}`)}</Text>
-              <Ionicons name="checkmark-circle" size={18} color={COLORS.secondary} />
+              <Txt variant="body" style={{ flex: 1 }}>{t(`premium.${label}`)}</Txt>
+              <Ionicons name="checkmark-circle" size={18} color={COLORS.success} />
             </View>
           ))}
-        </Animated.View>
+        </Card>
 
-        {/* Pricing */}
-        <Animated.View style={[styles.pricingCard, { opacity: cardOp }]}>
-          <View style={styles.trialBadgeRow}>
-            <View style={styles.trialBadge}>
-              <Ionicons name="timer-outline" size={14} color={COLORS.warning} />
-              <Text style={styles.trialBadgeText}>{t('paywall.trialBadge', { days: trialDuration })}</Text>
-            </View>
-          </View>
-          <Text style={styles.priceLine}>
-            {t('paywall.thenPrice', { price: priceString })}
-          </Text>
-          <Text style={styles.priceHint}>{t('premium.priceHint')}</Text>
-        </Animated.View>
+        <Card variant="locked" style={styles.bloque} contentStyle={{ alignItems: 'center' }}>
+          <Badge
+            variant="streak"
+            icon="timer-outline"
+            label={t('paywall.trialBadge', { days: trialDuration })}
+            style={{ marginBottom: SPACING.s }}
+          />
+          <Txt style={styles.precio} center>{t('paywall.thenPrice', { price: priceString })}</Txt>
+          <Txt variant="caption" color={COLORS.textLow} center>{t('premium.priceHint')}</Txt>
+        </Card>
 
-        {/* CTA */}
-        <Animated.View style={{ opacity: cardOp }}>
-          <TouchableOpacity
-            style={styles.ctaBtn}
-            onPress={handlePurchase}
-            disabled={purchasing || loading}
-            activeOpacity={0.88}
-          >
-            <LinearGradient
-              colors={GRADIENT.primary}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.ctaGradient}
-            >
-              {purchasing
-                ? <ActivityIndicator color={COLORS.onPrimary} />
-                : <>
-                    <Ionicons name="diamond-outline" size={20} color={COLORS.onPrimary} />
-                    <Text style={styles.ctaText}>{t('paywall.startTrial')}</Text>
-                  </>
-              }
-            </LinearGradient>
-          </TouchableOpacity>
+        <Button
+          label={t('paywall.startTrial')}
+          variant="premiumLocked"
+          icon="diamond-outline"
+          size="lg"
+          fullWidth
+          loading={purchasing}
+          disabled={loading}
+          onPress={handlePurchase}
+          style={styles.bloque}
+        />
 
-          {/* Legal */}
-          <Text style={styles.legal}>{t('paywall.legal', { price: priceString })}</Text>
+        <Txt variant="caption" color={COLORS.textLow} center style={styles.legal}>
+          {t('paywall.legal', { price: priceString })}
+        </Txt>
 
-          {/* Restore */}
-          <TouchableOpacity onPress={handleRestore} disabled={restoring} style={styles.restoreBtn}>
-            {restoring
-              ? <ActivityIndicator size="small" color={COLORS.onSurfaceVariant} />
-              : <Text style={styles.restoreText}>{t('paywall.restore')}</Text>
-            }
-          </TouchableOpacity>
-        </Animated.View>
+        <Button
+          label={t('paywall.restore')}
+          variant="ghost"
+          size="sm"
+          loading={restoring}
+          onPress={handleRestore}
+          style={{ alignSelf: 'center' }}
+        />
 
-        {/* ── DEV panel — invisible in production builds ── */}
-        {__DEV__ && (
-          <View style={styles.devPanel}>
-            <Text style={styles.devLabel}>⚙ DEV — Simulación</Text>
+        {__DEV__ ? (
+          <Card style={styles.bloque}>
+            <Txt variant="overline" color={COLORS.textLow} style={{ marginBottom: SPACING.s }}>
+              ⚙ DEV — Simulación
+            </Txt>
             <View style={styles.devRow}>
-              <TouchableOpacity style={styles.devBtn} onPress={simulatePurchase}>
-                <Ionicons name="checkmark-circle" size={14} color="#4ade80" />
-                <Text style={styles.devBtnText}>Compra exitosa</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.devBtn, styles.devBtnRed]} onPress={simulateFree}>
-                <Ionicons name="close-circle" size={14} color="#f87171" />
-                <Text style={[styles.devBtnText, { color: '#f87171' }]}>Volver a free</Text>
-              </TouchableOpacity>
+              <Button
+                label="Compra exitosa"
+                variant="secondary"
+                size="sm"
+                icon="checkmark-circle"
+                onPress={simulatePurchase}
+                style={{ flex: 1 }}
+              />
+              <Button
+                label="Volver a free"
+                variant="destructive"
+                size="sm"
+                icon="close-circle"
+                onPress={simulateFree}
+                style={{ flex: 1 }}
+              />
             </View>
-          </View>
-        )}
+          </Card>
+        ) : null}
 
         <View style={{ height: 40 }} />
       </ScrollView>
@@ -241,179 +210,39 @@ export default function PaywallScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: COLORS.background },
-  closeBtn: {
-    position: 'absolute',
-    top: 56,
-    right: SPACING.lg,
-    zIndex: 10,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: COLORS.surfaceContainerHigh,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  scroll: {
-    paddingHorizontal: SPACING.lg,
-    paddingTop: 56,
-    paddingBottom: SPACING.xxl,
+  root: { flex: 1, backgroundColor: COLORS.bg },
+  scroll: { paddingHorizontal: SPACING.m, paddingTop: 76, paddingBottom: SPACING.l },
+  pressed: { opacity: 0.7 },
+  bloque: { marginTop: SPACING.m },
+
+  close: {
+    position: 'absolute', top: 52, right: SPACING.m, zIndex: 10,
+    width: 40, height: 40, borderRadius: RADIUS.full,
+    backgroundColor: COLORS.surfaceRaised,
+    borderWidth: 1.5, borderColor: COLORS.border,
+    alignItems: 'center', justifyContent: 'center',
   },
 
-  // Hero
-  hero: { marginBottom: SPACING.lg },
-  heroBg: {
-    alignItems: 'center',
-    paddingVertical: SPACING.xl,
-    paddingHorizontal: SPACING.lg,
-    borderRadius: RADIUS.xxl,
+  hero: { alignItems: 'center' },
+  diamante: {
+    width: 72, height: 72, borderRadius: RADIUS.xl,
+    alignItems: 'center', justifyContent: 'center',
+    marginBottom: SPACING.m,
+    ...SHADOWS.gold,
   },
-  diamondBg: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: SPACING.lg,
-    ...SHADOWS.nebula,
-  },
-  heroTitle: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: COLORS.onSurface,
-    letterSpacing: -0.4,
-    marginBottom: 6,
-  },
-  heroTrial: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: COLORS.primary,
-    marginBottom: 6,
-  },
-  heroSub: {
-    fontSize: 14,
-    color: COLORS.onSurfaceVariant,
-    textAlign: 'center',
-    lineHeight: 20,
+  heroTitle: { marginBottom: 6 },
+  heroTrial: { marginBottom: 6 },
+
+  featureRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 9 },
+  featureIcon: {
+    width: 34, height: 34, borderRadius: RADIUS.s,
+    backgroundColor: COLORS.premiumSoft,
+    borderWidth: 1.5, borderColor: COLORS.premiumBorder,
+    alignItems: 'center', justifyContent: 'center',
+    marginRight: SPACING.s,
   },
 
-  // Features card
-  featuresCard: {
-    backgroundColor: COLORS.surfaceContainerLow,
-    borderRadius: RADIUS.xxl,
-    padding: SPACING.lg,
-    marginBottom: SPACING.md,
-    gap: 14,
-    borderWidth: 1,
-    borderColor: COLORS.outlineVariant + '30',
-  },
-  featureRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.md },
-  featureIconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: COLORS.primary + '18',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  featureText: { flex: 1, fontSize: 14, color: COLORS.onSurface, fontWeight: '500' },
-
-  // Pricing card
-  pricingCard: {
-    backgroundColor: COLORS.surfaceContainer,
-    borderRadius: RADIUS.xxl,
-    padding: SPACING.lg,
-    marginBottom: SPACING.lg,
-    borderWidth: 1,
-    borderColor: COLORS.outlineVariant + '25',
-    alignItems: 'center',
-  },
-  trialBadgeRow: { marginBottom: SPACING.sm },
-  trialBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    backgroundColor: COLORS.warning + '18',
-    borderRadius: RADIUS.full,
-    borderWidth: 1,
-    borderColor: COLORS.warning + '40',
-  },
-  trialBadgeText: { fontSize: 13, fontWeight: '700', color: COLORS.warning },
-  priceLine: { fontSize: 16, color: COLORS.onSurface, fontWeight: '600', marginBottom: 4 },
-  priceHint: { fontSize: 12, color: COLORS.onSurfaceVariant },
-
-  // CTA
-  ctaBtn: {
-    borderRadius: RADIUS.full,
-    overflow: 'hidden',
-    marginBottom: SPACING.md,
-    ...SHADOWS.nebula,
-  },
-  ctaGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: SPACING.sm,
-    paddingVertical: 18,
-    paddingHorizontal: SPACING.xl,
-  },
-  ctaText: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: COLORS.onPrimary,
-    letterSpacing: 0.2,
-  },
-  legal: {
-    fontSize: 11,
-    color: COLORS.onSurfaceVariant,
-    textAlign: 'center',
-    lineHeight: 16,
-    marginBottom: SPACING.md,
-    paddingHorizontal: SPACING.sm,
-  },
-  restoreBtn: { alignItems: 'center', paddingVertical: SPACING.sm },
-  restoreText: { fontSize: 13, color: COLORS.onSurfaceVariant, textDecorationLine: 'underline' },
-
-  // DEV panel
-  devPanel: {
-    marginTop: SPACING.xl,
-    padding: SPACING.md,
-    borderRadius: RADIUS.xl,
-    backgroundColor: '#1a1a2e',
-    borderWidth: 1,
-    borderColor: '#7c4dff44',
-    borderStyle: 'dashed',
-  },
-  devLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#7c4dff',
-    letterSpacing: 1.5,
-    marginBottom: SPACING.sm,
-    textAlign: 'center',
-  },
-  devRow: { flexDirection: 'row', gap: SPACING.sm },
-  devBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 10,
-    borderRadius: RADIUS.lg,
-    backgroundColor: '#4ade8018',
-    borderWidth: 1,
-    borderColor: '#4ade8040',
-  },
-  devBtnRed: {
-    backgroundColor: '#f8717118',
-    borderColor: '#f8717140',
-  },
-  devBtnText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#4ade80',
-  },
+  precio: { fontFamily: FONTS.amountBold, fontSize: 20, lineHeight: 25, color: COLORS.textHigh, marginBottom: 3 },
+  legal: { marginTop: SPACING.m, marginBottom: SPACING.s, fontSize: 11, lineHeight: 16 },
+  devRow: { flexDirection: 'row', gap: SPACING.s },
 });

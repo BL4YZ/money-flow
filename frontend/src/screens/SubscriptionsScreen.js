@@ -1,54 +1,118 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
-  View, Text, ScrollView, StyleSheet, TouchableOpacity,
-  RefreshControl, ActivityIndicator, Alert, Switch,
-  Modal, TextInput, KeyboardAvoidingView, Platform, Animated, PanResponder,
+  View, ScrollView, StyleSheet, Pressable, RefreshControl,
+  ActivityIndicator, Alert,
 } from 'react-native';
-import { useEntrance, useStaggerEntrance, useCountUp } from '../utils/animations';
-import { daysUntilDue } from '../utils/notifications';
-import { LinearGradient } from 'expo-linear-gradient';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Toast from 'react-native-toast-message';
 import api from '../api/client';
+import { daysUntilDue } from '../utils/notifications';
 import { usePlan } from '../context/PlanContext';
-import { COLORS, SPACING, RADIUS, SHADOWS, GRADIENT } from '../theme';
 import { useLanguage } from '../context/LanguageContext';
 import RefreshBadge from '../components/RefreshBadge';
+import {
+  Txt, Card, Input, Chip, Segmented, Badge, Button, BottomSheet,
+  EmptyState, ScreenHeader, Toggle, formatUYU,
+} from '../components/ui';
+import { COLORS, SPACING, RADIUS, FONTS, serviceMeta } from '../theme';
 
-// Map service names to icons and accent colors
-const SERVICE_META = {
-  'Netflix':               { icon: 'film-outline',       color: '#E50914' },
-  'Spotify':               { icon: 'musical-notes-outline', color: '#1DB954' },
-  'Disney+':               { icon: 'tv-outline',          color: '#006E99' },
-  'HBO Max':               { icon: 'videocam-outline',    color: '#5822A7' },
-  'Amazon Prime':          { icon: 'cart-outline',        color: '#FF9900' },
-  'YouTube Premium':       { icon: 'logo-youtube',        color: '#FF0000' },
-  'Apple TV+':             { icon: 'logo-apple',          color: '#A2AAAD' },
-  'PlayStation Plus':      { icon: 'game-controller-outline', color: '#003087' },
-  'Xbox Game Pass':        { icon: 'game-controller-outline', color: '#107C10' },
-  'iCloud':                { icon: 'cloud-outline',       color: '#3478F6' },
-  'Google One':            { icon: 'cloud-outline',       color: '#4285F4' },
-  'Microsoft 365':         { icon: 'grid-outline',        color: '#D83B01' },
-  'Adobe Creative Cloud':  { icon: 'color-palette-outline', color: '#FF0000' },
-  'Gimnasio':              { icon: 'barbell-outline',     color: '#FF6D00' },
-};
-
-function getServiceMeta(name) {
-  return SERVICE_META[name] || { icon: 'phone-portrait-outline', color: COLORS.primary };
-}
-
-const EMPTY_FORM      = { name: '', amount: '', frequency: 'monthly' };
+const EMPTY_FORM = { name: '', amount: '', frequency: 'monthly' };
 const EMPTY_BILL_FORM = { name: '', amount: '', due_day: '', reminder_days: '3', category: 'Servicios' };
 
 const BILL_CATEGORIES = ['Servicios', 'Vivienda', 'Salud', 'Educación', 'Transporte', 'Otros'];
-const BILL_CAT_ICONS  = {
+const BILL_CAT_ICONS = {
   Servicios: 'flash-outline', Vivienda: 'home-outline', Salud: 'medkit-outline',
   Educación: 'school-outline', Transporte: 'car-outline', Otros: 'receipt-outline',
 };
 
+/** Recordatorio de factura. El color dice cuán cerca está el vencimiento. */
+function BillCard({ bill, onDelete }) {
+  const { t } = useLanguage();
+  const days = daysUntilDue(bill.due_day);
+  const icon = BILL_CAT_ICONS[bill.category] || 'receipt-outline';
+  const tono = days <= 3 ? COLORS.error : days <= 7 ? COLORS.warning : COLORS.textMid;
+
+  return (
+    <Card style={styles.fila}>
+      <View style={styles.filaRow}>
+        <View style={[styles.iconBox, { borderColor: tono }]}>
+          <Ionicons name={icon} size={18} color={tono} />
+        </View>
+        <View style={styles.filaInfo}>
+          <Txt variant="caption" color={COLORS.textHigh} style={styles.filaNombre} numberOfLines={1}>
+            {bill.name}
+          </Txt>
+          <Txt variant="caption" color={tono} style={styles.filaMeta}>
+            {days === 0 ? t('subs.billDueToday')
+              : days === 1 ? t('subs.billDueTomorrow')
+              : t('subs.billDueInDays', { n: days })}
+            {` · día ${bill.due_day}`}
+          </Txt>
+          {bill.amount ? (
+            <Txt style={styles.filaMonto}>{formatUYU(parseFloat(bill.amount))}</Txt>
+          ) : null}
+        </View>
+        <View style={styles.filaDer}>
+          <Badge variant="statusMuted" icon="notifications-outline" label={`−${bill.reminder_days}d`} />
+          <Pressable onPress={onDelete} hitSlop={8} style={{ marginTop: 6 }}>
+            <Ionicons name="trash-outline" size={14} color={COLORS.textLow} />
+          </Pressable>
+        </View>
+      </View>
+    </Card>
+  );
+}
+
+/** Suscripción. El toggle pausa sin borrar: pausar y dar de baja no es lo mismo. */
+function SubCard({ sub, onToggle, onDelete }) {
+  const { t } = useLanguage();
+  const { icon, color } = serviceMeta(sub.name);
+  const amount = parseFloat(sub.amount || 0);
+
+  return (
+    <Card style={[styles.fila, !sub.is_active && styles.filaInactiva]}>
+      <View style={styles.filaRow}>
+        <View style={[styles.iconBox, { borderColor: color }]}>
+          <Ionicons name={icon} size={20} color={color} />
+        </View>
+
+        <View style={styles.filaInfo}>
+          <Txt variant="h2" style={styles.subNombre} numberOfLines={1}>{sub.name}</Txt>
+          <View style={styles.subMeta}>
+            <Txt style={styles.subMonto}>{formatUYU(amount)}</Txt>
+            <Txt variant="caption" color={COLORS.textLow}>
+              {' · '}{sub.frequency === 'monthly' ? t('subs.monthly') : t('subs.yearly')}
+            </Txt>
+            {sub.auto_detected ? (
+              <Badge variant="statusMuted" label="AUTO" style={{ marginLeft: SPACING.s }} />
+            ) : null}
+          </View>
+
+          {sub.price_alert ? (
+            <View style={styles.priceAlert}>
+              <Ionicons name="trending-up" size={12} color={COLORS.warning} />
+              <Txt variant="caption" color={COLORS.warning} style={{ marginLeft: 5, flex: 1 }}>
+                Subió {formatUYU(sub.price_alert.diff)} — ahora {formatUYU(sub.price_alert.new)}
+              </Txt>
+            </View>
+          ) : null}
+        </View>
+
+        <View style={styles.subControles}>
+          <Toggle value={sub.is_active} onValueChange={onToggle} />
+          <Pressable onPress={onDelete} hitSlop={8} style={{ marginTop: SPACING.s }}>
+            <Ionicons name="trash-outline" size={15} color={COLORS.textLow} />
+          </Pressable>
+        </View>
+      </View>
+    </Card>
+  );
+}
+
 export default function SubscriptionsScreen() {
   const { t } = useLanguage();
   const { canAddBill, showUpgrade } = usePlan();
+
   const [subscriptions, setSubscriptions] = useState([]);
   const [totalMonthly, setTotalMonthly] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -57,54 +121,14 @@ export default function SubscriptionsScreen() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
 
-  // Bills state
   const [bills, setBills] = useState([]);
   const [billModalVisible, setBillModalVisible] = useState(false);
   const [billForm, setBillForm] = useState(EMPTY_BILL_FORM);
   const [savingBill, setSavingBill] = useState(false);
 
-  // Próximos cobros + detección automática
   const [upcoming, setUpcoming] = useState([]);
   const [detected, setDetected] = useState([]);
   const [dismissedDetect, setDismissedDetect] = useState([]);
-
-  const panY = useRef(new Animated.Value(0)).current;
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => false,
-      onMoveShouldSetPanResponder: (_, g) => g.dy > 5 && g.dy > Math.abs(g.dx),
-      onPanResponderMove: (_, g) => {
-        if (g.dy > 0) panY.setValue(g.dy);
-      },
-      onPanResponderRelease: (_, g) => {
-        if (g.dy > 70 || g.vy > 0.6) {
-          panY.setValue(0);
-          setModalVisible(false);
-          setForm(EMPTY_FORM);
-        } else {
-          Animated.spring(panY, {
-            toValue: 0, damping: 20, stiffness: 300, useNativeDriver: true,
-          }).start();
-        }
-      },
-    })
-  ).current;
-
-  const panYBill = useRef(new Animated.Value(0)).current;
-  const panResponderBill = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => false,
-      onMoveShouldSetPanResponder: (_, g) => g.dy > 5 && g.dy > Math.abs(g.dx),
-      onPanResponderMove: (_, g) => { if (g.dy > 0) panYBill.setValue(g.dy); },
-      onPanResponderRelease: (_, g) => {
-        if (g.dy > 70 || g.vy > 0.6) {
-          panYBill.setValue(0); setBillModalVisible(false); setBillForm(EMPTY_BILL_FORM);
-        } else {
-          Animated.spring(panYBill, { toValue: 0, damping: 20, stiffness: 300, useNativeDriver: true }).start();
-        }
-      },
-    })
-  ).current;
 
   const fetchSubs = useCallback(async () => {
     try {
@@ -141,16 +165,12 @@ export default function SubscriptionsScreen() {
   }, []);
 
   useEffect(() => {
-    fetchSubs();
-    fetchBills();
-    fetchUpcoming();
-    fetchDetected();
+    fetchSubs(); fetchBills(); fetchUpcoming(); fetchDetected();
   }, [fetchSubs, fetchBills, fetchUpcoming, fetchDetected]);
 
-  // Agregar una suscripción detectada automáticamente
   const addDetected = async (candidate) => {
     try {
-      // Inferir el día de cobro de la última fecha detectada
+      // El día de cobro se infiere de la última fecha detectada.
       const billing_day = candidate.lastCharge
         ? new Date(candidate.lastCharge + 'T00:00:00').getDate()
         : undefined;
@@ -160,10 +180,10 @@ export default function SubscriptionsScreen() {
         frequency: candidate.frequency,
         billing_day,
       });
-      setSubscriptions(prev => [data.subscription, ...prev]);
-      setTotalMonthly(prev => prev + candidate.amount);
-      setDetected(prev => prev.filter(c => c.description !== candidate.description));
-      fetchUpcoming(); // refrescar timeline con el nuevo día de cobro
+      setSubscriptions((prev) => [data.subscription, ...prev]);
+      setTotalMonthly((prev) => prev + candidate.amount);
+      setDetected((prev) => prev.filter((c) => c.description !== candidate.description));
+      fetchUpcoming();
       Toast.show({ type: 'success', text1: t('subs.successSubAdded') });
     } catch (_) {
       Toast.show({ type: 'error', text1: t('subs.errorSave') });
@@ -174,21 +194,20 @@ export default function SubscriptionsScreen() {
     if (!billForm.name.trim() || !billForm.due_day) {
       return Toast.show({ type: 'error', text1: t('subs.errorFields') });
     }
-    const due = parseInt(billForm.due_day);
+    const due = parseInt(billForm.due_day, 10);
     if (isNaN(due) || due < 1 || due > 31) {
       return Toast.show({ type: 'error', text1: t('subs.errorDay') });
     }
     setSavingBill(true);
     try {
-      const payload = {
+      const { data } = await api.post('/bills', {
         name: billForm.name.trim(),
         due_day: due,
-        reminder_days: parseInt(billForm.reminder_days) || 3,
+        reminder_days: parseInt(billForm.reminder_days, 10) || 3,
         category: billForm.category,
         ...(billForm.amount ? { amount: parseFloat(billForm.amount) } : {}),
-      };
-      const { data } = await api.post('/bills', payload);
-      setBills(prev => [...prev, data.bill].sort((a, b) => a.due_day - b.due_day));
+      });
+      setBills((prev) => [...prev, data.bill].sort((a, b) => a.due_day - b.due_day));
       setBillModalVisible(false);
       setBillForm(EMPTY_BILL_FORM);
       Toast.show({ type: 'success', text1: t('subs.successBillCreated') });
@@ -206,7 +225,7 @@ export default function SubscriptionsScreen() {
         text: t('common.delete'), style: 'destructive',
         onPress: async () => {
           await api.delete(`/bills/${id}`);
-          setBills(prev => prev.filter(b => b.id !== id));
+          setBills((prev) => prev.filter((b) => b.id !== id));
           Toast.show({ type: 'success', text1: t('subs.successBillDeleted') });
         },
       },
@@ -216,9 +235,7 @@ export default function SubscriptionsScreen() {
   const toggleActive = async (id, current) => {
     try {
       await api.patch(`/subscriptions/${id}`, { is_active: !current });
-      setSubscriptions(prev =>
-        prev.map(s => s.id === id ? { ...s, is_active: !current } : s)
-      );
+      setSubscriptions((prev) => prev.map((s) => (s.id === id ? { ...s, is_active: !current } : s)));
     } catch (_) {
       Toast.show({ type: 'error', text1: t('subs.errorUpdate') });
     }
@@ -231,7 +248,7 @@ export default function SubscriptionsScreen() {
         text: t('common.delete'), style: 'destructive',
         onPress: async () => {
           await api.delete(`/subscriptions/${id}`);
-          setSubscriptions(prev => prev.filter(s => s.id !== id));
+          setSubscriptions((prev) => prev.filter((s) => s.id !== id));
           Toast.show({ type: 'success', text1: t('subs.successSubDeleted') });
         },
       },
@@ -249,8 +266,8 @@ export default function SubscriptionsScreen() {
         amount: parseFloat(form.amount),
         frequency: form.frequency,
       });
-      setSubscriptions(prev => [data.subscription, ...prev]);
-      setTotalMonthly(prev => prev + parseFloat(form.amount));
+      setSubscriptions((prev) => [data.subscription, ...prev]);
+      setTotalMonthly((prev) => prev + parseFloat(form.amount));
       setModalVisible(false);
       setForm(EMPTY_FORM);
       Toast.show({ type: 'success', text1: t('subs.successSubAdded') });
@@ -261,16 +278,9 @@ export default function SubscriptionsScreen() {
     }
   };
 
-  const heroAnim    = useEntrance({ delay: 0,   fromY: 24 });
-  const cardAnim    = useEntrance({ delay: 100, fromY: 28 });
-  const listAnim    = useEntrance({ delay: 200, fromY: 20 });
-
-  const activeSubs = subscriptions.filter(s => s.is_active);
-  const inactiveSubs = subscriptions.filter(s => !s.is_active);
-  const visibleDetected = detected.filter(c => !dismissedDetect.includes(c.description));
-  const totalYearly = totalMonthly * 12;
-  const animatedMonthly = useCountUp(totalMonthly, { duration: 1100, delay: 200 });
-  const animatedYearly  = useCountUp(totalYearly,  { duration: 1100, delay: 300 });
+  const activas = subscriptions.filter((s) => s.is_active);
+  const pausadas = subscriptions.filter((s) => !s.is_active);
+  const detectadas = detected.filter((c) => !dismissedDetect.includes(c.description));
 
   if (loading) {
     return (
@@ -283,18 +293,6 @@ export default function SubscriptionsScreen() {
   return (
     <View style={styles.root}>
       <RefreshBadge refreshing={refreshing} />
-      {/* Header */}
-      <View style={styles.topBar}>
-        <View style={styles.topBarLeft}>
-          <View style={styles.avatar}>
-            <Ionicons name="person" size={18} color={COLORS.primary} />
-          </View>
-          <Text style={styles.topBarTitle}>MoneyFlow</Text>
-        </View>
-        <TouchableOpacity style={styles.addBtn} onPress={() => setModalVisible(true)}>
-          <Ionicons name="add" size={20} color={COLORS.onPrimary} />
-        </TouchableOpacity>
-      </View>
 
       <ScrollView
         contentContainerStyle={styles.content}
@@ -308,835 +306,373 @@ export default function SubscriptionsScreen() {
           />
         }
       >
-        {/* Hero */}
-        <Animated.View style={[styles.hero, heroAnim.style]}>
-          <Text style={styles.heroTitle}>{t('subs.heroTitle')}</Text>
-          <Text style={styles.heroSubtitle}>{t('subs.heroSubtitle')}</Text>
-        </Animated.View>
+        <ScreenHeader
+          title={t('subs.heroTitle')}
+          subtitle={t('subs.heroSubtitle')}
+          actionIcon="add"
+          onActionPress={() => setModalVisible(true)}
+        />
 
-        {/* Hero metric card */}
-        <Animated.View style={[styles.heroCard, cardAnim.style]}>
-          <View style={styles.heroCardMain}>
-            <Text style={styles.heroCardLabel}>{t('subs.monthlyCommitment')}</Text>
-            <Text style={styles.heroCardAmount}>
-              ${animatedMonthly.toLocaleString('es-UY', { maximumFractionDigits: 0 })}
-            </Text>
-            <Text style={styles.heroCardSub}>
-              ${animatedYearly.toLocaleString('es-UY', { maximumFractionDigits: 0 })} {t('subs.perYear')}
-            </Text>
-          </View>
-          {/* Bento mini stats */}
-          <View style={styles.bentoGrid}>
+        <Card variant="raised" label={t('subs.monthlyCommitment')} style={styles.bloque}>
+          <Txt style={styles.total}>{formatUYU(totalMonthly)}</Txt>
+          <Txt variant="caption" color={COLORS.textMid}>
+            {formatUYU(totalMonthly * 12)} {t('subs.perYear')}
+          </Txt>
+          <View style={styles.bento}>
             <View style={styles.bentoItem}>
-              <Text style={styles.bentoValue}>{activeSubs.length}</Text>
-              <Text style={styles.bentoLabel}>{t('subs.active')}</Text>
+              <Txt style={styles.bentoValor}>{activas.length}</Txt>
+              <Txt variant="caption" color={COLORS.textLow}>{t('subs.active')}</Txt>
             </View>
-            <View style={[styles.bentoItem, styles.bentoItemRight]}>
-              <Text style={[styles.bentoValue, { color: COLORS.onSurfaceVariant }]}>{inactiveSubs.length}</Text>
-              <Text style={styles.bentoLabel}>{t('subs.paused')}</Text>
+            <View style={styles.bentoItem}>
+              <Txt style={[styles.bentoValor, { color: COLORS.textMid }]}>{pausadas.length}</Txt>
+              <Txt variant="caption" color={COLORS.textLow}>{t('subs.paused')}</Txt>
             </View>
           </View>
-        </Animated.View>
+        </Card>
 
-        {/* Empty state */}
-        {subscriptions.length === 0 && (
-          <View style={styles.emptyCard}>
-            <View style={styles.emptyIconBg}>
-              <Ionicons name="repeat-outline" size={32} color={COLORS.primary} />
+        {/* Detectadas del resumen bancario — la función que justifica subir el PDF. */}
+        {detectadas.length > 0 ? (
+          <Card variant="raised" style={styles.bloque}>
+            <View style={styles.detectHead}>
+              <Ionicons name="sparkles" size={16} color={COLORS.accent} />
+              <Txt variant="overline" color={COLORS.accent} style={{ marginLeft: 7 }}>
+                Detectamos cobros recurrentes
+              </Txt>
             </View>
-            <Text style={styles.emptyTitle}>{t('subs.noSubsYet')}</Text>
-            <Text style={styles.emptyHint}>{t('subs.emptyHint')}</Text>
-          </View>
-        )}
-
-        {/* ── Suscripciones detectadas automáticamente ────────── */}
-        {visibleDetected.length > 0 && (
-          <View style={styles.detectCard}>
-            <View style={styles.detectHeader}>
-              <Ionicons name="sparkles" size={16} color={COLORS.secondary} />
-              <Text style={styles.detectTitle}>Detectamos cobros recurrentes</Text>
-            </View>
-            <Text style={styles.detectSub}>
+            <Txt variant="caption" color={COLORS.textMid} style={{ marginBottom: SPACING.s }}>
               Encontramos estos pagos que se repiten en tus movimientos. ¿Agregarlos?
-            </Text>
-            {visibleDetected.map((c) => (
+            </Txt>
+            {detectadas.map((c) => (
               <View key={c.description} style={styles.detectRow}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.detectName} numberOfLines={1}>{c.suggestedName}</Text>
-                  <Text style={styles.detectMeta}>
-                    ${c.amount.toLocaleString('es-UY')}/mes · {c.occurrences} cobros
-                  </Text>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Txt variant="caption" color={COLORS.textHigh} style={styles.filaNombre} numberOfLines={1}>
+                    {c.suggestedName}
+                  </Txt>
+                  <Txt variant="caption" color={COLORS.textLow}>
+                    {formatUYU(c.amount)}/mes · {c.occurrences} cobros
+                  </Txt>
                 </View>
-                <TouchableOpacity style={styles.detectAddBtn} onPress={() => addDetected(c)}>
-                  <Ionicons name="add" size={16} color={COLORS.onPrimary} />
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.detectDismiss}
-                  onPress={() => setDismissedDetect(prev => [...prev, c.description])}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                <Button label="Agregar" size="sm" onPress={() => addDetected(c)} />
+                <Pressable
+                  onPress={() => setDismissedDetect((prev) => [...prev, c.description])}
+                  hitSlop={8}
+                  style={{ marginLeft: SPACING.s }}
                 >
-                  <Ionicons name="close" size={16} color={COLORS.onSurfaceVariant} />
-                </TouchableOpacity>
+                  <Ionicons name="close" size={16} color={COLORS.textLow} />
+                </Pressable>
               </View>
             ))}
-          </View>
-        )}
+          </Card>
+        ) : null}
 
-        {/* ── Próximos cobros (30 días) ───────────────────────── */}
-        {upcoming.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Próximos cobros</Text>
-            <View style={styles.upcomingCard}>
-              {upcoming.map((u, i) => (
-                <View key={u.type + u.id} style={[styles.upcomingRow, i > 0 && styles.upcomingRowBorder]}>
-                  <View style={[styles.upcomingDateBox, u.daysUntil <= 3 && styles.upcomingDateBoxSoon]}>
-                    <Text style={[styles.upcomingDay, u.daysUntil <= 3 && { color: COLORS.warning }]}>
-                      {new Date(u.date + 'T00:00:00').getDate()}
-                    </Text>
-                    <Text style={styles.upcomingMonth}>
-                      {new Date(u.date + 'T00:00:00').toLocaleDateString('es-UY', { month: 'short' })}
-                    </Text>
+        {/* Próximos cobros (30 días) */}
+        {upcoming.length > 0 ? (
+          <>
+            <Txt variant="overline" color={COLORS.textLow} style={styles.seccion}>Próximos cobros</Txt>
+            <Card>
+              {upcoming.map((u, i) => {
+                const pronto = u.daysUntil <= 3;
+                const d = new Date(u.date + 'T00:00:00');
+                return (
+                  <View key={u.type + u.id} style={[styles.upRow, i > 0 && styles.upRowBorde]}>
+                    <View style={[styles.upFecha, pronto && styles.upFechaPronto]}>
+                      <Txt style={[styles.upDia, pronto && { color: COLORS.warning }]}>{d.getDate()}</Txt>
+                      <Txt variant="caption" color={COLORS.textLow} style={styles.upMes}>
+                        {d.toLocaleDateString('es-UY', { month: 'short' })}
+                      </Txt>
+                    </View>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Txt variant="caption" color={COLORS.textHigh} style={styles.filaNombre} numberOfLines={1}>
+                        {u.name}
+                      </Txt>
+                      <Txt variant="caption" color={COLORS.textLow}>
+                        {u.daysUntil === 0 ? 'Hoy' : u.daysUntil === 1 ? 'Mañana' : `En ${u.daysUntil} días`}
+                        {u.type === 'bill' ? ' · Factura' : ''}
+                      </Txt>
+                    </View>
+                    {u.amount > 0 ? <Txt style={styles.upMonto}>{formatUYU(u.amount)}</Txt> : null}
                   </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.upcomingName} numberOfLines={1}>{u.name}</Text>
-                    <Text style={styles.upcomingWhen}>
-                      {u.daysUntil === 0 ? 'Hoy' : u.daysUntil === 1 ? 'Mañana' : `En ${u.daysUntil} días`}
-                      {u.type === 'bill' ? ' · Factura' : ''}
-                    </Text>
-                  </View>
-                  {u.amount > 0 && (
-                    <Text style={styles.upcomingAmount}>
-                      ${u.amount.toLocaleString('es-UY', { maximumFractionDigits: 0 })}
-                    </Text>
-                  )}
-                </View>
-              ))}
-            </View>
-          </View>
-        )}
+                );
+              })}
+            </Card>
+          </>
+        ) : null}
 
-        {/* ── Bill Reminders ──────────────────────────────────── */}
-        <Animated.View style={listAnim.style}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>{t('subs.billReminders')}</Text>
-            <View style={{ flexDirection: 'row', gap: 8 }}>
-              {__DEV__ && (
-                <TouchableOpacity
-                  style={[styles.sectionAddBtn, { backgroundColor: COLORS.warning + '20' }]}
-                  onPress={async () => {
-                    try {
-                      const { data } = await api.post('/bills/test-notify');
-                      Toast.show({ type: 'success', text1: data.sent !== 1 ? t('subs.testSentPlural', { n: data.sent }) : t('subs.testSent', { n: data.sent }), text2: data.reason || undefined });
-                    } catch (e) {
-                      Toast.show({ type: 'error', text1: t('subs.testFailed'), text2: e.message });
-                    }
-                  }}
-                >
-                  <Ionicons name="notifications-outline" size={14} color={COLORS.warning} />
-                  <Text style={[styles.sectionAddText, { color: COLORS.warning }]}>{t('subs.testNotify')}</Text>
-                </TouchableOpacity>
-              )}
-              <TouchableOpacity
-                style={styles.sectionAddBtn}
-                onPress={() => {
-                  if (!canAddBill) { showUpgrade('bills'); return; }
-                  setBillForm(EMPTY_BILL_FORM); setBillModalVisible(true);
+        {/* Recordatorios de factura */}
+        <View style={styles.seccionHead}>
+          <Txt variant="overline" color={COLORS.textLow}>{t('subs.billReminders')}</Txt>
+          <View style={styles.seccionAcciones}>
+            {__DEV__ ? (
+              <Button
+                label={t('subs.testNotify')}
+                variant="ghost"
+                size="sm"
+                icon="notifications-outline"
+                onPress={async () => {
+                  try {
+                    const { data } = await api.post('/bills/test-notify');
+                    Toast.show({
+                      type: 'success',
+                      text1: data.sent !== 1
+                        ? t('subs.testSentPlural', { n: data.sent })
+                        : t('subs.testSent', { n: data.sent }),
+                      text2: data.reason || undefined,
+                    });
+                  } catch (e) {
+                    Toast.show({ type: 'error', text1: t('subs.testFailed'), text2: e.message });
+                  }
                 }}
-              >
-                <Ionicons name={canAddBill ? 'add' : 'lock-closed'} size={14} color={COLORS.primary} />
-                <Text style={styles.sectionAddText}>{t('subs.addReminder')}</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {bills.length === 0 ? (
-            <TouchableOpacity
-              style={styles.billsEmpty}
+              />
+            ) : null}
+            <Button
+              label={t('subs.addReminder')}
+              variant="ghost"
+              size="sm"
+              icon={canAddBill ? 'add' : 'lock-closed'}
               onPress={() => {
                 if (!canAddBill) { showUpgrade('bills'); return; }
-                setBillForm(EMPTY_BILL_FORM); setBillModalVisible(true);
+                setBillForm(EMPTY_BILL_FORM);
+                setBillModalVisible(true);
               }}
-            >
-              <Ionicons name="notifications-outline" size={20} color={COLORS.onSurfaceVariant + '60'} />
-              <Text style={styles.billsEmptyText}>{t('subs.noReminders')}</Text>
-            </TouchableOpacity>
-          ) : (
-            bills.map((bill, index) => (
-              <BillCard
-                key={bill.id}
-                bill={bill}
-                index={index}
-                onDelete={() => deleteBill(bill.id, bill.name)}
-              />
-            ))
-          )}
-        </Animated.View>
+            />
+          </View>
+        </View>
 
-        {/* Active subscriptions */}
-        {activeSubs.length > 0 && (
-          <Animated.View style={[styles.section, listAnim.style]}>
-            <Text style={styles.sectionTitle}>{t('subs.activeSection')}</Text>
-            {activeSubs.map((sub, index) => (
+        {bills.length === 0 ? (
+          <EmptyState
+            icon="notifications-outline"
+            title={t('subs.noReminders')}
+            actionLabel={t('subs.addReminder')}
+            actionIcon={canAddBill ? 'add' : 'lock-closed'}
+            onAction={() => {
+              if (!canAddBill) { showUpgrade('bills'); return; }
+              setBillForm(EMPTY_BILL_FORM);
+              setBillModalVisible(true);
+            }}
+          />
+        ) : (
+          bills.map((bill) => (
+            <BillCard key={bill.id} bill={bill} onDelete={() => deleteBill(bill.id, bill.name)} />
+          ))
+        )}
+
+        {subscriptions.length === 0 ? (
+          <EmptyState
+            icon="repeat-outline"
+            title={t('subs.noSubsYet')}
+            text={t('subs.emptyHint')}
+            actionLabel={t('subs.addSub')}
+            actionIcon="add"
+            onAction={() => setModalVisible(true)}
+            style={styles.bloque}
+          />
+        ) : null}
+
+        {activas.length > 0 ? (
+          <>
+            <Txt variant="overline" color={COLORS.textLow} style={styles.seccion}>
+              {t('subs.activeSection')}
+            </Txt>
+            {activas.map((sub) => (
               <SubCard
                 key={sub.id}
-                index={index}
                 sub={sub}
                 onToggle={() => toggleActive(sub.id, sub.is_active)}
                 onDelete={() => deleteSub(sub.id, sub.name)}
               />
             ))}
-          </Animated.View>
-        )}
+          </>
+        ) : null}
 
-        {/* Paused subscriptions */}
-        {inactiveSubs.length > 0 && (
-          <Animated.View style={[styles.section, listAnim.style]}>
-            <Text style={styles.sectionTitle}>{t('subs.pausedSection')}</Text>
-            {inactiveSubs.map((sub, index) => (
+        {pausadas.length > 0 ? (
+          <>
+            <Txt variant="overline" color={COLORS.textLow} style={styles.seccion}>
+              {t('subs.pausedSection')}
+            </Txt>
+            {pausadas.map((sub) => (
               <SubCard
                 key={sub.id}
-                index={index}
                 sub={sub}
                 onToggle={() => toggleActive(sub.id, sub.is_active)}
                 onDelete={() => deleteSub(sub.id, sub.name)}
               />
             ))}
-          </Animated.View>
-        )}
+          </>
+        ) : null}
 
-        {/* Optimize card */}
-        {subscriptions.length > 0 && (
-          <LinearGradient
-            colors={['#1c1b3a', '#2d1b6e']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.optimizeCard}
-          >
+        {subscriptions.length > 0 ? (
+          <Card variant="raised" style={styles.bloque}>
             <View style={styles.optimizeRow}>
-              <View style={styles.optimizeText}>
-                <Text style={styles.optimizeTitle}>{t('subs.optimizeTitle')}</Text>
-                <Text style={styles.optimizeSub}>
+              <View style={{ flex: 1 }}>
+                <Txt variant="h2" style={{ marginBottom: 4 }}>{t('subs.optimizeTitle')}</Txt>
+                <Txt variant="caption" color={COLORS.textMid}>
                   {t('subs.optimizeSub')}{' '}
-                  <Text style={{ color: COLORS.secondary, fontWeight: '700' }}>
-                    ${Math.round(totalMonthly * 0.2).toLocaleString()}{t('subs.perMonth')}
-                  </Text>
-                </Text>
+                  <Txt variant="caption" color={COLORS.income}>
+                    {formatUYU(Math.round(totalMonthly * 0.2))}{t('subs.perMonth')}
+                  </Txt>
+                </Txt>
               </View>
-              <View style={styles.optimizeIcon}>
-                <Ionicons name="flash" size={24} color={COLORS.secondary} />
-              </View>
+              <Ionicons name="flash" size={24} color={COLORS.accent} />
             </View>
-          </LinearGradient>
-        )}
+          </Card>
+        ) : null}
 
-        <View style={{ height: 100 }} />
+        {/* Aire para la tab bar flotante. */}
+        <View style={{ height: 110 }} />
       </ScrollView>
 
-      {/* ── Add subscription modal ── */}
-      <Modal
+      {/* Nueva suscripción */}
+      <BottomSheet
         visible={modalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setModalVisible(false)}
+        onClose={() => { setModalVisible(false); setForm(EMPTY_FORM); }}
+        title={t('subs.addSub')}
+        primaryLabel={t('common.save')}
+        onPrimary={createSub}
+        primaryLoading={saving}
       >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.modalOverlay}
-        >
-          <TouchableOpacity
-            style={StyleSheet.absoluteFill}
-            activeOpacity={1}
-            onPress={() => setModalVisible(false)}
-          />
-          <Animated.View style={[styles.modalCard, { transform: [{ translateY: panY }] }]}>
-            <View style={styles.modalHandleArea} {...panResponder.panHandlers}>
-              <View style={styles.modalHandle} />
-            </View>
-            <Text style={styles.modalTitle}>{t('subs.newSub')}</Text>
+        <Input
+          icon="repeat-outline"
+          value={form.name}
+          onChangeText={(v) => setForm((f) => ({ ...f, name: v }))}
+          placeholder={t('subs.namePlaceholder')}
+          style={{ marginBottom: SPACING.s }}
+        />
+        <Input
+          money
+          value={form.amount}
+          onChangeText={(v) => setForm((f) => ({ ...f, amount: v }))}
+          placeholder={t('subs.amountPlaceholder')}
+          keyboardType="numeric"
+          style={{ marginBottom: SPACING.m }}
+        />
+        <Segmented
+          options={[
+            { value: 'monthly', label: t('subs.monthly') },
+            { value: 'yearly', label: t('subs.yearly') },
+          ]}
+          value={form.frequency}
+          onChange={(v) => setForm((f) => ({ ...f, frequency: v }))}
+        />
+      </BottomSheet>
 
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>{t('subs.subName')}</Text>
-              <TextInput
-                style={styles.input}
-                placeholder={t('subs.namePlaceholder')}
-                placeholderTextColor={COLORS.onSurfaceVariant + '60'}
-                value={form.name}
-                onChangeText={v => setForm(f => ({ ...f, name: v }))}
-                autoCapitalize="words"
-              />
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>{t('subs.subAmount')}</Text>
-              <TextInput
-                style={styles.input}
-                placeholder={t('subs.amountPlaceholder')}
-                placeholderTextColor={COLORS.onSurfaceVariant + '60'}
-                value={form.amount}
-                onChangeText={v => setForm(f => ({ ...f, amount: v }))}
-                keyboardType="decimal-pad"
-              />
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>{t('subs.frequency')}</Text>
-              <View style={styles.freqRow}>
-                {['monthly', 'yearly'].map(freq => (
-                  <TouchableOpacity
-                    key={freq}
-                    style={[styles.freqBtn, form.frequency === freq && styles.freqBtnActive]}
-                    onPress={() => setForm(f => ({ ...f, frequency: freq }))}
-                  >
-                    <Text style={[styles.freqBtnText, form.frequency === freq && styles.freqBtnTextActive]}>
-                      {freq === 'monthly' ? t('subs.monthly') : t('subs.yearly')}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-
-            <LinearGradient
-              colors={GRADIENT.primary}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.saveBtn}
-            >
-              <TouchableOpacity
-                style={styles.saveBtnInner}
-                onPress={createSub}
-                disabled={saving}
-              >
-                {saving
-                  ? <ActivityIndicator color="#fff" />
-                  : <Text style={styles.saveBtnText}>{t('subs.saveSub')}</Text>
-                }
-              </TouchableOpacity>
-            </LinearGradient>
-          </Animated.View>
-        </KeyboardAvoidingView>
-      </Modal>
-
-      {/* Bill Reminder Modal */}
-      <Modal
+      {/* Nuevo recordatorio */}
+      <BottomSheet
         visible={billModalVisible}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setBillModalVisible(false)}
+        onClose={() => { setBillModalVisible(false); setBillForm(EMPTY_BILL_FORM); }}
+        title={t('subs.addReminder')}
+        primaryLabel={t('common.save')}
+        onPrimary={saveBill}
+        primaryLoading={savingBill}
       >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.modalOverlay}
-        >
-          <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={() => setBillModalVisible(false)} />
-          <Animated.View style={[styles.modalCard, { transform: [{ translateY: panYBill }] }]}>
-            <View style={styles.modalHandleArea} {...panResponderBill.panHandlers}>
-              <View style={styles.modalHandle} />
-            </View>
-            <Text style={styles.modalTitle}>{t('subs.newBill')}</Text>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>{t('subs.billName')}</Text>
-              <TextInput
-                style={styles.input}
-                placeholder={t('subs.billNamePlaceholder')}
-                placeholderTextColor={COLORS.onSurfaceVariant + '60'}
-                value={billForm.name}
-                onChangeText={v => setBillForm(f => ({ ...f, name: v }))}
-                autoCapitalize="words"
-              />
-            </View>
-
-            <View style={{ flexDirection: 'row', gap: SPACING.md }}>
-              <View style={[styles.inputGroup, { flex: 1 }]}>
-                <Text style={styles.inputLabel}>{t('subs.billDueDay')}</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder={t('subs.dueDayPlaceholder')}
-                  placeholderTextColor={COLORS.onSurfaceVariant + '60'}
-                  value={billForm.due_day}
-                  onChangeText={v => setBillForm(f => ({ ...f, due_day: v }))}
-                  keyboardType="number-pad"
-                  maxLength={2}
-                />
-              </View>
-              <View style={[styles.inputGroup, { flex: 1 }]}>
-                <Text style={styles.inputLabel}>{t('subs.billReminderDays')}</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder={t('subs.reminderPlaceholder')}
-                  placeholderTextColor={COLORS.onSurfaceVariant + '60'}
-                  value={billForm.reminder_days}
-                  onChangeText={v => setBillForm(f => ({ ...f, reminder_days: v }))}
-                  keyboardType="number-pad"
-                  maxLength={2}
-                />
-              </View>
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>{t('subs.billAmountOpt')}</Text>
-              <TextInput
-                style={styles.input}
-                placeholder={t('subs.amountPlaceholder')}
-                placeholderTextColor={COLORS.onSurfaceVariant + '60'}
-                value={billForm.amount}
-                onChangeText={v => setBillForm(f => ({ ...f, amount: v }))}
-                keyboardType="decimal-pad"
-              />
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>{t('common.category')}</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                {BILL_CATEGORIES.map(cat => (
-                  <TouchableOpacity
-                    key={cat}
-                    style={[styles.freqBtn, billForm.category === cat && styles.freqBtnActive, { marginRight: SPACING.sm }]}
-                    onPress={() => setBillForm(f => ({ ...f, category: cat }))}
-                  >
-                    <Text style={[styles.freqBtnText, billForm.category === cat && styles.freqBtnTextActive]}>{cat}</Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            </View>
-
-            <LinearGradient colors={GRADIENT.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.saveBtn}>
-              <TouchableOpacity style={styles.saveBtnInner} onPress={saveBill} disabled={savingBill}>
-                {savingBill
-                  ? <ActivityIndicator color="#fff" />
-                  : <Text style={styles.saveBtnText}>{t('subs.saveReminder')}</Text>
-                }
-              </TouchableOpacity>
-            </LinearGradient>
-          </Animated.View>
-        </KeyboardAvoidingView>
-      </Modal>
+        <Input
+          icon="receipt-outline"
+          value={billForm.name}
+          onChangeText={(v) => setBillForm((f) => ({ ...f, name: v }))}
+          placeholder={t('subs.billNamePlaceholder')}
+          style={{ marginBottom: SPACING.s }}
+        />
+        <Input
+          money
+          value={billForm.amount}
+          onChangeText={(v) => setBillForm((f) => ({ ...f, amount: v }))}
+          placeholder={t('subs.amountPlaceholder')}
+          keyboardType="numeric"
+          style={{ marginBottom: SPACING.s }}
+        />
+        <Input
+          icon="calendar-outline"
+          value={billForm.due_day}
+          onChangeText={(v) => setBillForm((f) => ({ ...f, due_day: v }))}
+          placeholder={t('subs.dayPlaceholder')}
+          keyboardType="numeric"
+          style={{ marginBottom: SPACING.s }}
+        />
+        <Input
+          icon="notifications-outline"
+          value={billForm.reminder_days}
+          onChangeText={(v) => setBillForm((f) => ({ ...f, reminder_days: v }))}
+          placeholder={t('subs.reminderPlaceholder')}
+          keyboardType="numeric"
+          style={{ marginBottom: SPACING.m }}
+        />
+        <Txt variant="overline" color={COLORS.textLow} style={{ marginBottom: SPACING.s }}>
+          {t('common.category')}
+        </Txt>
+        <View style={styles.catChips}>
+          {BILL_CATEGORIES.map((cat) => (
+            <Chip
+              key={cat}
+              label={cat}
+              icon={BILL_CAT_ICONS[cat]}
+              active={billForm.category === cat}
+              onPress={() => setBillForm((f) => ({ ...f, category: cat }))}
+            />
+          ))}
+        </View>
+      </BottomSheet>
     </View>
   );
 }
 
-function BillCard({ bill, onDelete, index = 0 }) {
-  const { t } = useLanguage();
-  const stagger = useStaggerEntrance(index, { baseDelay: 60, fromY: 14 });
-  const days    = daysUntilDue(bill.due_day);
-  const icon    = BILL_CAT_ICONS[bill.category] || 'receipt-outline';
-  const urgent  = days <= 3;
-  const soon    = days <= 7;
-  const dotColor = urgent ? COLORS.danger : soon ? '#f9a825' : COLORS.secondary;
-
-  return (
-    <Animated.View style={[styles.billCard, stagger.style]}>
-      <View style={[styles.billIconBox, { backgroundColor: dotColor + '20' }]}>
-        <Ionicons name={icon} size={18} color={dotColor} />
-      </View>
-      <View style={styles.billInfo}>
-        <Text style={styles.billName}>{bill.name}</Text>
-        <View style={styles.billMeta}>
-          <View style={[styles.billDot, { backgroundColor: dotColor }]} />
-          <Text style={[styles.billDays, { color: dotColor }]}>
-            {days === 0 ? t('subs.billDueToday') : days === 1 ? t('subs.billDueTomorrow') : t('subs.billDueInDays', { n: days })}
-          </Text>
-          <Text style={styles.billDayOf}> · day {bill.due_day}</Text>
-        </View>
-        {bill.amount && (
-          <Text style={styles.billAmount}>
-            ${parseFloat(bill.amount).toLocaleString('es-UY', { maximumFractionDigits: 0 })}
-          </Text>
-        )}
-      </View>
-      <View style={styles.billRight}>
-        <View style={[styles.billReminderBadge, { borderColor: dotColor + '40', backgroundColor: dotColor + '12' }]}>
-          <Ionicons name="notifications-outline" size={10} color={dotColor} />
-          <Text style={[styles.billReminderText, { color: dotColor }]}>-{bill.reminder_days}d</Text>
-        </View>
-        <TouchableOpacity onPress={onDelete} hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }} style={{ marginTop: 6 }}>
-          <Ionicons name="trash-outline" size={14} color={COLORS.onSurfaceVariant + '60'} />
-        </TouchableOpacity>
-      </View>
-    </Animated.View>
-  );
-}
-
-function SubCard({ sub, onToggle, onDelete, index = 0 }) {
-  const { t } = useLanguage();
-  const { icon, color } = getServiceMeta(sub.name);
-  const amount = parseFloat(sub.amount || 0);
-  const stagger = useStaggerEntrance(index, { baseDelay: 65, fromY: 16 });
-
-  return (
-    <Animated.View style={[styles.subCard, !sub.is_active && styles.subCardInactive, stagger.style]}>
-      {/* Icon box */}
-      <View style={[styles.subIconBox, { backgroundColor: color + '20' }]}>
-        <Ionicons name={icon} size={20} color={color} />
-      </View>
-
-      {/* Info */}
-      <View style={styles.subInfo}>
-        <Text style={styles.subName}>{sub.name}</Text>
-        <View style={styles.subMetaRow}>
-          <Text style={styles.subMeta}>
-            ${amount.toLocaleString('es-UY', { maximumFractionDigits: 0 })}
-            {' · '}
-            {sub.frequency === 'monthly' ? t('subs.monthly') : t('subs.yearly')}
-          </Text>
-          {sub.auto_detected && (
-            <View style={styles.autoBadge}>
-              <Text style={styles.autoBadgeText}>AUTO</Text>
-            </View>
-          )}
-        </View>
-        {/* Alerta de subida de precio */}
-        {sub.price_alert && (
-          <View style={styles.priceAlert}>
-            <Ionicons name="trending-up" size={12} color={COLORS.warning} />
-            <Text style={styles.priceAlertText}>
-              Subió ${sub.price_alert.diff.toLocaleString('es-UY')} — ahora ${sub.price_alert.new.toLocaleString('es-UY')}
-            </Text>
-          </View>
-        )}
-      </View>
-
-      {/* Controls */}
-      <View style={styles.subControls}>
-        <Switch
-          value={sub.is_active}
-          onValueChange={onToggle}
-          trackColor={{ false: COLORS.surfaceContainerHigh, true: COLORS.primaryContainer }}
-          thumbColor={sub.is_active ? COLORS.primary : COLORS.onSurfaceVariant}
-        />
-        <TouchableOpacity onPress={onDelete} hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}>
-          <Ionicons name="trash-outline" size={15} color={COLORS.onSurfaceVariant + '70'} />
-        </TouchableOpacity>
-      </View>
-    </Animated.View>
-  );
-}
-
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: COLORS.background },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.background },
-
-  // Top bar
-  topBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: SPACING.lg,
-    paddingTop: 56,
-    paddingBottom: SPACING.md,
-    backgroundColor: COLORS.background + 'CC',
+  root: { flex: 1, backgroundColor: COLORS.bg },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.bg },
+  content: { paddingHorizontal: SPACING.m, paddingTop: 60 },
+  bloque: { marginTop: SPACING.m },
+  seccion: { marginTop: SPACING.l, marginBottom: SPACING.s },
+  seccionHead: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    marginTop: SPACING.l, marginBottom: SPACING.s,
   },
-  topBarLeft: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
-  avatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: COLORS.surfaceContainerHigh,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.outlineVariant,
-  },
-  topBarTitle: { fontSize: 18, fontWeight: '800', color: COLORS.onSurface, letterSpacing: -0.3 },
+  seccionAcciones: { flexDirection: 'row', alignItems: 'center' },
 
-  content: { paddingHorizontal: SPACING.lg },
-
-  // Detección automática
-  detectCard: {
-    backgroundColor: COLORS.secondary + '10',
-    borderRadius: RADIUS.xl,
-    borderWidth: 1, borderColor: COLORS.secondary + '30',
-    padding: SPACING.md,
-    marginBottom: SPACING.lg,
+  total: { fontFamily: FONTS.amountBold, fontSize: 32, lineHeight: 38, color: COLORS.textHigh },
+  bento: { flexDirection: 'row', gap: SPACING.s, marginTop: SPACING.m },
+  bentoItem: {
+    flex: 1, alignItems: 'center',
+    backgroundColor: COLORS.surfaceSunken,
+    borderRadius: RADIUS.m, paddingVertical: 12,
   },
-  detectHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
-  detectTitle: { fontSize: 14, fontWeight: '700', color: COLORS.onSurface },
-  detectSub: { fontSize: 12, color: COLORS.onSurfaceVariant, marginBottom: SPACING.md, lineHeight: 17 },
-  detectRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, paddingVertical: 8 },
-  detectName: { fontSize: 14, fontWeight: '600', color: COLORS.onSurface },
-  detectMeta: { fontSize: 12, color: COLORS.onSurfaceVariant, marginTop: 2 },
-  detectAddBtn: {
-    width: 32, height: 32, borderRadius: 16,
-    backgroundColor: COLORS.primary,
+  bentoValor: { fontFamily: FONTS.amountBold, fontSize: 20, lineHeight: 24, color: COLORS.textHigh, marginBottom: 2 },
+
+  detectHead: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
+  detectRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8 },
+
+  fila: { marginTop: SPACING.s },
+  filaInactiva: { opacity: 0.55 },
+  filaRow: { flexDirection: 'row', alignItems: 'center' },
+  iconBox: {
+    width: 42, height: 42, borderRadius: RADIUS.m,
+    borderWidth: 1.5,
+    backgroundColor: COLORS.surfaceSunken,
     alignItems: 'center', justifyContent: 'center',
+    marginRight: SPACING.s,
   },
-  detectDismiss: {
-    width: 32, height: 32, borderRadius: 16,
-    backgroundColor: COLORS.surfaceContainerHigh,
-    alignItems: 'center', justifyContent: 'center',
-  },
+  filaInfo: { flex: 1, minWidth: 0 },
+  filaNombre: { fontFamily: FONTS.semibold },
+  filaMeta: { marginTop: 2, fontSize: 12 },
+  filaMonto: { fontFamily: FONTS.amount, fontSize: 12, lineHeight: 16, color: COLORS.textLow, marginTop: 2 },
+  filaDer: { alignItems: 'flex-end', marginLeft: SPACING.s },
 
-  // Próximos cobros
-  upcomingCard: {
-    backgroundColor: COLORS.surfaceContainer,
-    borderRadius: RADIUS.xl,
-    borderWidth: 1, borderColor: COLORS.outlineVariant + '25',
-    overflow: 'hidden',
-  },
-  upcomingRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.md, padding: SPACING.md },
-  upcomingRowBorder: { borderTopWidth: 1, borderTopColor: COLORS.outlineVariant + '20' },
-  upcomingDateBox: {
-    width: 44, height: 44, borderRadius: RADIUS.md,
-    backgroundColor: COLORS.surfaceContainerHigh,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  upcomingDateBoxSoon: { backgroundColor: COLORS.warning + '20' },
-  upcomingDay: { fontSize: 16, fontWeight: '800', color: COLORS.onSurface },
-  upcomingMonth: { fontSize: 9, color: COLORS.onSurfaceVariant, textTransform: 'uppercase' },
-  upcomingName: { fontSize: 14, fontWeight: '600', color: COLORS.onSurface },
-  upcomingWhen: { fontSize: 11, color: COLORS.onSurfaceVariant, marginTop: 2 },
-  upcomingAmount: { fontSize: 15, fontWeight: '800', color: COLORS.onSurface },
+  subNombre: { fontSize: 15 },
+  subMeta: { flexDirection: 'row', alignItems: 'center', marginTop: 3, flexWrap: 'wrap' },
+  subMonto: { fontFamily: FONTS.amountBold, fontSize: 13, lineHeight: 16, color: COLORS.textHigh },
+  subControles: { alignItems: 'center', marginLeft: SPACING.s },
+  priceAlert: { flexDirection: 'row', alignItems: 'center', marginTop: 6 },
 
-  // Alerta de precio
-  priceAlert: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
-  priceAlertText: { fontSize: 11, color: COLORS.warning, fontWeight: '600' },
+  upRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10 },
+  upRowBorde: { borderTopWidth: 1, borderTopColor: COLORS.borderSubtle },
+  upFecha: {
+    width: 44, alignItems: 'center',
+    backgroundColor: COLORS.surfaceSunken,
+    borderRadius: RADIUS.s, paddingVertical: 6,
+    marginRight: SPACING.s,
+  },
+  upFechaPronto: { backgroundColor: COLORS.warningSoft },
+  upDia: { fontFamily: FONTS.amountBold, fontSize: 16, lineHeight: 19, color: COLORS.textHigh },
+  upMes: { fontSize: 10, textTransform: 'uppercase' },
+  upMonto: { fontFamily: FONTS.amountBold, fontSize: 14, lineHeight: 17, color: COLORS.textHigh, marginLeft: SPACING.s },
 
-  // Hero
-  hero: { marginBottom: SPACING.xl },
-  heroTitle: { fontSize: 36, fontWeight: '800', color: COLORS.onSurface, letterSpacing: -0.5, marginBottom: SPACING.sm },
-  heroSubtitle: { fontSize: 15, color: COLORS.onSurfaceVariant, lineHeight: 22 },
-
-  // Hero metric card
-  heroCard: {
-    backgroundColor: COLORS.surfaceContainer,
-    borderRadius: RADIUS.xxl,
-    padding: SPACING.lg,
-    marginBottom: SPACING.xl,
-    borderWidth: 1,
-    borderColor: COLORS.outlineVariant + '25',
-    ...SHADOWS.ambient,
-  },
-  heroCardMain: { marginBottom: SPACING.md },
-  heroCardLabel: {
-    fontSize: 9,
-    fontWeight: '700',
-    color: COLORS.onSurfaceVariant,
-    letterSpacing: 2,
-    marginBottom: SPACING.sm,
-  },
-  heroCardAmount: {
-    fontSize: 42,
-    fontWeight: '800',
-    color: COLORS.onSurface,
-    letterSpacing: -1,
-    marginBottom: 4,
-  },
-  heroCardSub: { fontSize: 13, color: COLORS.onSurfaceVariant },
-  bentoGrid: {
-    flexDirection: 'row',
-    borderTopWidth: 1,
-    borderTopColor: COLORS.outlineVariant + '30',
-    paddingTop: SPACING.md,
-  },
-  bentoItem: { flex: 1 },
-  bentoItemRight: {
-    paddingLeft: SPACING.md,
-    borderLeftWidth: 1,
-    borderLeftColor: COLORS.outlineVariant + '30',
-  },
-  bentoValue: { fontSize: 22, fontWeight: '800', color: COLORS.primary, marginBottom: 2 },
-  bentoLabel: { fontSize: 11, color: COLORS.onSurfaceVariant },
-
-  // Section
-  section: { marginBottom: SPACING.lg },
-  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING.md },
-  sectionTitle: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: COLORS.onSurfaceVariant,
-    letterSpacing: 2,
-  },
-  sectionAddBtn: { flexDirection: 'row', alignItems: 'center', gap: 3 },
-  sectionAddText: { fontSize: 12, fontWeight: '700', color: COLORS.primary },
-
-  // Bills empty state
-  billsEmpty: {
-    flexDirection: 'row', alignItems: 'center', gap: SPACING.md,
-    padding: SPACING.md, marginBottom: SPACING.lg,
-    borderRadius: RADIUS.xl, borderWidth: 1.5, borderStyle: 'dashed',
-    borderColor: COLORS.outlineVariant + '40',
-  },
-  billsEmptyText: { flex: 1, fontSize: 13, color: COLORS.onSurfaceVariant, lineHeight: 18 },
-
-  // Bill card
-  billCard: {
-    flexDirection: 'row', alignItems: 'center', gap: SPACING.md,
-    backgroundColor: COLORS.surfaceContainerLow,
-    borderRadius: RADIUS.xl, padding: SPACING.md,
-    marginBottom: SPACING.sm,
-    borderWidth: 1, borderColor: COLORS.outlineVariant + '20',
-  },
-  billIconBox: { width: 40, height: 40, borderRadius: RADIUS.lg, justifyContent: 'center', alignItems: 'center' },
-  billInfo: { flex: 1 },
-  billName: { fontSize: 14, fontWeight: '700', color: COLORS.onSurface, marginBottom: 3 },
-  billMeta: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  billDot: { width: 6, height: 6, borderRadius: 3 },
-  billDays: { fontSize: 12, fontWeight: '600' },
-  billDayOf: { fontSize: 12, color: COLORS.onSurfaceVariant },
-  billAmount: { fontSize: 13, fontWeight: '700', color: COLORS.onSurface, marginTop: 3 },
-  billRight: { alignItems: 'flex-end' },
-  billReminderBadge: {
-    flexDirection: 'row', alignItems: 'center', gap: 3,
-    paddingHorizontal: 7, paddingVertical: 3,
-    borderRadius: RADIUS.full, borderWidth: 1,
-  },
-  billReminderText: { fontSize: 10, fontWeight: '700' },
-
-  // Sub card
-  subCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.md,
-    backgroundColor: COLORS.surfaceContainerLow,
-    borderRadius: RADIUS.xxl,
-    padding: SPACING.md,
-    marginBottom: SPACING.sm,
-    borderWidth: 1,
-    borderColor: COLORS.outlineVariant + '20',
-  },
-  subCardInactive: { opacity: 0.45 },
-  subIconBox: {
-    width: 44,
-    height: 44,
-    borderRadius: RADIUS.lg,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  subInfo: { flex: 1 },
-  subName: { fontSize: 15, fontWeight: '700', color: COLORS.onSurface, marginBottom: 3 },
-  subMetaRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
-  subMeta: { fontSize: 12, color: COLORS.onSurfaceVariant },
-  autoBadge: {
-    backgroundColor: COLORS.secondary + '20',
-    borderRadius: RADIUS.full,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
-  autoBadgeText: { fontSize: 8, fontWeight: '700', color: COLORS.secondary, letterSpacing: 1 },
-  subControls: { flexDirection: 'row', alignItems: 'center', gap: SPACING.md },
-
-  // Optimize card
-  optimizeCard: {
-    borderRadius: RADIUS.xxl,
-    padding: SPACING.lg,
-    marginBottom: SPACING.lg,
-    borderWidth: 1,
-    borderColor: COLORS.primaryContainer + '30',
-  },
-  optimizeRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  optimizeText: { flex: 1, marginRight: SPACING.md },
-  optimizeTitle: { fontSize: 16, fontWeight: '800', color: COLORS.onSurface, marginBottom: 6 },
-  optimizeSub: { fontSize: 13, color: COLORS.onSurfaceVariant, lineHeight: 18 },
-  optimizeIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: COLORS.secondary + '15',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-
-  // Add button
-  addBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: COLORS.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-
-  // Modal
-  modalOverlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    backgroundColor: '#00000080',
-  },
-  modalCard: {
-    backgroundColor: COLORS.surfaceContainer,
-    borderTopLeftRadius: RADIUS.xxl,
-    borderTopRightRadius: RADIUS.xxl,
-    padding: SPACING.lg,
-    paddingBottom: 40,
-    borderTopWidth: 1,
-    borderColor: COLORS.outlineVariant + '30',
-  },
-  modalHandleArea: { alignItems: 'center', paddingTop: SPACING.sm, paddingBottom: SPACING.md, marginBottom: SPACING.sm },
-  modalHandle: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: COLORS.outlineVariant,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: COLORS.onSurface,
-    marginBottom: SPACING.xl,
-    letterSpacing: -0.3,
-  },
-  inputGroup: { marginBottom: SPACING.lg },
-  inputLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: COLORS.onSurfaceVariant,
-    letterSpacing: 1.5,
-    marginBottom: SPACING.sm,
-  },
-  input: {
-    backgroundColor: COLORS.surfaceContainerHigh,
-    borderRadius: RADIUS.lg,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: 14,
-    fontSize: 15,
-    color: COLORS.onSurface,
-    borderWidth: 1,
-    borderColor: COLORS.outlineVariant + '30',
-  },
-  freqRow: { flexDirection: 'row', gap: SPACING.sm },
-  freqBtn: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: RADIUS.lg,
-    backgroundColor: COLORS.surfaceContainerHigh,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.outlineVariant + '30',
-  },
-  freqBtnActive: {
-    backgroundColor: COLORS.primaryContainer,
-    borderColor: COLORS.primary + '50',
-  },
-  freqBtnText: { fontSize: 14, color: COLORS.onSurfaceVariant, fontWeight: '600' },
-  freqBtnTextActive: { color: COLORS.primary },
-  saveBtn: {
-    borderRadius: RADIUS.lg,
-    marginTop: SPACING.sm,
-    overflow: 'hidden',
-  },
-  saveBtnInner: {
-    paddingVertical: 16,
-    alignItems: 'center',
-  },
-  saveBtnText: { fontSize: 16, fontWeight: '700', color: '#fff' },
-
-  // Empty state
-  emptyCard: {
-    alignItems: 'center',
-    paddingVertical: SPACING.xxl,
-    marginBottom: SPACING.xl,
-  },
-  emptyIconBg: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: COLORS.primaryContainer + '15',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: SPACING.lg,
-    borderWidth: 1,
-    borderColor: COLORS.primary + '30',
-  },
-  emptyTitle: { fontSize: 18, fontWeight: '700', color: COLORS.onSurface, marginBottom: SPACING.sm },
-  emptyHint: { fontSize: 14, color: COLORS.onSurfaceVariant, textAlign: 'center', lineHeight: 20 },
+  optimizeRow: { flexDirection: 'row', alignItems: 'center' },
+  catChips: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.s },
 });

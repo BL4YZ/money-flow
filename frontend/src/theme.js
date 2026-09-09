@@ -196,51 +196,33 @@ export function categoryColor(name = 'Otros') {
   return `hsl(${Math.abs(hash) % 360}, 60%, 68%)`;
 }
 
-// ── COMPATIBILIDAD TEMPORAL — BORRAR AL TERMINAR LA MIGRACIÓN ─────
+// ── Colores de servicios de suscripción ───────────────────────────
 //
-// Las 9 pantallas todavía usan los nombres del theme viejo. Sin estos alias la
-// app no arranca durante la migración: un `COLORS.background` inexistente entra
-// como `undefined` y RN no avisa, simplemente pinta mal.
-//
-// Se van borrando a medida que cada pantalla pasa a los componentes nuevos. La
-// migración está completa cuando este bloque se puede eliminar y la app sigue
-// compilando — ese es el criterio, no "se ve bien".
-Object.assign(COLORS, {
-  background:              COLORS.bg,
-  surfaceContainer:        COLORS.surfaceRaised,
-  surfaceContainerLow:     COLORS.surface,
-  surfaceContainerLowest:  COLORS.bg,
-  surfaceContainerHigh:    COLORS.surfaceSunken,
-  surfaceContainerHighest: COLORS.surfaceOverlay,
-  primaryContainer:        COLORS.primarySoft,
-  onPrimaryContainer:      COLORS.textHigh,
-  secondary:               COLORS.accent,
-  secondaryFixed:          COLORS.accent,
-  secondaryFixedDim:       COLORS.accent,
-  onSecondary:             COLORS.bg,
-  tertiary:                COLORS.premium,
-  tertiaryFixedDim:        COLORS.premium,
-  onSurface:               COLORS.textHigh,
-  onSurfaceVariant:        COLORS.textMid,
-  onBackground:            COLORS.textHigh,
-  outline:                 COLORS.textLow,
-  outlineVariant:          COLORS.border,
-  danger:                  COLORS.error,
-  text:                    COLORS.textHigh,
-  textSecondary:           COLORS.textMid,
-  textMuted:               COLORS.textLow,
-  border:                  COLORS.border,
-});
-
-// Las escalas se renombraron (md → m). Mismos valores, distinta clave: sin
-// estos alias quedaban 225 paddings en `undefined`, que RN no reporta.
-Object.assign(SPACING, { sm: SPACING.s, md: SPACING.m, lg: SPACING.l });
-Object.assign(RADIUS,  { sm: RADIUS.s,  md: RADIUS.m,  lg: RADIUS.l });
-Object.assign(SHADOWS, { nebula: SHADOWS.glow });
-
-/** @deprecated usar GRADIENTS */
-export const GRADIENT = {
-  primary:        GRADIENTS.action,
-  primaryReverse: [...GRADIENTS.action].reverse(),
-  locked:         GRADIENTS.premium,
+// Misma regla que STORE_COLORS: `brand` es el color real de la marca e `icon`
+// el que se pinta sobre `surfaceSunken`, ajustado cuando la marca no llega a
+// contraste 3.0 ahí. Cuatro de catorce no llegaban — PlayStation Plus, azul
+// marino sobre gris oscuro, daba 1.26 y el icono era una mancha.
+export const SERVICE_COLORS = {
+  'Netflix':              { brand: '#E50914', icon: '#E50914', ionicon: 'film-outline' },
+  'Spotify':              { brand: '#1DB954', icon: '#1DB954', ionicon: 'musical-notes-outline' },
+  'Disney+':              { brand: '#006E99', icon: '#007DAD', ionicon: 'tv-outline' },
+  'HBO Max':              { brand: '#5822A7', icon: '#8D57DD', ionicon: 'videocam-outline' },
+  'Amazon Prime':         { brand: '#FF9900', icon: '#FF9900', ionicon: 'cart-outline' },
+  'YouTube Premium':      { brand: '#FF0000', icon: '#FF0000', ionicon: 'logo-youtube' },
+  'Apple TV+':            { brand: '#A2AAAD', icon: '#A2AAAD', ionicon: 'logo-apple' },
+  'PlayStation Plus':     { brand: '#003087', icon: '#1C6DFF', ionicon: 'game-controller-outline' },
+  'Xbox Game Pass':       { brand: '#107C10', icon: '#128A12', ionicon: 'game-controller-outline' },
+  'iCloud':               { brand: '#3478F6', icon: '#3478F6', ionicon: 'cloud-outline' },
+  'Google One':           { brand: '#4285F4', icon: '#4285F4', ionicon: 'cloud-outline' },
+  'Microsoft 365':        { brand: '#D83B01', icon: '#D83B01', ionicon: 'grid-outline' },
+  'Adobe Creative Cloud': { brand: '#FF0000', icon: '#FF0000', ionicon: 'color-palette-outline' },
+  'Gimnasio':             { brand: '#FF6D00', icon: '#FF6D00', ionicon: 'barbell-outline' },
 };
+
+/** Icono y color de un servicio. Cae en genérico si no se conoce. */
+export function serviceMeta(name) {
+  const s = SERVICE_COLORS[name];
+  return s
+    ? { icon: s.ionicon, color: s.icon }
+    : { icon: 'phone-portrait-outline', color: COLORS.primary };
+}
