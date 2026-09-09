@@ -35,7 +35,10 @@ function paleta(variant, disabled) {
     case 'destructive':
       return { bg: COLORS.errorSoft, border: COLORS.errorBorder, fg: COLORS.expense, iconFg: COLORS.error };
     case 'premiumLocked':
-      return { bg: 'transparent', border: 'transparent', fg: COLORS.onPremium };
+      return { bg: 'transparent', border: 'transparent', fg: COLORS.onPremium, gradiente: GRADIENTS.premium, sombra: SHADOWS.gold };
+    // Acción principal del comparador. Es el único otro gradiente de la app.
+    case 'action':
+      return { bg: 'transparent', border: 'transparent', fg: COLORS.onPrimary, gradiente: GRADIENTS.action, sombra: SHADOWS.ambient };
     case 'primary':
     default:
       return { bg: COLORS.primary, border: 'transparent', fg: COLORS.onPrimary };
@@ -87,11 +90,11 @@ export default function Button({
     fullWidth && styles.fullWidth,
   ];
 
-  // El dorado es un gradiente, así que la caja la pinta LinearGradient y el
-  // Pressable queda por fuera para no perder el área táctil.
-  if (variant === 'premiumLocked' && !disabled) {
+  // Las variantes con gradiente lo pinta LinearGradient, y el Pressable queda
+  // por fuera para no perder el área táctil.
+  if (p.gradiente && !disabled) {
     return (
-      <Animated.View style={[{ transform: [{ scale }] }, fullWidth && styles.fullWidth, SHADOWS.gold, style]}>
+      <Animated.View style={[{ transform: [{ scale }] }, fullWidth && styles.fullWidth, p.sombra, style]}>
         <Pressable
           onPress={inerte ? undefined : onPress}
           onPressIn={() => !inerte && anim(0.98)}
@@ -99,7 +102,7 @@ export default function Button({
           disabled={inerte}
         >
           <LinearGradient
-            colors={GRADIENTS.premium}
+            colors={p.gradiente}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={caja}

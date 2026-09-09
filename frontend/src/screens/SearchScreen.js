@@ -49,7 +49,11 @@ function registrarClick({ searchId, position, offer }) {
  * pantalla en un comparador: sin esto se calculaba el precio de cada tienda y
  * se mostraba sólo el más barato, tirando la comparación.
  */
-function TiendaRow({ offer, esMejor, hayDiferencia, delta, onAbrir }) {
+function TiendaRow({ offer, esMejor, hayDiferencia, delta, samePrice, onAbrir }) {
+  const pct = offer.listPrice && offer.listPrice > offer.price
+    ? Math.round((1 - offer.price / offer.listPrice) * 100)
+    : null;
+
   return (
     <Pressable
       style={({ pressed }) => [styles.tiendaRow, pressed && styles.pressed]}
@@ -61,8 +65,15 @@ function TiendaRow({ offer, esMejor, hayDiferencia, delta, onAbrir }) {
       </Txt>
       {esMejor && hayDiferencia ? <Badge variant="best" label="Mejor" /> : null}
       <View style={{ flex: 1 }} />
-      {delta > 0 ? (
+      {pct ? (
+        <View style={styles.descRow}>
+          <Txt style={styles.tachadoChico}>{formatUYU(offer.listPrice)}</Txt>
+          <Badge variant="discount" label={`−${pct}%`} style={{ marginLeft: 6 }} />
+        </View>
+      ) : delta > 0 ? (
         <Txt style={styles.delta}>+{formatUYU(delta)}</Txt>
+      ) : samePrice && !esMejor ? (
+        <Txt variant="caption" color={COLORS.textLow} style={styles.delta}>mismo precio</Txt>
       ) : null}
       <Txt style={[styles.tiendaPrecio, esMejor && hayDiferencia && { color: COLORS.income }]}>
         {formatUYU(offer.price)}
@@ -75,7 +86,7 @@ function TiendaRow({ offer, esMejor, hayDiferencia, delta, onAbrir }) {
 /**
  * Grupo de resultado: un producto real con la oferta de cada tienda adentro.
  */
-function GrupoResultado({ item, index, searchId }) {
+function GrupoResultado({ item, index, searchId, substitutes, query }) {
   const [abierto, setAbierto] = useState(false);
 
   const offers = (item.offers && item.offers.length ? item.offers : [item])
@@ -123,9 +134,16 @@ function GrupoResultado({ item, index, searchId }) {
 
           <View style={styles.grupoMeta}>
             {enVarias ? (
-              <Txt variant="caption" color={COLORS.textMid} style={styles.metaTxt}>
-                {offers.length} tiendas
-              </Txt>
+              <>
+                <Txt variant="caption" color={COLORS.textLow} style={styles.metaTxt}>
+                  {offers.length} tiendas
+                </Txt>
+                {/* El rango dice de un vistazo cuánto se juega entre la más
+                    barata y la más cara, sin abrir el grupo. */}
+                <Txt style={styles.rango}>
+                  {formatUYU(best.price)} – {formatUYU(peor.price)}
+                </Txt>
+              </>
             ) : (
               <>
                 <StoreDot storeId={best.storeId} size={8} style={{ marginRight: 6 }} />
@@ -136,31 +154,24 @@ function GrupoResultado({ item, index, searchId }) {
               <Txt variant="caption" color={COLORS.textLow} style={styles.metaTxt}> · {unitario}</Txt>
             ) : null}
           </View>
-
-          {enVarias && ahorro > 0 ? (
-            <Txt variant="caption" color={COLORS.income} style={styles.rango}>
-              {formatUYU(best.price)} – {formatUYU(peor.price)} · ahorrás {formatUYU(ahorro)}
-              {ahorroPct >= 3 ? ` (${ahorroPct}%)` : ''}
-            </Txt>
-          ) : null}
         </View>
 
         <View style={styles.grupoPrecio}>
           <Txt style={styles.precio}>{formatUYU(precio)}</Txt>
-          {pctDesc ? (
-            <Txt style={styles.tachado}>{formatUYU(best.listPrice)}</Txt>
-          ) : null}
+          {pctDesc ? <Txt style={styles.tachado}>{formatUYU(best.listPrice)}</Txt> : null}
           {item.currency === 'USD' && item.originalPrice != null ? (
             <Txt style={styles.usd}>US$ {item.originalPrice.toLocaleString('es-UY')}</Txt>
           ) : null}
-          {pctDesc ? <Badge variant="discount" label={`−${pctDesc}%`} style={{ marginTop: 5 }} /> : null}
           {enVarias ? (
-            <Ionicons
-              name={abierto ? 'chevron-up' : 'chevron-down'}
-              size={16}
-              color={COLORS.textLow}
-              style={{ marginTop: 4 }}
-            />
+            <View style={styles.grupoCta}>
+              <Txt style={styles.grupoCtaTxt}>{abierto ? 'Ocultar' : 'Ver tiendas'}</Txt>
+              <Ionicons
+                name={abierto ? 'chevron-up' : 'chevron-down'}
+                size={13}
+                color={COLORS.textHigh}
+                style={{ marginLeft: 4 }}
+              />
+            </View>
           ) : null}
         </View>
       </Pressable>
@@ -179,9 +190,21 @@ function GrupoResultado({ item, index, searchId }) {
               esMejor={i === 0}
               hayDiferencia={ahorro > 0}
               delta={i === 0 ? 0 : Math.round(o.price - best.price)}
+              samePrice={i > 0 && o.price === best.price}
               onAbrir={(of) => registrarClick({ searchId, position: index + 1, offer: of })}
             />
           ))}
+
+          {/* Por qué algún nombre no coincide con lo buscado. Va acá adentro y
+              no como card suelta arriba: la aclaración es sobre ESTAS filas. */}
+          {substitutes ? (
+            <View style={styles.sustitutos}>
+              <Ionicons name="information-circle-outline" size={15} color={COLORS.textLow} />
+              <Txt variant="caption" color={COLORS.textLow} style={styles.sustitutosTxt}>
+                Alguna tienda ofrece un sustituto, no el mismo producto que “{query}”.
+              </Txt>
+            </View>
+          ) : null}
         </View>
       ) : null}
     </Card>
@@ -306,6 +329,7 @@ export default function SearchScreen() {
           subtitle={tiendasDeCategoria ? `${tiendasDeCategoria} cadenas · precios de hoy` : 'Precios de hoy'}
           actionIcon={canComparePrices ? 'options-outline' : 'lock-closed'}
           onActionPress={canComparePrices ? undefined : () => showUpgrade('prices')}
+          card={false}
         />
 
         {/* Sangra hasta el borde con degradado a la derecha: es la afordancia
@@ -357,7 +381,7 @@ export default function SearchScreen() {
             ]}
           >
             <Ionicons
-              name={canComparePrices ? 'search' : 'lock-closed'}
+              name={canComparePrices ? 'arrow-forward' : 'lock-closed'}
               size={20}
               color={COLORS.onPrimary}
             />
@@ -401,19 +425,6 @@ export default function SearchScreen() {
           </>
         ) : null}
 
-        {/* Por qué los nombres no coinciden con lo que se buscó. */}
-        {meta?.substitutes && !loading && results && results.length > 0 ? (
-          <Card style={styles.aviso}>
-            <View style={styles.avisoRow}>
-              <Ionicons name="information-circle-outline" size={16} color={COLORS.accent} />
-              <Txt variant="caption" color={COLORS.textMid} style={styles.avisoTxt}>
-                No hay productos que se llamen “{ultimaBusqueda}”. Te mostramos las marcas
-                con las que se vende.
-              </Txt>
-            </View>
-          </Card>
-        ) : null}
-
         {/* Sin resultados — distingue el hueco de stock del error de tipeo. */}
         {results && !loading && results.length === 0 ? (
           <EmptyState
@@ -436,6 +447,8 @@ export default function SearchScreen() {
                 item={item}
                 index={i}
                 searchId={searchId}
+                substitutes={!!meta?.substitutes}
+                query={ultimaBusqueda}
               />
             ))
           : null}
@@ -495,9 +508,6 @@ const styles = StyleSheet.create({
   sortRow: { gap: SPACING.s, paddingBottom: SPACING.xs },
   skel: { marginTop: SPACING.s },
 
-  aviso: { marginTop: SPACING.m },
-  avisoRow: { flexDirection: 'row', alignItems: 'flex-start' },
-  avisoTxt: { flex: 1, marginLeft: SPACING.s },
 
   grupo: { marginTop: SPACING.s, padding: 13 },
   grupoHead: { flexDirection: 'row', alignItems: 'center' },
@@ -514,7 +524,9 @@ const styles = StyleSheet.create({
   grupoNombre: { fontFamily: FONTS.semibold, fontSize: 14.5, lineHeight: 19.5, color: COLORS.textHigh, marginBottom: 5 },
   grupoMeta: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' },
   metaTxt: { fontFamily: FONTS.medium, fontSize: 12.5, lineHeight: 16 },
-  rango: { fontSize: 12.5, lineHeight: 16, marginTop: 4 },
+  rango: { fontFamily: FONTS.amount, fontSize: 12, lineHeight: 15, color: COLORS.textMid, marginLeft: 7 },
+  grupoCta: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
+  grupoCtaTxt: { fontFamily: FONTS.semibold, fontSize: 11.5, lineHeight: 14, color: COLORS.textHigh },
   grupoPrecio: { alignItems: 'flex-end' },
   precio: { fontFamily: FONTS.amountBold, fontSize: 16, lineHeight: 19, color: COLORS.textHigh },
   tachado: {
@@ -528,5 +540,12 @@ const styles = StyleSheet.create({
   tiendaRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10 },
   tiendaNombre: { fontFamily: FONTS.semibold, marginLeft: 8, marginRight: 8, flexShrink: 1 },
   tiendaPrecio: { fontFamily: FONTS.amountBold, fontSize: 14, lineHeight: 17, color: COLORS.textHigh },
-  delta: { fontFamily: FONTS.semibold, fontSize: 12, lineHeight: 16, color: COLORS.expense, marginRight: 10 },
+  delta: { fontFamily: FONTS.semibold, fontSize: 11.5, lineHeight: 15, color: COLORS.expense, marginRight: 10 },
+  descRow: { flexDirection: 'row', alignItems: 'center', marginRight: 10 },
+  tachadoChico: {
+    fontFamily: FONTS.amount, fontSize: 11.5, lineHeight: 15,
+    color: COLORS.textLow, textDecorationLine: 'line-through',
+  },
+  sustitutos: { flexDirection: 'row', alignItems: 'flex-start', marginTop: 9 },
+  sustitutosTxt: { flex: 1, marginLeft: 7, fontSize: 11.5, lineHeight: 16 },
 });

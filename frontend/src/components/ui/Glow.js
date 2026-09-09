@@ -19,12 +19,16 @@ export default function Glow({
   size = 300,
   opacity = 0.14,
   top = -90,
-  left = -40,
+  left,
+  right,
   style,
 }) {
+  // Cada pantalla lo ancla de un lado distinto; si no se pide ninguno, izquierda.
+  const lado = right != null ? { right } : { left: left != null ? left : -40 };
+
   return (
     <View
-      style={[styles.wrap, { top, left, width: size, height: size }, style]}
+      style={[styles.wrap, { top, ...lado, width: size, height: size }, style]}
       pointerEvents="none"
     >
       <Svg width={size} height={size}>

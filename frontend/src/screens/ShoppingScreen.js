@@ -23,6 +23,9 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const POLL_INTERVAL = 1500;
 
+// Cuántos ítems se listan antes de colapsar el resto en "+N más".
+const CHIPS_VISIBLES = 6;
+
 const CATEGORIES = [
   { id: null,           label: 'Todo',     icon: 'globe-outline' },
   { id: 'supermercado', label: 'Super',    icon: 'cart-outline' },
@@ -33,98 +36,121 @@ const CATEGORIES = [
 ];
 
 /**
- * Total de una tienda. `partial` no es cosmético: una tienda a la que le
- * faltan ítems tiene un total MENOR y eso no es un ahorro. La card lo dice con
- * su propia variante y con la aclaración adentro, no al pie en letra chica.
+ * Totales por tienda, en UNA card. El diseño las lista como filas compactas y
+ * no como una card por cadena: con seis tiendas, seis cards ocupaban toda la
+ * pantalla y la comparación —que es el punto— quedaba repartida en scroll.
+ *
+ * La fila se expande al tocarla para ver el desglose, que es lo que se perdería
+ * al compactar.
  */
-function StoreCard({ store, totalItems, rank, mejorTotal }) {
+function StoresCard({ byStore, totalItems, mejorTotal, aviso }) {
   const { t } = useLanguage();
-  const [abierto, setAbierto] = useState(false);
-  const completa = store.found === totalItems;
-  const esMejor = rank === 0 && completa;
+  const [abierta, setAbierta] = useState(null);
 
-  // Cuánto MÁS cuesta esta tienda que la mejor. Sólo tiene sentido entre
-  // tiendas con la lista completa.
-  const extra = completa && mejorTotal != null ? Math.round(store.total - mejorTotal) : 0;
-
-  const alternar = () => {
-    LayoutAnimation.configureNext(LayoutAnimation.create(180, 'easeInEaseOut', 'opacity'));
-    setAbierto((v) => !v);
-  };
+  // Una tienda incompleta tiene un total MENOR y eso no es un ahorro. Se dice
+  // acá, dentro de la misma card, no al pie en letra chica.
+  const incompleta = byStore.find((s) => s.found !== totalItems);
 
   return (
-    <Card
-      variant={esMejor ? 'best' : completa ? 'base' : 'partial'}
-      onPress={alternar}
-      style={styles.storeCard}
-    >
-      <View style={styles.storeHead}>
-        <StoreDot storeId={store.storeId} size={10} style={{ marginTop: 5 }} />
-        <View style={styles.storeInfo}>
-          <View style={styles.storeTitleRow}>
-            <Txt variant="h2" style={styles.storeName}>{store.name}</Txt>
-            {esMejor ? <Badge variant="best" label={t('shopping.bestStore')} /> : null}
-            {!completa ? (
-              <Badge
-                variant="statusMuted"
-                icon="alert-circle"
-                label={t('shopping.partialItems', { found: store.found, total: totalItems })}
-              />
-            ) : null}
-          </View>
-          <Txt variant="caption" color={completa ? COLORS.textMid : COLORS.warning} style={styles.storeSub}>
-            {completa
-              ? t(store.found === 1 ? 'shopping.foundItem' : 'shopping.foundItems', { n: store.found })
-              : t('shopping.missing', { items: store.missing.join(', ') })}
-          </Txt>
-        </View>
-        <View style={styles.storeTotalCol}>
-          <Txt style={[styles.storeTotal, esMejor && { color: COLORS.income }]}>
-            {formatUYU(store.total)}
-          </Txt>
-          {extra > 0 ? <Txt style={styles.storeExtra}>+{formatUYU(extra)}</Txt> : null}
-          <Ionicons
-            name={abierto ? 'chevron-up' : 'chevron-down'}
-            size={14}
-            color={COLORS.textLow}
-            style={{ marginTop: 4 }}
-          />
-        </View>
-      </View>
+    <Card style={styles.storesCard}>
+      {byStore.map((store, i) => {
+        const completa = store.found === totalItems;
+        const esMejor = i === 0 && completa;
+        const extra = completa && mejorTotal != null ? Math.round(store.total - mejorTotal) : 0;
+        const open = abierta === store.storeId;
 
-      {/* La aclaración va DENTRO de la card de la tienda incompleta: si vive
-          suelta al pie, se lee como nota general y no como "este número". */}
-      {!completa ? (
-        <Txt variant="caption" color={COLORS.warning} style={styles.storeAviso}>
-          {store.name} sale menos porque le faltan {totalItems - store.found} ítems. No es un ahorro.
-        </Txt>
-      ) : null}
-
-      {abierto ? (
-        <View style={styles.storeItems}>
-          {store.items.map((si, i) => (
-            <View key={i} style={styles.storeItemRow}>
-              <Txt variant="caption" color={COLORS.textHigh} style={styles.storeItemName} numberOfLines={2}>
-                {si.productName}
+        return (
+          <View key={store.storeId}>
+            <Pressable
+              onPress={() => {
+                LayoutAnimation.configureNext(LayoutAnimation.create(180, 'easeInEaseOut', 'opacity'));
+                setAbierta(open ? null : store.storeId);
+              }}
+              style={({ pressed }) => [
+                styles.storeRow,
+                i > 0 && styles.storeRowBorde,
+                pressed && { opacity: 0.7 },
+              ]}
+            >
+              <StoreDot storeId={store.storeId} size={8} />
+              <Txt style={styles.storeNombre} numberOfLines={1}>{store.name}</Txt>
+              <Txt
+                style={[
+                  styles.storeEstado,
+                  { color: completa ? COLORS.success : COLORS.warning },
+                ]}
+              >
+                {completa
+                  ? `${store.found}/${totalItems}`
+                  : t('shopping.partialItems', { found: store.found, total: totalItems })}
               </Txt>
-              <View style={styles.storeItemRight}>
-                <View style={{ alignItems: 'flex-end' }}>
-                  <Txt style={styles.storeItemPrice}>{formatUYU(si.price)}</Txt>
-                  {si.currency === 'USD' && si.originalPrice != null ? (
-                    <Txt style={styles.storeItemMeta}>US$ {si.originalPrice.toLocaleString('es-UY')}</Txt>
-                  ) : null}
-                  {si.unitPrice != null ? (
-                    <Txt style={styles.storeItemMeta}>{formatUnitPrice(si)}</Txt>
-                  ) : null}
-                </View>
-                {si.url ? (
-                  <Pressable onPress={() => Linking.openURL(si.url)} hitSlop={8} style={{ marginLeft: 8 }}>
-                    <Ionicons name="open-outline" size={14} color={COLORS.textMid} />
-                  </Pressable>
+              <Txt
+                style={[
+                  styles.storeTotal,
+                  { color: esMejor ? COLORS.income : completa ? COLORS.textHigh : COLORS.textMid },
+                ]}
+              >
+                {formatUYU(store.total)}
+              </Txt>
+            </Pressable>
+
+            {extra > 0 && !open ? (
+              <Txt style={styles.storeExtra}>+{formatUYU(extra)} que la más barata</Txt>
+            ) : null}
+
+            {open ? (
+              <View style={styles.storeItems}>
+                {store.items.map((si, k) => (
+                  <View key={k} style={styles.storeItemRow}>
+                    <Txt variant="caption" color={COLORS.textHigh} style={styles.storeItemName} numberOfLines={2}>
+                      {si.productName}
+                    </Txt>
+                    <View style={styles.storeItemRight}>
+                      <View style={{ alignItems: 'flex-end' }}>
+                        <Txt style={styles.storeItemPrice}>{formatUYU(si.price)}</Txt>
+                        {si.currency === 'USD' && si.originalPrice != null ? (
+                          <Txt style={styles.storeItemMeta}>US$ {si.originalPrice.toLocaleString('es-UY')}</Txt>
+                        ) : null}
+                        {si.unitPrice != null ? (
+                          <Txt style={styles.storeItemMeta}>{formatUnitPrice(si)}</Txt>
+                        ) : null}
+                      </View>
+                      {si.url ? (
+                        <Pressable onPress={() => Linking.openURL(si.url)} hitSlop={8} style={{ marginLeft: 8 }}>
+                          <Ionicons name="open-outline" size={14} color={COLORS.textMid} />
+                        </Pressable>
+                      ) : null}
+                    </View>
+                  </View>
+                ))}
+                {!completa ? (
+                  <Txt variant="caption" color={COLORS.warning} style={{ marginTop: 6 }}>
+                    {t('shopping.missing', { items: store.missing.join(', ') })}
+                  </Txt>
                 ) : null}
               </View>
-            </View>
-          ))}
+            ) : null}
+          </View>
+        );
+      })}
+
+      {incompleta ? (
+        <View style={styles.storeAviso}>
+          <Ionicons name="alert-circle" size={15} color={COLORS.warning} />
+          <Txt variant="caption" color={COLORS.warning} style={styles.storeAvisoTxt}>
+            {incompleta.name} sale menos porque le faltan {totalItems - incompleta.found} ítems.
+            No es un ahorro.
+          </Txt>
+        </View>
+      ) : null}
+
+      {/* Los totales sólo se comparan entre tiendas con la lista completa Y
+          envases parecidos: buscando "arroz" una puede aportar un 5 kg y otra un
+          1 kg, y el total más bajo sería el de la que vende menos producto. */}
+      {aviso ? (
+        <View style={styles.storeAviso}>
+          <Ionicons name="information-circle-outline" size={15} color={COLORS.textLow} />
+          <Txt variant="caption" color={COLORS.textLow} style={styles.storeAvisoTxt}>{aviso}</Txt>
         </View>
       ) : null}
     </Card>
@@ -192,6 +218,7 @@ export default function ShoppingScreen() {
   const [progress, setProgress] = useState(null);
   const [suggestions, setSuggestions] = useState([]);
   const [category, setCategory] = useState(null);
+  const [chipsAbiertos, setChipsAbiertos] = useState(false);
 
   const loadingInterval = useRef(null);
   const pollRef = useRef(null);      // jobId activo; sirve para cancelar el polling
@@ -363,6 +390,19 @@ export default function ShoppingScreen() {
     ? (results.byStore.find((s) => s.found === results.totalItems) || {}).total
     : undefined;
 
+  // Reparto del carrito óptimo por cadena, ordenado por cantidad de ítems.
+  const reparto = (() => {
+    if (!results) return [];
+    const cuenta = {};
+    results.results.forEach((r) => {
+      if (!r.cheapest) return;
+      const k = r.cheapest.storeId;
+      if (!cuenta[k]) cuenta[k] = { storeId: k, store: r.cheapest.store, n: 0 };
+      cuenta[k].n += 1;
+    });
+    return Object.values(cuenta).sort((a, b) => b.n - a.n);
+  })();
+
   const op = insight && insight.oportunidad;
 
   return (
@@ -370,7 +410,7 @@ export default function ShoppingScreen() {
       style={styles.root}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <Glow />
+      <Glow size={280} opacity={0.16} top={-70} right={-60} />
       <ScrollView
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
@@ -381,6 +421,7 @@ export default function ShoppingScreen() {
           subtitle={items.length
             ? `${items.length} ítem${items.length === 1 ? '' : 's'} · ${t('shopping.subtitle')}`
             : t('shopping.subtitle')}
+          card={false}
         />
 
         <Input
@@ -398,7 +439,7 @@ export default function ShoppingScreen() {
         {items.length > 0 ? (
           <Card style={styles.bloque}>
             <View style={styles.chipsRow}>
-              {items.map((item) => (
+              {(chipsAbiertos ? items : items.slice(0, CHIPS_VISIBLES)).map((item) => (
                 <ListItemChip
                   key={item.id}
                   label={item.name}
@@ -406,6 +447,21 @@ export default function ShoppingScreen() {
                   onRemove={() => deleteItem(item.id)}
                 />
               ))}
+              {items.length > CHIPS_VISIBLES ? (
+                <Pressable
+                  onPress={() => setChipsAbiertos((v) => !v)}
+                  style={({ pressed }) => [styles.masChip, pressed && { opacity: 0.7 }]}
+                >
+                  <Ionicons
+                    name={chipsAbiertos ? 'remove' : 'add'}
+                    size={13}
+                    color={COLORS.textLow}
+                  />
+                  <Txt variant="caption" color={COLORS.textLow} style={styles.masChipTxt}>
+                    {chipsAbiertos ? 'ver menos' : `${items.length - CHIPS_VISIBLES} más`}
+                  </Txt>
+                </Pressable>
+              ) : null}
             </View>
 
             {!comparing ? (
@@ -426,8 +482,8 @@ export default function ShoppingScreen() {
                   label={canShopping
                     ? `${t('shopping.compare')} · ${items.length} ítem${items.length === 1 ? '' : 's'}`
                     : t('premium.lockedShopping')}
-                  icon={canShopping ? 'search' : 'lock-closed'}
-                  variant={canShopping ? 'primary' : 'premiumLocked'}
+                  icon={canShopping ? 'git-compare-outline' : 'lock-closed'}
+                  variant={canShopping ? 'action' : 'premiumLocked'}
                   onPress={compare}
                   fullWidth
                   style={{ marginTop: SPACING.m }}
@@ -460,37 +516,57 @@ export default function ShoppingScreen() {
 
         {results && results.byStore.length > 0 ? (
           <>
-            {/* Carrito óptimo. */}
+            {/* Carrito óptimo. El ahorro va a la derecha del total y no
+                debajo: son las dos cifras que se comparan y leerlas en la misma
+                línea es lo que hace la card. */}
             <Card variant="best" label={t('shopping.optimalCart')} style={styles.bloque}>
-              <Txt variant="caption" color={COLORS.textMid}>{t('shopping.optimalSub')}</Txt>
-              <Txt style={styles.optimalTotal}>{formatUYU(results.optimalTotal)}</Txt>
-
-              <View style={styles.optimalMeta}>
-                <Txt variant="caption" color={COLORS.textMid}>
-                  {results.results.filter((r) => r.cheapest).length} de {results.totalItems} ítems
-                </Txt>
-                {/* Un total que exige ir a cuatro lugares es aspiracional; el
-                    usuario decide con este dato. */}
-                {results.storesNeeded > 0 ? (
-                  <Txt variant="caption" color={COLORS.textMid}>
-                    {' · '}{results.storesNeeded === 1
-                      ? t('shopping.storesNeeded_one')
-                      : t('shopping.storesNeeded_other', { n: results.storesNeeded })}
+              <View style={styles.optimalRow}>
+                <View style={{ flex: 1 }}>
+                  <Txt style={styles.optimalTotal}>{formatUYU(results.optimalTotal)}</Txt>
+                  <Txt variant="caption" color={COLORS.textMid} style={{ marginTop: 4 }}>
+                    {results.results.filter((r) => r.cheapest).length} de {results.totalItems} ítems
+                    {/* Un total que exige ir a cuatro lugares es aspiracional; el
+                        usuario decide con este dato. */}
+                    {results.storesNeeded > 0
+                      ? `, ${results.storesNeeded === 1
+                          ? t('shopping.storesNeeded_one')
+                          : t('shopping.storesNeeded_other', { n: results.storesNeeded })}`
+                      : ''}
                   </Txt>
+                </View>
+
+                {/* `itemSavings` reemplaza a `optimalSavings`, que sólo existía
+                    si alguna tienda tenía la lista completa — y con listas
+                    largas eso casi nunca pasa, así que el ahorro desaparecía
+                    sin explicación. */}
+                {(results.itemSavings > 0 || results.optimalSavings > 0) ? (
+                  <View style={styles.optimalAhorro}>
+                    <Txt style={styles.ahorroMonto}>
+                      −{formatUYU(results.itemSavings || results.optimalSavings)}
+                    </Txt>
+                    <Txt variant="caption" color={COLORS.textLow} style={{ marginTop: 4 }}>
+                      {t('shopping.optimalSub')}
+                    </Txt>
+                  </View>
                 ) : null}
               </View>
 
-              {/* `itemSavings` reemplaza a `optimalSavings`, que sólo existía si
-                  alguna tienda tenía la lista completa — y con listas largas eso
-                  casi nunca pasa, así que el ahorro desaparecía sin explicación. */}
-              {(results.itemSavings > 0 || results.optimalSavings > 0) ? (
-                <View style={styles.ahorroRow}>
-                  <Ionicons name="trending-down" size={15} color={COLORS.income} />
-                  <Txt variant="caption" color={COLORS.income} style={styles.ahorroTxt}>
-                    {t('shopping.savings', {
-                      amount: (results.itemSavings || results.optimalSavings)
-                        .toLocaleString('es-UY', { maximumFractionDigits: 0 }),
-                    })}
+              {/* Reparto: qué cadenas hay que recorrer y cuántos ítems en cada
+                  una. Los puntos se superponen para leerse como un grupo. */}
+              {reparto.length > 0 ? (
+                <View style={styles.reparto}>
+                  <View style={styles.repartoDots}>
+                    {reparto.map((r, i) => (
+                      <StoreDot
+                        key={r.storeId}
+                        storeId={r.storeId}
+                        size={8}
+                        style={i > 0 ? { marginLeft: -4 } : null}
+                      />
+                    ))}
+                  </View>
+                  <Txt variant="caption" color={COLORS.textMid} style={styles.repartoTxt} numberOfLines={1}>
+                    {reparto.map((r) => `${r.n} en ${r.store}`).join(' · ')}
                   </Txt>
                 </View>
               ) : null}
@@ -499,50 +575,60 @@ export default function ShoppingScreen() {
             {/* Cruce con el banco: lo único que un comparador puro no puede
                 mostrar, porque necesita el resumen bancario. */}
             {insight && insight.perfil ? (
-              <Card variant="raised" style={styles.bloque}>
+              <Card variant="raised" style={styles.insightCard}>
                 <View style={styles.insightHead}>
-                  <Ionicons name="wallet-outline" size={16} color={COLORS.accent} />
+                  <Ionicons name="analytics-outline" size={17} color={COLORS.accent} />
                   <Txt variant="overline" color={COLORS.accent} style={styles.insightTitle}>
                     {t('shopping.insightTitle')}
                   </Txt>
                   <View style={{ flex: 1 }} />
+                  {/* El badge es componente y no letra chica: es lo que sostiene
+                      que la proyección mensual es una estimación. */}
                   <Badge variant="estimate" label="Estimación" />
                 </View>
 
-                <Txt variant="body" style={{ marginBottom: 4 }}>
+                {/* Una frase, con los valores resaltados en línea: el dato es la
+                    oración entera, no tres métricas sueltas. */}
+                <Txt variant="body" style={styles.insightFrase}>
                   {t('shopping.insightSpend', {
                     amount: insight.perfil.promedioMensual.toLocaleString('es-UY'),
                   })}
+                  {insight.perfil.habitual
+                    ? ` ${t('shopping.insightHabitual', { store: insight.perfil.habitual.store })}`
+                    : ''}
                 </Txt>
 
-                {insight.perfil.habitual ? (
-                  <View style={styles.insightRow}>
-                    <StoreDot storeId={insight.perfil.habitual.storeId} size={8} style={{ marginRight: 7 }} />
-                    <Txt variant="caption" color={COLORS.textMid}>
-                      {t('shopping.insightHabitual', { store: insight.perfil.habitual.store })}
-                    </Txt>
-                  </View>
-                ) : null}
-
                 {op && !op.yaCompraEnLaMejor ? (
-                  <View style={styles.insightBox}>
-                    <Ionicons name="trending-down" size={15} color={COLORS.income} />
-                    <View style={{ flex: 1, marginLeft: SPACING.s }}>
-                      <Txt variant="caption" color={COLORS.income} style={styles.insightSaving}>
-                        {t('shopping.insightSaving', {
-                          store: op.mejor.store,
-                          amount: op.ahorroMensual.toLocaleString('es-UY'),
-                        })}
-                      </Txt>
-                      <Txt variant="caption" color={COLORS.textLow} style={{ marginTop: 3 }}>
-                        {t('shopping.insightSavingList', {
-                          amount: op.ahorroLista.toLocaleString('es-UY'),
-                          pct: op.ahorroPct,
-                        })}
-                        {' · '}{t('shopping.insightEstimate')}
-                      </Txt>
+                  <>
+                    <Txt variant="body" style={styles.insightFrase}>
+                      {t('shopping.insightSaving', {
+                        store: op.mejor.store,
+                        amount: op.ahorroMensual.toLocaleString('es-UY'),
+                      })}
+                    </Txt>
+                    <View style={styles.insightCajas}>
+                      <View style={styles.insightCaja}>
+                        <Txt variant="caption" color={COLORS.textLow}>Al mes</Txt>
+                        <Txt style={styles.insightMonto}>−{formatUYU(op.ahorroMensual)}</Txt>
+                      </View>
+                      <View style={styles.insightCaja}>
+                        <Txt variant="caption" color={COLORS.textLow}>Al año</Txt>
+                        <Txt style={styles.insightMonto}>−{formatUYU(op.ahorroMensual * 12)}</Txt>
+                      </View>
                     </View>
-                  </View>
+                    <Txt variant="caption" color={COLORS.textLow} style={styles.insightPie}>
+                      {t('shopping.insightSavingList', {
+                        amount: op.ahorroLista.toLocaleString('es-UY'),
+                        pct: op.ahorroPct,
+                      })}
+                      {' · '}
+                      {/* El promedio se calcula sobre los meses que REALMENTE
+                          tienen movimientos, y el número se dice acá. */}
+                      Proyección sobre {insight.perfil.mesesConDatos}
+                      {insight.perfil.mesesConDatos === 1 ? ' mes' : ' meses'} con datos;
+                      puede variar por promos y faltantes.
+                    </Txt>
+                  </>
                 ) : null}
 
                 {op && op.yaCompraEnLaMejor ? (
@@ -576,23 +662,14 @@ export default function ShoppingScreen() {
             <Txt variant="overline" color={COLORS.textLow} style={styles.seccion}>
               {t('shopping.storesRanked')}
             </Txt>
-            {/* Los totales sólo se comparan entre tiendas con la lista completa
-                Y envases parecidos: buscando "arroz" una puede aportar un 5 kg y
-                otra un 1 kg, y el total más bajo sería el de la que vende menos. */}
-            {results.byStore.length > 1 && results.comparableStores < results.byStore.length ? (
-              <Card variant="partial" label="Ojo" style={styles.bloque}>
-                <Txt variant="caption" color={COLORS.textMid}>{t('shopping.notComparable')}</Txt>
-              </Card>
-            ) : null}
-            {results.byStore.map((store, i) => (
-              <StoreCard
-                key={store.storeId}
-                store={store}
-                totalItems={results.totalItems}
-                rank={i}
-                mejorTotal={mejorTotalCompleto}
-              />
-            ))}
+            <StoresCard
+              byStore={results.byStore}
+              totalItems={results.totalItems}
+              mejorTotal={mejorTotalCompleto}
+              aviso={results.byStore.length > 1 && results.comparableStores < results.byStore.length
+                ? t('shopping.notComparable')
+                : null}
+            />
           </>
         ) : null}
 
@@ -628,14 +705,43 @@ const styles = StyleSheet.create({
   seccion: { marginTop: SPACING.l, marginBottom: SPACING.s },
 
   chipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.s },
+  masChip: {
+    flexDirection: 'row', alignItems: 'center',
+    borderWidth: 1.5, borderStyle: 'dashed', borderColor: COLORS.borderStrong,
+    borderRadius: RADIUS.full, paddingVertical: 7, paddingHorizontal: 12,
+  },
+  masChipTxt: { fontFamily: FONTS.semibold, fontSize: 12.5, marginLeft: 5 },
   catRow: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.s, marginTop: SPACING.m },
 
-  optimalTotal: { fontFamily: FONTS.amountBold, fontSize: 32, lineHeight: 38, color: COLORS.textHigh, marginTop: 2 },
+  optimalRow: { flexDirection: 'row', alignItems: 'flex-end' },
+  optimalTotal: { fontFamily: FONTS.amountBold, fontSize: 32, lineHeight: 34, letterSpacing: -0.6, color: COLORS.textHigh },
+  optimalAhorro: { alignItems: 'flex-end', marginLeft: SPACING.s },
+  ahorroMonto: { fontFamily: FONTS.amountBold, fontSize: 18, lineHeight: 21, color: COLORS.income },
+  reparto: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: COLORS.bg,
+    borderWidth: 1.5, borderColor: COLORS.borderSubtle,
+    borderRadius: RADIUS.m, paddingVertical: 10, paddingHorizontal: 12,
+    marginTop: SPACING.s,
+  },
+  repartoDots: { flexDirection: 'row', alignItems: 'center', marginRight: SPACING.s },
+  repartoTxt: { flex: 1 },
   optimalMeta: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 2 },
   ahorroRow: { flexDirection: 'row', alignItems: 'center', marginTop: SPACING.s },
   ahorroTxt: { marginLeft: 6, flex: 1 },
 
-  insightHead: { flexDirection: 'row', alignItems: 'center', marginBottom: SPACING.s },
+  insightCard: { marginTop: SPACING.m, borderRadius: RADIUS.xl },
+  insightHead: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
+  insightFrase: { fontSize: 13.5, lineHeight: 20, marginBottom: 11 },
+  insightCajas: { flexDirection: 'row', gap: 9, marginBottom: 11 },
+  insightCaja: {
+    flex: 1,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1.5, borderColor: COLORS.borderSubtle,
+    borderRadius: RADIUS.m, padding: 11,
+  },
+  insightMonto: { fontFamily: FONTS.amountBold, fontSize: 15, lineHeight: 19, color: COLORS.income, marginTop: 6 },
+  insightPie: { fontSize: 11.5, lineHeight: 16 },
   insightTitle: { marginLeft: 7 },
   insightRow: { flexDirection: 'row', alignItems: 'center', marginBottom: SPACING.s },
   insightBox: {
@@ -656,17 +762,16 @@ const styles = StyleSheet.create({
   otraRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 3 },
   otraTxt: { fontSize: 12 },
 
-  storeCard: { marginTop: SPACING.s },
-  storeHead: { flexDirection: 'row', alignItems: 'flex-start' },
-  storeInfo: { flex: 1, minWidth: 0, marginLeft: SPACING.s },
-  storeTitleRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 },
-  storeName: { fontSize: 16 },
-  storeSub: { marginTop: 3 },
-  storeTotalCol: { alignItems: 'flex-end', marginLeft: SPACING.s },
-  storeTotal: { fontFamily: FONTS.amountBold, fontSize: 17, lineHeight: 20, color: COLORS.textHigh },
-  storeExtra: { fontFamily: FONTS.semibold, fontSize: 12, lineHeight: 16, color: COLORS.expense },
-  storeAviso: { marginTop: SPACING.s },
-  storeItems: { marginTop: SPACING.s, borderTopWidth: 1, borderTopColor: COLORS.borderSubtle, paddingTop: 4 },
+  storesCard: { paddingVertical: 4 },
+  storeRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 11 },
+  storeRowBorde: { borderTopWidth: 1, borderTopColor: COLORS.borderSubtle },
+  storeNombre: { fontFamily: FONTS.bold, fontSize: 12.5, lineHeight: 16, color: COLORS.textHigh, flex: 1, marginLeft: SPACING.s },
+  storeEstado: { fontFamily: FONTS.bold, fontSize: 10, lineHeight: 13, letterSpacing: 0.6, textTransform: 'uppercase' },
+  storeTotal: { fontFamily: FONTS.amountBold, fontSize: 14, lineHeight: 17, minWidth: 62, textAlign: 'right', marginLeft: SPACING.s },
+  storeExtra: { fontFamily: FONTS.semibold, fontSize: 11.5, lineHeight: 15, color: COLORS.expense, marginBottom: 8, marginLeft: 16 },
+  storeAviso: { flexDirection: 'row', alignItems: 'flex-start', paddingTop: 9, marginTop: 3, borderTopWidth: 1, borderTopColor: COLORS.borderSubtle },
+  storeAvisoTxt: { flex: 1, marginLeft: 7, fontSize: 11.5, lineHeight: 16 },
+  storeItems: { paddingBottom: SPACING.s, paddingLeft: 16 },
   storeItemRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8 },
   storeItemName: { flex: 1, marginRight: SPACING.s, fontFamily: FONTS.medium },
   storeItemRight: { flexDirection: 'row', alignItems: 'center' },
