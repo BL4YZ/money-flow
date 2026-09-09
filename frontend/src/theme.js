@@ -156,6 +156,46 @@ export function storeDot(storeId) {
   return s ? s.dot : COLORS.textLow;
 }
 
+// ── Colores de categoría de gasto ─────────────────────────────────
+//
+// Identidad, igual que las tiendas: la misma categoría tiene siempre el mismo
+// color sin importar el orden en que venga del backend, porque si cambia entre
+// meses el gráfico deja de ser legible de un vistazo.
+export const CATEGORY_COLORS = {
+  // Ingresos — siempre verde
+  Salario:         '#5fe0a8',
+  Ingreso:         '#46c98f',
+  // Gastos — distintos entre sí y del verde
+  Supermercado:    '#a29bfe',
+  Restaurantes:    '#fd79a8',
+  Comida:          '#e17055',
+  Transporte:      '#54a0ff',
+  Salud:           '#ff6b6b',
+  Streaming:       '#6c5ce7',
+  Servicios:       '#fdcb6e',
+  Deporte:         '#00cec9',
+  Entretenimiento: '#e84393',
+  Ropa:            '#74b9ff',
+  Educación:       '#8e44ad',
+  Vivienda:        '#f39c12',
+  Préstamos:       '#e74c3c',
+  Seguros:         '#1abc9c',
+  Transferencia:   '#95a5a6',
+  Otros:           '#9d968e',
+};
+
+/**
+ * Color de una categoría. Las custom, que el usuario inventa, salen de un hash
+ * del nombre: siempre el mismo color para el mismo texto, con luminosidad fija
+ * para que ninguna quede ilegible sobre el fondo oscuro.
+ */
+export function categoryColor(name = 'Otros') {
+  if (CATEGORY_COLORS[name]) return CATEGORY_COLORS[name];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  return `hsl(${Math.abs(hash) % 360}, 60%, 68%)`;
+}
+
 // ── COMPATIBILIDAD TEMPORAL — BORRAR AL TERMINAR LA MIGRACIÓN ─────
 //
 // Las 9 pantallas todavía usan los nombres del theme viejo. Sin estos alias la
