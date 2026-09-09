@@ -38,7 +38,7 @@ export default function ScreenHeader({
         <View style={styles.medio}>
           <Txt style={styles.titulo} numberOfLines={1}>{title}</Txt>
           {subtitle ? (
-            <Txt variant="caption" color={COLORS.textLow} style={styles.sub} numberOfLines={1}>
+            <Txt variant="caption" color={COLORS.textLow} style={styles.sub} numberOfLines={2}>
               {subtitle}
             </Txt>
           ) : null}

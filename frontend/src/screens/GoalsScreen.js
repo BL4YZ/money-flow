@@ -260,7 +260,11 @@ export default function GoalsScreen() {
                   </View>
                   <View style={styles.resumenMeta}>
                     <Txt variant="caption" color={COLORS.textLow}>{t('goals.done')}</Txt>
-                    <Txt style={[styles.resumenValor, { color: COLORS.income }]}>{completadas.length}</Txt>
+                    {/* El cero no va en verde: pintar "0 logradas" del color
+                        del logro dice lo contrario de lo que pasa. */}
+                    <Txt style={[styles.resumenValor, completadas.length > 0 && { color: COLORS.income }]}>
+                      {completadas.length}
+                    </Txt>
                   </View>
                 </View>
               </View>
