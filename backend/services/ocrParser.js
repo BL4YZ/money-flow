@@ -212,6 +212,19 @@ function parseCSVTransactions(buffer) {
     if (prom >= 4) textuales.push(k);   // una referencia corta no describe nada
   }
 
+  // La REFERENCIA del banco: entre las columnas que quedaron, la que tiene un
+  // valor casi único por fila. Es el identificador que el banco ya le puso al
+  // movimiento, y sirve de clave para no duplicar al volver a subir.
+  let colRef = -1;
+  let mejorRatio = 0;
+  for (const k of textuales) {
+    const vals = filas.map((f) => (f[k] || '').trim()).filter(Boolean);
+    if (vals.length < filas.length * 0.8) continue;
+    const ratio = new Set(vals).size / vals.length;
+    if (ratio > mejorRatio) { mejorRatio = ratio; colRef = k; }
+  }
+  if (mejorRatio < 0.9) colRef = -1;   // sin unicidad no sirve como clave
+
   const transactions = [];
   for (const f of filas) {
     let amount = null;
@@ -237,11 +250,22 @@ function parseCSVTransactions(buffer) {
       textuales.map((k) => (f[k] || '').trim()).filter(Boolean).join(' - '),
     ) || 'Movimiento';
 
+    const fecha = parseDate((f[0] || '').trim());
+
+    // Clave de idempotencia: fecha + la referencia del propio banco. En el
+    // resumen real esa combinación es única en las 16 filas. Va SIN el importe
+    // a propósito — si el monto formara parte de la clave, volver a subir un
+    // resumen con un importe corregido crearía una fila nueva en vez de
+    // arreglar la vieja, que es exactamente lo que hay que evitar.
+    const ref = colRef >= 0 ? (f[colRef] || '').trim() : '';
+    const externalId = `${fecha}|${ref || description.slice(0, 60)}`;
+
     transactions.push({
-      date: parseDate((f[0] || '').trim()),
+      date: fecha,
       description,
       amount,
       type,
+      externalId,
       // Sin rawText a propósito: es la línea entera del resumen y termina
       // guardada o logueada.
     });

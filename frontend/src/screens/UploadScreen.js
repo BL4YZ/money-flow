@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, ScrollView, Pressable } from 'react-native';
+import { View, StyleSheet, ScrollView, Pressable, Alert } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Toast from 'react-native-toast-message';
@@ -28,6 +28,7 @@ export default function UploadScreen() {
   const [result, setResult] = useState(null);
   const [fileName, setFileName] = useState(null);
   const [seguridadVisible, setSeguridadVisible] = useState(false);
+  const [limpiando, setLimpiando] = useState(false);
 
   const pickAndUpload = async () => {
     if (!canUpload) { showUpgrade('upload'); return; }
@@ -86,6 +87,39 @@ export default function UploadScreen() {
     }
   };
 
+  // Borra lo que vino de un resumen anterior. Existe porque un import previo
+  // pudo guardar importes equivocados, y volver a subir sólo corrige las filas
+  // que ya tienen identificador del banco — las de antes de esa columna
+  // quedarían al lado de las nuevas.
+  const limpiarImportado = () => {
+    Alert.alert(
+      'Borrar lo importado',
+      'Se borran los movimientos que vinieron de un resumen. Los que cargaste a mano no se tocan.',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Borrar',
+          style: 'destructive',
+          onPress: async () => {
+            setLimpiando(true);
+            try {
+              const { data } = await api.delete('/transactions/imported');
+              Toast.show({
+                type: 'success',
+                text1: data.borradas === 1 ? '1 movimiento borrado' : `${data.borradas} movimientos borrados`,
+                text2: 'Volvé a subir el resumen',
+              });
+            } catch (_) {
+              Toast.show({ type: 'error', text1: 'No se pudo borrar' });
+            } finally {
+              setLimpiando(false);
+            }
+          },
+        },
+      ],
+    );
+  };
+
   return (
     <View style={styles.root}>
       <Glow />
@@ -136,6 +170,16 @@ export default function UploadScreen() {
             <Badge variant="statusMuted" icon="grid-outline" label="CSV" />
           </View>
         </Pressable>
+
+        <Button
+          label="Borrar lo importado y empezar de nuevo"
+          variant="ghost"
+          size="sm"
+          icon="refresh-outline"
+          onPress={limpiarImportado}
+          loading={limpiando}
+          style={{ alignSelf: 'center', marginTop: SPACING.s }}
+        />
 
         <View style={styles.features}>
           {/* Tocable: acá es donde uno se pregunta qué pasa con el archivo,

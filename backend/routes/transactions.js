@@ -179,6 +179,38 @@ router.patch('/:id', async (req, res) => {
 });
 
 // ─── DELETE /api/transactions/:id ────────────────────────────
+/**
+ * DELETE /api/transactions/imported — borra lo que vino de un resumen.
+ *
+ * Existe por un caso concreto: el primer import de un CSV leyó la columna de
+ * SALDO como si fuera el importe, y esas filas quedaron guardadas con montos
+ * equivocados. Volver a subir el archivo ya las corrige —el INSERT hace
+ * ON CONFLICT DO UPDATE contra external_id— pero eso sólo alcanza para las
+ * filas que TIENEN external_id. Las de aquel import son anteriores a esa
+ * columna, así que valen NULL y quedarían al lado de las nuevas.
+ *
+ * Nunca toca lo cargado a mano: filtra por source = 'ocr'. Y con `?rotas=1`
+ * borra sólo las que no tienen external_id, que son exactamente las de un
+ * import viejo — un import nuevo y correcto sobrevive.
+ */
+router.delete('/imported', async (req, res) => {
+  const soloRotas = req.query.rotas === '1' || req.query.rotas === 'true';
+  try {
+    const r = await db.query(
+      `DELETE FROM transactions
+        WHERE user_id = $1 AND source = 'ocr'
+          ${soloRotas ? 'AND external_id IS NULL' : ''}`,
+      [req.userId],
+    );
+    // Cantidades, nunca contenido.
+    console.log(`[transactions] import borrado: ${r.rowCount} filas`);
+    res.json({ ok: true, borradas: r.rowCount });
+  } catch (err) {
+    console.error('[transactions] borrado de import falló:', err.message);
+    res.status(500).json({ error: 'No se pudo borrar' });
+  }
+});
+
 router.delete('/:id', async (req, res) => {
   try {
     const result = await db.query(

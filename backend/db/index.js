@@ -88,6 +88,21 @@ async function initSchema() {
       -- Vinculación de transacciones a metas (para auto-acreditar)
       ALTER TABLE transactions ADD COLUMN IF NOT EXISTS goal_id UUID;
 
+      -- Identificador del movimiento segun el propio banco (fecha + su numero
+      -- de referencia). Es lo que permite volver a subir el mismo resumen sin
+      -- duplicar, y sobre todo CORREGIR un import anterior.
+      --
+      -- Hasta acá el INSERT decía ON CONFLICT DO NOTHING pero el único índice
+      -- único era el de la primary key, que es un UUID nuevo en cada fila: no
+      -- había con qué chocar, así que la deduplicación nunca existió y cada
+      -- subida del mismo archivo insertaba todo otra vez.
+      --
+      -- El índice es PARCIAL a propósito: las filas viejas y las cargadas a
+      -- mano tienen external_id NULL y no deben competir entre sí.
+      ALTER TABLE transactions ADD COLUMN IF NOT EXISTS external_id TEXT;
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_tx_user_external
+        ON transactions (user_id, external_id) WHERE external_id IS NOT NULL;
+
       CREATE TABLE IF NOT EXISTS budgets (
         id           SERIAL PRIMARY KEY,
         user_id      UUID NOT NULL,

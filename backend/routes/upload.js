@@ -118,17 +118,37 @@ router.post('/', requirePremium, async (req, res) => {
 
     // 4. Insertar en BD (ignorar duplicados por fecha+descripción+monto)
     let inserted = 0;
+    let updated = 0;
     let skipped = 0;
 
     for (const tx of toInsert) {
       try {
-        await db.query(
-          `INSERT INTO transactions (user_id, date, description, amount, type, category, raw_text, source)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, 'ocr')
-           ON CONFLICT DO NOTHING`,
-          [req.userId, tx.date, tx.description, tx.amount, tx.type, tx.category, tx.rawText]
+        // Volver a subir el mismo resumen ACTUALIZA en vez de duplicar. No es
+        // un detalle: el import anterior podía traer importes equivocados —
+        // pasó de verdad, con la columna de saldo leída como monto— y la única
+        // forma de arreglarlo desde la app es volver a subir el archivo.
+        //
+        // La clave NO incluye el importe justamente por eso: si lo incluyera,
+        // un monto corregido no coincidiría con la fila vieja y se insertaría
+        // al lado en vez de repararla.
+        //
+        // `xmax = 0` distingue una inserción de una actualización, para poder
+        // decirle al usuario qué pasó de verdad. Antes se contaba `inserted++`
+        // aunque el ON CONFLICT no hubiera insertado nada.
+        const r = await db.query(
+          `INSERT INTO transactions (user_id, date, description, amount, type, category, raw_text, source, external_id)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, 'ocr', $8)
+           ON CONFLICT (user_id, external_id) WHERE external_id IS NOT NULL
+           DO UPDATE SET
+             description = EXCLUDED.description,
+             amount      = EXCLUDED.amount,
+             type        = EXCLUDED.type,
+             category    = EXCLUDED.category
+           RETURNING (xmax = 0) AS es_nueva`,
+          [req.userId, tx.date, tx.description, tx.amount, tx.type, tx.category, tx.rawText, tx.externalId || null]
         );
-        inserted++;
+        if (r.rows[0] && r.rows[0].es_nueva) inserted++;
+        else updated++;
       } catch (err) {
         skipped++;
       }
@@ -153,6 +173,7 @@ router.post('/', requirePremium, async (req, res) => {
     res.json({
       success: true,
       inserted,
+      updated,
       skipped,
       total: parsedTransactions.length,
       subscriptionsDetected: newSubs,
