@@ -98,11 +98,72 @@ const sinTildes = (s) => String(s || '').toLowerCase()
 const ES_FECHA = /^\s*\d{1,2}[/\-.]\d{1,2}[/\-.]\d{2,4}\s*$/;
 
 /**
- * Transacciones de un CSV de banco.
+ * Encuentra la columna del SALDO y las del IMPORTE sin confiar en el encabezado.
  *
- * Mapea POR NOMBRE DE ENCABEZADO, no por posición. En el resumen real las
- * columnas numéricas caen en dos patrones distintos según la fila, así que
- * contar posiciones habría funcionado con la mitad de los movimientos.
+ * POR QUÉ NO SE PUEDE CONFIAR EN EL ENCABEZADO
+ *
+ * En el resumen de Santander el encabezado declara 8 columnas
+ * (Fecha, Referencia, Concepto, Descripción, Débito, Crédito, Saldos, "") y las
+ * filas de datos traen 7: NO emiten `Descripción`. Todo lo que viene después de
+ * la posición 2 queda corrido un lugar, así que mapear por nombre entregaba la
+ * columna de SALDO como si fuera el crédito. Reportado por el usuario: un carga
+ * de 1.000 pesos en ANCAP aparecía como 43.311, que era el saldo de la cuenta.
+ *
+ * LA PROPIEDAD QUE SÍ SE VERIFICA
+ *
+ * Un saldo corriente cambia entre filas consecutivas exactamente por el importe
+ * de la fila. Eso se puede comprobar sobre los propios datos y no depende de
+ * cómo el banco haya nombrado ni ordenado las columnas. En el archivo real la
+ * identidad se cumple en 11/11 y 4/4 filas, sin ambigüedad.
+ *
+ * Y el SIGNO sale del saldo, no de qué columna sea: si el saldo subió es un
+ * crédito y si bajó es un débito. Más robusto que adivinar cuál de las dos
+ * columnas numéricas se llamaba "Débito".
+ */
+function detectarColumnas(filas, ancho) {
+  const col = (f, k) => parseAmount((f[k] || '').trim());
+  const numericas = [];
+  for (let k = 1; k < ancho; k++) {   // 0 es la fecha
+    const n = filas.filter((f) => col(f, k) !== null).length;
+    if (n > 0) numericas.push({ k, n });
+  }
+
+  let saldo = -1;
+  let mejor = 0;
+  for (const { k, n } of numericas) {
+    if (n < filas.length * 0.9) continue;   // el saldo está en casi todas
+    for (const { k: imp } of numericas) {
+      if (imp === k) continue;
+      let ok = 0, total = 0;
+      for (let i = 1; i < filas.length; i++) {
+        const a = col(filas[i - 1], k);
+        const b = col(filas[i], k);
+        const m = col(filas[i], imp);
+        if (a === null || b === null || m === null) continue;
+        total++;
+        if (Math.abs(Math.abs(b - a) - Math.abs(m)) < 0.02) ok++;
+      }
+      if (total >= 3 && ok / total > 0.6 && ok > mejor) { mejor = ok; saldo = k; }
+    }
+  }
+
+  // Las de importe son las numéricas que no son el saldo ni la referencia. La
+  // referencia se descarta por magnitud: es un identificador largo, no plata.
+  const importes = numericas
+    .filter(({ k }) => k !== saldo)
+    .filter(({ k }) => {
+      const vals = filas.map((f) => col(f, k)).filter((v) => v !== null).sort((a, b) => a - b);
+      if (vals.length === 0) return false;
+      const mediana = Math.abs(vals[Math.floor(vals.length / 2)]);
+      return mediana < 1e9;   // un número de referencia de 12 dígitos no es un monto
+    })
+    .map(({ k }) => k);
+
+  return { saldo, importes };
+}
+
+/**
+ * Transacciones de un CSV de banco.
  *
  * El archivo trae un preámbulo (cliente, cuenta, moneda, sucursal) y cierra con
  * saldo anterior y saldo final: esas filas tienen la misma cantidad de columnas
@@ -116,57 +177,73 @@ function parseCSVTransactions(buffer) {
     texto = new TextDecoder('windows-1252').decode(buffer);
   }
 
-  const lineas = texto.split(/\r?\n/).filter((l) => l.trim());
+  const lineas = texto.split(/\r?\n/).filter((l) => l.trim()).map(splitCSVLine);
 
-  // El encabezado es la fila que nombra fecha y al menos una columna de plata.
-  let cols = null;
-  let iHeader = -1;
-  for (let i = 0; i < lineas.length; i++) {
-    const c = splitCSVLine(lineas[i]).map(sinTildes);
-    if (c.includes('fecha') && (c.includes('debito') || c.includes('credito'))) {
-      cols = c; iHeader = i; break;
+  // Los movimientos son las filas que empiezan con fecha. El preámbulo y las
+  // filas de saldo anterior / saldo final tienen la misma cantidad de columnas
+  // pero no fecha, así que caen solas.
+  const filas = lineas.filter((c) => ES_FECHA.test((c[0] || '').trim()));
+  if (filas.length === 0) return [];
+  const ancho = Math.max(...filas.map((f) => f.length));
+
+  const { saldo, importes } = detectarColumnas(filas, ancho);
+  if (importes.length === 0) return [];
+
+  // Saldo de arranque: la última fila ANTES del primer movimiento que traiga un
+  // número en la columna del saldo. Es el "saldo anterior" del resumen, y sirve
+  // para saber el signo del primer movimiento — sin él habría que adivinarlo.
+  let saldoPrevio = null;
+  if (saldo >= 0) {
+    const iPrimera = lineas.indexOf(filas[0]);
+    for (let i = iPrimera - 1; i >= 0; i--) {
+      const v = parseAmount((lineas[i][saldo] || '').trim());
+      if (v !== null) { saldoPrevio = v; break; }
     }
   }
-  if (!cols) return [];
 
-  const idx = (nombre) => cols.indexOf(nombre);
-  const iFecha = idx('fecha');
-  const iDebito = idx('debito');
-  const iCredito = idx('credito');
-  const iConcepto = idx('concepto');
-  const iDescripcion = idx('descripcion');
-  const iReferencia = idx('referencia');
+  // La descripción sale de las columnas de TEXTO, que es lo que queda después
+  // de sacar fecha, saldo, importes y la referencia.
+  const usadas = new Set([0, saldo, ...importes]);
+  const textuales = [];
+  for (let k = 1; k < ancho; k++) {
+    if (usadas.has(k)) continue;
+    const largos = filas.map((f) => (f[k] || '').trim().length);
+    const prom = largos.reduce((a, b) => a + b, 0) / largos.length;
+    if (prom >= 4) textuales.push(k);   // una referencia corta no describe nada
+  }
 
   const transactions = [];
-  for (let i = iHeader + 1; i < lineas.length; i++) {
-    const c = splitCSVLine(lineas[i]);
-    const fechaRaw = (c[iFecha] || '').trim();
-    if (!ES_FECHA.test(fechaRaw)) continue;   // saldo anterior / saldo final
-
-    const debito = iDebito >= 0 ? parseAmount((c[iDebito] || '').trim()) : null;
-    const credito = iCredito >= 0 ? parseAmount((c[iCredito] || '').trim()) : null;
-
-    // El movimiento es el que tenga un importe distinto de cero; los bancos
-    // rellenan la otra columna con vacío o con 0,00.
+  for (const f of filas) {
     let amount = null;
-    let type = null;
-    if (debito && Math.abs(debito) > 0) { amount = Math.abs(debito); type = 'debit'; }
-    else if (credito && Math.abs(credito) > 0) { amount = Math.abs(credito); type = 'credit'; }
+    for (const k of importes) {
+      const v = parseAmount((f[k] || '').trim());
+      if (v !== null && Math.abs(v) > 0) { amount = Math.abs(v); break; }
+    }
     if (amount === null) continue;
 
-    // Concepto y descripción son dos columnas y a veces sólo una trae algo.
-    const partes = [c[iConcepto], c[iDescripcion], iReferencia >= 0 ? null : c[1]]
-      .map((x) => (x || '').trim())
-      .filter(Boolean);
-    const description = cleanDescription(partes.join(' - ')) || 'Movimiento';
+    // EL SIGNO SALE DEL SALDO, no de qué columna sea: si subió es un ingreso.
+    // Si no hay saldo utilizable se cae a la posición, que es lo que había.
+    let type = 'debit';
+    const actual = saldo >= 0 ? parseAmount((f[saldo] || '').trim()) : null;
+    if (actual !== null && saldoPrevio !== null) {
+      type = actual > saldoPrevio ? 'credit' : 'debit';
+    } else if (importes.length > 1) {
+      const k = importes.find((x) => parseAmount((f[x] || '').trim()));
+      type = k === importes[0] ? 'debit' : 'credit';
+    }
+    if (actual !== null) saldoPrevio = actual;
+
+    const description = cleanDescription(
+      textuales.map((k) => (f[k] || '').trim()).filter(Boolean).join(' - '),
+    ) || 'Movimiento';
 
     transactions.push({
-      date: parseDate(fechaRaw),
+      date: parseDate((f[0] || '').trim()),
       description,
       amount,
       type,
       // Sin rawText a propósito: es la línea entera del resumen y termina
-      // guardada o logueada. Los otros parsers la incluyen; acá no hace falta.
+      // guardada o logueada.
     });
   }
   return transactions;
