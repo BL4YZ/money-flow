@@ -5,6 +5,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import Toast from 'react-native-toast-message';
 import api from '../api/client';
 import { encryptFile } from '../utils/encryption';
+import SecuritySheet from '../components/SecuritySheet';
 import { usePlan } from '../context/PlanContext';
 import { useLanguage } from '../context/LanguageContext';
 import {
@@ -26,6 +27,7 @@ export default function UploadScreen() {
   const [uploadPhase, setUploadPhase] = useState('encrypting');
   const [result, setResult] = useState(null);
   const [fileName, setFileName] = useState(null);
+  const [seguridadVisible, setSeguridadVisible] = useState(false);
 
   const pickAndUpload = async () => {
     if (!canUpload) { showUpgrade('upload'); return; }
@@ -136,10 +138,13 @@ export default function UploadScreen() {
         </Pressable>
 
         <View style={styles.features}>
-          <Card style={styles.featureCard}>
+          {/* Tocable: acá es donde uno se pregunta qué pasa con el archivo,
+              así que la explicación entera está a un toque. */}
+          <Card style={styles.featureCard} onPress={() => setSeguridadVisible(true)}>
             <Ionicons name="shield-checkmark-outline" size={24} color={COLORS.primary} />
             <Txt variant="h2" style={styles.featureTitle}>{t('upload.featurePrivate')}</Txt>
             <Txt variant="caption" color={COLORS.textMid}>{t('upload.featurePrivateDesc')}</Txt>
+            <Txt variant="caption" color={COLORS.primary} style={{ marginTop: 6 }}>Cómo funciona →</Txt>
           </Card>
           <Card style={styles.featureCard}>
             <Ionicons name="flash-outline" size={24} color={COLORS.accent} />
@@ -176,6 +181,7 @@ export default function UploadScreen() {
         {/* Aire para la tab bar flotante. */}
         <View style={{ height: 110 }} />
       </ScrollView>
+      <SecuritySheet visible={seguridadVisible} onClose={() => setSeguridadVisible(false)} />
     </View>
   );
 }

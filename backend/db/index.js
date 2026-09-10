@@ -171,6 +171,14 @@ module.exports = {
     const p = await initPool();
     return p.query(text, params);
   },
+  // Cliente dedicado, para lo que necesita una transacción de verdad. El
+  // borrado de cuenta toca siete tablas y varias no tienen FK con cascade: si
+  // falla a la mitad quedan filas huérfanas apuntando a un usuario que ya no
+  // existe. Quien lo pide DEBE llamar a release() en un finally.
+  getClient: async () => {
+    const p = await initPool();
+    return p.connect();
+  },
   initPool,
   initSchema,
 };

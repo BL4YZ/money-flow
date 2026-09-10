@@ -41,6 +41,7 @@ console.log('bills OK');
 const shoppingRoute = require('./routes/shopping');
 console.log('shopping OK');
 const pushTokenRoute = require('./routes/pushToken');
+const accountRoute = require('./routes/account');
 console.log('pushToken OK');
 const webhooksRoute = require('./routes/webhooks');
 console.log('webhooks OK');
@@ -128,6 +129,7 @@ app.use('/api/budgets', budgetsRoute);
 app.use('/api/bills', billsRoute);
 app.use('/api/shopping', shoppingRoute);
 app.use('/api/push-token', pushTokenRoute);
+app.use('/api/account', accountRoute);
 app.use('/api/webhooks', webhooksRoute);
 
 // DEV only — allowlist explícito en vez de blocklist: si NODE_ENV falta o

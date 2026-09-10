@@ -11,6 +11,7 @@ import { useAuth } from '../context/AuthContext';
 import { usePlan } from '../context/PlanContext';
 import { useLanguage } from '../context/LanguageContext';
 import RefreshBadge from '../components/RefreshBadge';
+import SecuritySheet from '../components/SecuritySheet';
 import {
   Txt, Card, Input, Chip, Segmented, Badge, Button, BottomSheet,
   EmptyState, ProgressBar, ScreenHeader, Glow, BarChart, formatUYU,
@@ -173,6 +174,7 @@ export default function DashboardScreen() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [chartMode, setChartMode] = useState('mes');   // 'mes' | 'cat'
+  const [seguridadVisible, setSeguridadVisible] = useState(false);
   const [customCategories, setCustomCategories] = useState([]);
   const [newCatInput, setNewCatInput] = useState('');
   const [showCatInput, setShowCatInput] = useState(false);
@@ -493,6 +495,13 @@ export default function DashboardScreen() {
             <Badge variant="premium" label={t('premium.badge')} />
           )}
           <View style={{ flex: 1 }} />
+          <Button
+            label=""
+            variant="ghost"
+            size="sm"
+            icon="shield-checkmark-outline"
+            onPress={() => setSeguridadVisible(true)}
+          />
           <Button label={lang === 'es' ? 'EN' : 'ES'} variant="ghost" size="sm" onPress={toggleLanguage} />
           <Button label="Salir" variant="ghost" size="sm" icon="log-out-outline" onPress={logout} />
         </View>
@@ -763,6 +772,8 @@ export default function DashboardScreen() {
           autoFocus
         />
       </BottomSheet>
+
+      <SecuritySheet visible={seguridadVisible} onClose={() => setSeguridadVisible(false)} />
     </View>
   );
 }
