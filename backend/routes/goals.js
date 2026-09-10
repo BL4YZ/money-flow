@@ -86,6 +86,79 @@ function calcMilestones(currentAmount, targetAmount) {
   };
 }
 
+// Cuánto está gastando de MENOS este mes, comparado a día equivalente.
+//
+// La versión anterior comparaba el mes en curso — 10 días — contra el promedio
+// de meses de 30, así que el número no medía ahorro sino qué día era hoy: un
+// usuario que gasta exactamente lo mismo todos los meses veía "ahorrás $23.714"
+// el día 1, $16.000 el día 10 y $0 el día 30. Cero recién el último día, que es
+// justo cuando ya no sirve de nada.
+//
+// Tres correcciones, y las tres cambian el número:
+//   1. Se compara a DÍA EQUIVALENTE: los primeros N días de cada mes contra los
+//      primeros N de este, con N = el día de hoy. Es lo que hace el gráfico de
+//      "spending vs last month" de Monzo, y es la única forma de que el
+//      resultado no dependa de la fecha.
+//   2. El mes en curso NO entra en el promedio. Antes sí, así que el mes parcial
+//      se comparaba contra un promedio que él mismo había bajado.
+//   3. La ventana arranca en un límite de mes (DATE_TRUNC), no en
+//      NOW() - 6 months, que caía a mitad de marzo y metía otro mes truncado.
+//
+// Devuelve null — no 0 — cuando no hay con qué comparar: sin movimientos
+// cargados este mes el cálculo viejo daba el promedio entero ("ahorrás $26.000"
+// sobre datos que no existen), y acá los datos entran por subida manual de CSV,
+// así que ese es el caso NORMAL, no el raro. Misma regla que el anillo del 72%:
+// antes que un número inventado, nada.
+async function calcSavingsSurplus(userId) {
+  const MESES_MINIMOS = 2; // con un solo mes previo la comparación es ruido
+
+  const { rows } = await db.query(
+    `WITH hoy AS (
+       SELECT EXTRACT(DAY FROM NOW())::int AS dia,
+              DATE_TRUNC('month', NOW())   AS mes_actual
+     ),
+     previos AS (
+       SELECT DATE_TRUNC('month', t.date) AS mes, SUM(ABS(t.amount)) AS total
+       FROM transactions t, hoy
+       WHERE t.user_id = $1 AND t.type = 'debit'
+         AND t.date >= hoy.mes_actual - INTERVAL '6 months'
+         AND t.date <  hoy.mes_actual
+         AND EXTRACT(DAY FROM t.date) <= hoy.dia
+       GROUP BY 1
+     ),
+     actual AS (
+       SELECT COALESCE(SUM(ABS(t.amount)), 0) AS total, COUNT(*) AS movs
+       FROM transactions t, hoy
+       WHERE t.user_id = $1 AND t.type = 'debit'
+         AND t.date >= hoy.mes_actual
+     )
+     SELECT (SELECT AVG(total) FROM previos)  AS avg_parcial,
+            (SELECT COUNT(*)   FROM previos)  AS meses_previos,
+            actual.total AS actual_total,
+            actual.movs  AS actual_movs,
+            (SELECT dia FROM hoy) AS dia
+     FROM actual`,
+    [userId]
+  );
+
+  const r = rows[0] || {};
+  const mesesPrevios = parseInt(r.meses_previos || 0, 10);
+  const movsActual   = parseInt(r.actual_movs   || 0, 10);
+  const avgParcial   = parseFloat(r.avg_parcial || 0);
+  const actual       = parseFloat(r.actual_total || 0);
+
+  // Sin historial suficiente, o sin nada cargado este mes: no hay comparación.
+  if (mesesPrevios < MESES_MINIMOS || movsActual === 0 || avgParcial <= 0) return null;
+  if (actual >= avgParcial) return null;
+
+  return {
+    amount: Math.round(avgParcial - actual),
+    dia: parseInt(r.dia, 10),          // hasta qué día del mes llega la comparación
+    mesesComparados: mesesPrevios,
+  };
+}
+
+
 // ─── CRUD de metas ─────────────────────────────────────────────────
 
 router.get('/', async (req, res) => {
@@ -96,22 +169,7 @@ router.get('/', async (req, res) => {
     );
 
     // Adjuntar insights a cada meta para que la UI los muestre sin un segundo request
-    const { rows: spending } = await db.query(
-      `SELECT
-         AVG(monthly_total) AS avg_monthly,
-         MAX(CASE WHEN month = DATE_TRUNC('month', NOW()) THEN monthly_total END) AS current_month
-       FROM (
-         SELECT DATE_TRUNC('month', date) AS month, SUM(ABS(amount)) AS monthly_total
-         FROM transactions
-         WHERE user_id = $1 AND type = 'debit' AND date >= NOW() - INTERVAL '6 months'
-         GROUP BY 1
-       ) t`,
-      [req.userId]
-    );
-    const avgMonthly   = parseFloat(spending[0]?.avg_monthly   || 0);
-    const currentMonth = parseFloat(spending[0]?.current_month || 0);
-    const savingsSurplus = avgMonthly > 0 && currentMonth < avgMonthly
-      ? Math.round(avgMonthly - currentMonth) : 0;
+    const savingsSurplus = await calcSavingsSurplus(req.userId);
 
     const goalsWithInsights = await Promise.all(goals.map(async (goal) => {
       const { rows: deposits } = await db.query(
@@ -167,7 +225,7 @@ router.post('/', [
         insights: {
           projection: { status: 'no_data' },
           monthlyQuota: calcMonthlyQuota(goal.current_amount, goal.target_amount, goal.target_date),
-          streak: 0, milestones: calcMilestones(goal.current_amount, goal.target_amount), savingsSurplus: 0,
+          streak: 0, milestones: calcMilestones(goal.current_amount, goal.target_amount), savingsSurplus: null,
         },
       },
     });
@@ -294,33 +352,14 @@ router.get('/:id/insights', async (req, res) => {
       [goal.id]
     );
 
-    // Gasto promedio mensual vs mes actual (para sugerencia de ahorro)
-    const { rows: spendingRows } = await db.query(
-      `SELECT
-         AVG(monthly_total) AS avg_monthly,
-         MAX(CASE WHEN month = DATE_TRUNC('month', NOW()) THEN monthly_total END) AS current_month
-       FROM (
-         SELECT DATE_TRUNC('month', date) AS month, SUM(ABS(amount)) AS monthly_total
-         FROM transactions
-         WHERE user_id = $1 AND type = 'debit'
-           AND date >= NOW() - INTERVAL '6 months'
-         GROUP BY 1
-       ) t`,
-      [req.userId]
-    );
-
-    const avgMonthly  = parseFloat(spendingRows[0]?.avg_monthly || 0);
-    const currentMonth = parseFloat(spendingRows[0]?.current_month || 0);
-    const savingsSurplus = avgMonthly > 0 && currentMonth < avgMonthly
-      ? Math.round(avgMonthly - currentMonth)
-      : 0;
+    const savingsSurplus = await calcSavingsSurplus(req.userId);
 
     res.json({
       projection:    calcProjection(deposits, goal.current_amount, goal.target_amount),
       monthlyQuota:  calcMonthlyQuota(goal.current_amount, goal.target_amount, goal.target_date),
       streak:        calcStreak(deposits),
       milestones:    calcMilestones(goal.current_amount, goal.target_amount),
-      savingsSurplus,                // cuánto está gastando menos que el promedio este mes
+      savingsSurplus,                // {amount, dia, mesesComparados} o null si no hay con que comparar
       totalDeposits: deposits.length,
     });
   } catch (err) {
@@ -383,3 +422,6 @@ router.post('/link-transaction', [
 });
 
 module.exports = router;
+// Expuesto solo para scripts/verify-savings-surplus.js: el calculo depende de
+// la fecha de hoy, asi que hay que poder correrlo contra datos sembrados.
+module.exports.__testing = { calcSavingsSurplus };

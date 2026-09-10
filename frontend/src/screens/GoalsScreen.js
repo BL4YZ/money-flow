@@ -39,7 +39,9 @@ function GoalCard({ goal, onDeposit, onDelete }) {
   const proj = ins?.projection;
   const streak = ins?.streak || 0;
   const quota = ins?.monthlyQuota;
-  const surplus = ins?.savingsSurplus || 0;
+  // {amount, dia, mesesComparados} — o null cuando no hay con que comparar
+  // (sin movimientos cargados este mes, o menos de dos meses de historial).
+  const surplus = ins?.savingsSurplus || null;
 
   const projText = (() => {
     if (goal.is_completed) return null;
@@ -107,9 +109,9 @@ function GoalCard({ goal, onDeposit, onDelete }) {
                 Hacé tu primer depósito para ver cuándo llegás
               </Txt>
             )}
-            {surplus > 0 ? (
+            {surplus?.amount > 0 ? (
               <Txt variant="caption" color={COLORS.income} style={{ marginTop: 4 }}>
-                💡 Ahorrás {formatUYU(surplus)} extra este mes
+                💡 Vas {formatUYU(surplus.amount)} por debajo de tu promedio a esta altura del mes
               </Txt>
             ) : null}
           </View>

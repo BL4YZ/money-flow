@@ -74,6 +74,15 @@ Two independent signals decide `isPremium`, reconciled client-side in `frontend/
 
 Feature flags derived from `isPremium` live in `PlanContext.buildFlags()` — add new gated features there, not ad-hoc checks scattered through screens.
 
+### Savings goals
+
+`routes/goals.js` — CRUD plus deposits (`goal_deposits`; a deposit also writes a `transactions` row carrying `goal_id`) and five derived numbers computed server-side and embedded in `GET /goals`, so the list needs no second request: `projection`, `monthlyQuota`, `streak`, `milestones`, `savingsSurplus`.
+
+- **`savingsSurplus` compares at EQUIVALENT DAY, and returns `null` rather than a number when it cannot compare.** The first version took `AVG(monthly_total)` over the last 6 months and subtracted the current month — a *partial* month against full-month averages — so the figure measured **what day it is**, not saving. Simulated over a user spending exactly the same every month it read "Ahorrás $23.714" on day 1, $16.000 on day 10 and $0 on day 30: zero only on the last day of the month, which is precisely when it is useless. Two further errors in the same query: the partial current month sat **inside its own average** (dragging it down), and `NOW() - INTERVAL '6 months'` lands mid-month so the oldest bucket was truncated too. It now sums the first N days of each of the 6 previous months with N = today's day, excludes the current month from the average, and starts the window at `DATE_TRUNC('month', …)` — the shape of Monzo's "spending vs last month" chart, and the only shape whose answer does not depend on the date.
+- It returns `null`, **not `0`**, with fewer than 2 comparable previous months or with **no transactions loaded for this month**. That second case is the normal one here rather than the rare one — statements arrive by manual CSV upload, so `MAX(CASE …)` was `NULL` → `0` → the surplus came out as the entire average, announcing a saving over data that does not exist. Same rule as Upload's hardcoded 72% ring: rather than an invented number, nothing. The UI must therefore read `savingsSurplus?.amount`, not the value itself.
+- `node scripts/verify-savings-surplus.js` seeds four disposable users — spends the same as always / spends half / nothing loaded this month / only one month of history — and asserts that the first, third and fourth stay silent while the second is detected to the peso. It calls the helper directly through `module.exports.__testing` because the calculation depends on today's date.
+- **Built and returned but never surfaced**: `POST /api/goals/link-transaction` (attach a real bank movement to a goal) and `milestones` (25/50/75/100%) are computed and shipped, and `GoalsScreen.js` reads neither; `GET /:id/insights` is likewise called by nothing — the screen only uses the insights embedded in `GET /goals`.
+
 ### External integrations
 
 - **Supabase**: used purely as managed Postgres (via `pg.Pool` + `DATABASE_URL`, pooler mode, port 6543). Not using Supabase Auth, Storage, or the JS client — `SUPABASE_URL`/`SUPABASE_ANON_KEY` in `.env` are currently unused by the backend code.
