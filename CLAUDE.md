@@ -18,6 +18,7 @@ Two independent apps in one repo, deployed separately:
 - `npm run dev` — start with nodemon (auto-restart)
 - `npm start` — start with `node --dns-result-order=ipv4first server.js` (the IPv4 flag matters — see "Database connection" below)
 - `node scripts/verify-security-fixes.js [baseUrl]` — E2E smoke test (registers a disposable user, tests webhook auth, premium gating, hybrid-encryption upload, IDOR, then cleans up everything it created including tables with no FK cascade). Defaults to `http://localhost:3000`; pass a URL to point at Render instead. Requires `DATABASE_URL` to be reachable.
+- `node scripts/verify-deploy-goals.js [baseUrl]` — is Render actually serving the code you just pushed? `/health` returns a hardcoded `version: '1.0.0'`, so it cannot tell one deploy from another; this asks the API for something only the new code does (`GET /goals` carrying `feasibility`). It registers a disposable user and **deletes itself through `DELETE /api/account`** rather than touching the database, so a broken account-deletion shows up here too. Defaults to the Render URL.
 - No lint/typecheck/test-suite scripts exist in this backend. There is no Jest/Mocha config — the verify script above is the only automated check.
 
 **Frontend** (`cd frontend`):
