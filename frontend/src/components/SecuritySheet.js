@@ -12,38 +12,56 @@ import { Txt, Card, Input, Button, BottomSheet } from './ui';
 import { COLORS, SPACING, RADIUS, FONTS } from '../theme';
 
 /**
- * Qué pasa con los datos del usuario, en castellano y sin vender humo.
+ * Qué pasa con el resumen del usuario, contado como un recorrido.
  *
- * Cada línea de acá describe algo que el código realmente hace. La tentación en
- * una pantalla así es escribir "cifrado de extremo a extremo" porque suena
- * mejor — y sería mentira: el servidor descifra el archivo para poder leerlo.
- * Decirlo es lo que hace creíble al resto.
+ * La primera versión afirmaba fuerte y después se desdecía ("se cifra… pero no
+ * es extremo a extremo"). Reportado como confuso, y con razón: afirmar y
+ * retractarse genera desconfianza aunque lo de abajo sea sólido. El error de
+ * fondo era discutir un TÉRMINO en vez de contar qué pasa.
+ *
+ * Además mezclaba dos amenazas distintas que el usuario no tiene por qué
+ * separar solo:
+ *   · ¿puede leerlo alguien que intercepte el envío?  → no
+ *   · ¿puede leerlo el servicio?                      → sí, y tiene que poder
+ *
+ * La segunda no es una falla de seguridad: sin descifrarlo no hay categorías,
+ * ni suscripciones detectadas, ni comparación de precios. Contado en orden
+ * —tu teléfono, el camino, el servidor, lo que queda— el dato honesto es parte
+ * del recorrido y no una excepción a la letra chica.
+ *
+ * Las dos cadenas de i18n que prometían "cifrado de punta a punta" se
+ * corrigieron: eran falsas, y una de ellas vendía la suscripción premium.
  */
 const PUNTOS = [
   {
-    icon: 'lock-closed-outline',
-    titulo: 'Se cifra en tu teléfono, antes de salir',
-    texto: 'El resumen se cifra con AES-256 acá mismo. La clave de ese cifrado viaja aparte, envuelta con una clave pública del servidor: aunque alguien intercepte el envío entero, sin la clave privada no puede abrirlo.',
+    paso: '1',
+    icon: 'phone-portrait-outline',
+    titulo: 'En tu teléfono',
+    texto: 'El archivo se cifra acá, antes de salir, con una clave nueva que se genera en ese momento y no se repite.',
   },
   {
-    icon: 'eye-outline',
-    titulo: 'El servidor sí lo abre — no es extremo a extremo',
-    texto: 'Para leer tus movimientos hay que descifrarlo, así que el servidor lo abre por unos segundos. Preferimos decírtelo antes que llamarlo "extremo a extremo", que sería falso.',
+    paso: '2',
+    icon: 'swap-horizontal-outline',
+    titulo: 'En el camino',
+    texto: 'Esa clave viaja aparte, envuelta con la clave pública del servidor. Quien intercepte el envío —tu wifi, tu proveedor, cualquiera en el medio— ve sólo ruido.',
   },
   {
-    icon: 'trash-bin-outline',
-    titulo: 'El archivo nunca se guarda',
-    texto: 'Se procesa en memoria y se descarta cuando termina el pedido. No queda en disco, ni en una carpeta temporal, ni en un backup.',
+    paso: '3',
+    icon: 'server-outline',
+    titulo: 'En el servidor',
+    texto: 'Ahí sí se abre: hay que leer los movimientos para poder categorizarlos y compararlos con los precios. Se hace en memoria, en segundos, y el archivo se descarta. Nunca toca el disco.',
   },
   {
+    paso: '4',
     icon: 'document-text-outline',
-    titulo: 'Qué queda guardado',
-    texto: 'Los movimientos ya procesados: fecha, descripción, monto y categoría. Con eso se arman los gráficos, las suscripciones detectadas y el cruce con los precios.',
+    titulo: 'Lo que queda',
+    texto: 'Los movimientos ya procesados: fecha, descripción, monto y categoría. El archivo original no queda en ningún lado.',
   },
   {
+    paso: '5',
     icon: 'key-outline',
-    titulo: 'Nunca te pedimos las claves del banco',
-    texto: 'La app no se conecta a tu banco ni te pide usuario y contraseña. Vos bajás el resumen y lo subís. Si alguna vez una pantalla te pide esos datos, no es esta app.',
+    titulo: 'Lo que nunca pasa',
+    texto: 'La app no se conecta a tu banco ni te pide usuario y contraseña. Vos bajás el resumen y lo subís. Si alguna pantalla te pide esas claves, no es esta app.',
   },
 ];
 
@@ -120,10 +138,34 @@ export default function SecuritySheet({ visible, onClose }) {
       title="Seguridad y datos"
       subtitle="Qué pasa con tu resumen bancario"
     >
+      {/* La respuesta directa, arriba de todo. Es la pregunta que la gente
+          realmente se hace, y dejarla implícita entre cinco párrafos fue lo que
+          hizo que la versión anterior se sintiera evasiva. */}
+      <Card style={styles.resumen}>
+        <Txt variant="caption" color={COLORS.textHigh} style={styles.resumenTitulo}>
+          ¿Quién puede ver tu resumen?
+        </Txt>
+        <View style={styles.resumenFila}>
+          <Ionicons name="close-circle" size={15} color={COLORS.income} />
+          <Txt variant="caption" color={COLORS.textMid} style={styles.resumenTxt}>
+            Nadie en el camino: ni tu wifi, ni tu proveedor, ni quien intercepte el envío.
+          </Txt>
+        </View>
+        <View style={styles.resumenFila}>
+          <Ionicons name="checkmark-circle" size={15} color={COLORS.textMid} />
+          <Txt variant="caption" color={COLORS.textMid} style={styles.resumenTxt}>
+            MoneyFlow sí, por unos segundos. Sin leerlo no hay categorías ni comparación de precios.
+          </Txt>
+        </View>
+      </Card>
+
       {PUNTOS.map((p) => (
         <View key={p.titulo} style={styles.punto}>
-          <View style={styles.iconBox}>
-            <Ionicons name={p.icon} size={17} color={COLORS.accent} />
+          <View style={styles.pasoCol}>
+            <View style={styles.iconBox}>
+              <Ionicons name={p.icon} size={16} color={COLORS.accent} />
+            </View>
+            <Txt style={styles.pasoNum}>{p.paso}</Txt>
           </View>
           <View style={styles.puntoTxt}>
             <Txt variant="caption" color={COLORS.textHigh} style={styles.puntoTitulo}>
@@ -188,12 +230,21 @@ export default function SecuritySheet({ visible, onClose }) {
 }
 
 const styles = StyleSheet.create({
+  resumen: { marginBottom: SPACING.m },
+  resumenTitulo: { fontFamily: FONTS.bold, marginBottom: SPACING.s },
+  resumenFila: { flexDirection: 'row', alignItems: 'flex-start', marginTop: 6 },
+  resumenTxt: { flex: 1, marginLeft: 7, fontSize: 12.5, lineHeight: 18 },
+
   punto: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: SPACING.m },
+  pasoCol: { alignItems: 'center', marginRight: SPACING.s },
   iconBox: {
     width: 34, height: 34, borderRadius: RADIUS.s,
     backgroundColor: COLORS.accentSoft,
     alignItems: 'center', justifyContent: 'center',
-    marginRight: SPACING.s,
+  },
+  pasoNum: {
+    fontFamily: FONTS.amountBold, fontSize: 10, lineHeight: 13,
+    color: COLORS.textLow, marginTop: 4,
   },
   puntoTxt: { flex: 1, minWidth: 0 },
   puntoTitulo: { fontFamily: FONTS.bold, marginBottom: 3 },
