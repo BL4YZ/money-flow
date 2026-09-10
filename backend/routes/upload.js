@@ -3,7 +3,7 @@ const crypto = require('crypto');
 const db = require('../db');
 const authMiddleware = require('../middleware/auth');
 const requirePremium = require('../middleware/requirePremium');
-const { extractTextFromPDF, parseTransactions } = require('../services/ocrParser');
+const { extractTextFromPDF, parseTransactions, parseCSVTransactions, pareceCSV } = require('../services/ocrParser');
 const { detectSubscriptions } = require('../services/subscriptionDetector');
 const { categorize } = require('../services/categorizer');
 const { getPublicKeyPem, decryptAesKey } = require('../services/uploadKeys');
@@ -55,30 +55,58 @@ router.post('/', requirePremium, async (req, res) => {
     const fileBuffer = Buffer.from(base64Str, 'base64');
 
     // Validate file type
-    const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
-    if (mimeType && !allowedTypes.some(t => mimeType.startsWith(t.split('/')[0]) || mimeType === t)) {
-      return res.status(400).json({ error: 'Solo se aceptan PDFs e imágenes' });
+    const allowedTypes = [
+      'application/pdf', 'image/jpeg', 'image/png', 'image/webp',
+      'text/csv', 'text/comma-separated-values', 'application/csv',
+      'application/vnd.ms-excel',   // lo que manda Windows para un .csv
+    ];
+    const esCSV = pareceCSV(fileBuffer, mimeType, filename);
+    if (!esCSV && mimeType && !allowedTypes.some((t) => mimeType.startsWith(t.split('/')[0]) || mimeType === t)) {
+      return res.status(400).json({ error: 'Solo se aceptan PDFs, imágenes o CSV' });
     }
 
-    // 2. Extraer texto del PDF/imagen
-    const text = await extractTextFromPDF(fileBuffer);
+    // 2. Extraer movimientos.
+    //
+    // El CSV va por su propio camino y no pasa por pdf-parse: el banco ya lo
+    // entrega estructurado. Verificado contra un resumen real de Santander —
+    // el CSV da 16 movimientos y el mismo resumen en PDF da 0, porque el texto
+    // sale tabulado y ninguno de los tres parsers de PDF lo reconoce.
+    let parsedTransactions;
+    if (esCSV) {
+      parsedTransactions = parseCSVTransactions(fileBuffer);
+      if (parsedTransactions.length === 0) {
+        return res.status(422).json({
+          error: 'No se encontraron movimientos en el CSV. Verificá que sea el resumen de cuenta y no otro archivo.',
+        });
+      }
+    } else {
+      const text = await extractTextFromPDF(fileBuffer);
 
-    if (!text || text.trim().length < 20) {
-      return res.status(422).json({
-        error: 'No se pudo extraer texto del archivo. Verificá que sea un estado de cuenta válido.',
-      });
+      if (!text || text.trim().length < 20) {
+        return res.status(422).json({
+          error: 'No se pudo extraer texto del archivo. Verificá que sea un estado de cuenta válido.',
+        });
+      }
+
+      // NO SE LOGUEA EL CONTENIDO. Acá había dos console.log que escribían los
+      // primeros 300 y 800 caracteres del resumen — nombre del titular, número
+      // de cuenta y movimientos — a los logs de Render. Todo el pipeline usa
+      // RSA+AES para que un request filtrado no sea descifrable, y esto lo
+      // anulaba escribiendo el plaintext al lado. Sólo va el tamaño.
+      console.log(`[upload] texto extraído: ${text.trim().length} chars`);
+
+      parsedTransactions = parseTransactions(text);
     }
-
-    console.log(`[upload] Texto extraído (${text.trim().length} chars):`, text.substring(0, 300).replace(/\n/g, ' | '));
-
-    // 2. Parsear transacciones
-    const parsedTransactions = parseTransactions(text);
 
     if (parsedTransactions.length === 0) {
-      console.log('[upload] Sin transacciones. Muestra del texto:', text.substring(0, 800));
+      // Sin muestra del texto, ni en el log ni en la respuesta. `text` acá es
+      // el resumen del usuario: los 800 caracteres que se escribían al log y
+      // los 500 que viajaban en el JSON traían el nombre del titular, el
+      // número de cuenta y los movimientos. Que la respuesta de error lleve
+      // datos financieros es peor todavía que loguearlos: sale por la red y
+      // queda en cualquier proxy o herramienta de errores del camino.
       return res.status(422).json({
-        error: 'No se encontraron transacciones. El formato del estado de cuenta puede no ser compatible.',
-        extractedTextSample: text.substring(0, 500),
+        error: 'No se encontraron transacciones. El formato del estado de cuenta puede no ser compatible. Probá con el CSV en vez del PDF.',
       });
     }
 

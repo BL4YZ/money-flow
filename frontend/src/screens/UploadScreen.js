@@ -30,8 +30,20 @@ export default function UploadScreen() {
   const pickAndUpload = async () => {
     if (!canUpload) { showUpgrade('upload'); return; }
     try {
+      // El badge de abajo prometía CSV desde siempre y el selector no lo
+      // dejaba elegir: el usuario veía "CSV" y no podía seleccionar el CSV que
+      // le da el banco. Windows manda los .csv como application/vnd.ms-excel,
+      // así que va el MIME real y el que manda el sistema. Del CSV salen 16
+      // movimientos donde el mismo resumen en PDF da 0.
       const picked = await DocumentPicker.getDocumentAsync({
-        type: ['application/pdf', 'image/*'],
+        type: [
+          'application/pdf',
+          'image/*',
+          'text/csv',
+          'text/comma-separated-values',
+          'application/csv',
+          'application/vnd.ms-excel',
+        ],
         copyToCacheDirectory: true,
       });
       if (picked.canceled) return;

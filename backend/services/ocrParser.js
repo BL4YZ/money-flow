@@ -62,6 +62,124 @@ async function extractTextFromPDF(pdfBuffer) {
   }
 }
 
+// ─── CSV del banco ────────────────────────────────────────────────
+//
+// Santander (y la mayoría) ofrece el resumen en CSV además de PDF, y el CSV es
+// muchísimo mejor punto de entrada: no depende de pdf-parse, no hay que
+// reconstruir una tabla por posiciones y el resultado es determinístico.
+// Verificado contra un resumen real: el PDF extrae texto pero queda tabulado a
+// ~13 caracteres por línea y ninguno de los tres parsers lo reconoce.
+
+/**
+ * Split que respeta comillas (RFC 4180). Con `split(',')` a secas las filas de
+ * un resumen real daban 7 u 8 columnas contra un encabezado de 8, porque los
+ * conceptos traen comas adentro y vienen entrecomillados. Con esto, todas dan 7.
+ */
+function splitCSVLine(linea) {
+  const out = [];
+  let cur = '';
+  let dentro = false;
+  for (let i = 0; i < linea.length; i++) {
+    const c = linea[i];
+    if (c === '"') {
+      if (dentro && linea[i + 1] === '"') { cur += '"'; i++; }
+      else dentro = !dentro;
+    } else if (c === ',' && !dentro) {
+      out.push(cur); cur = '';
+    } else cur += c;
+  }
+  out.push(cur);
+  return out;
+}
+
+const sinTildes = (s) => String(s || '').toLowerCase()
+  .normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+
+const ES_FECHA = /^\s*\d{1,2}[/\-.]\d{1,2}[/\-.]\d{2,4}\s*$/;
+
+/**
+ * Transacciones de un CSV de banco.
+ *
+ * Mapea POR NOMBRE DE ENCABEZADO, no por posición. En el resumen real las
+ * columnas numéricas caen en dos patrones distintos según la fila, así que
+ * contar posiciones habría funcionado con la mitad de los movimientos.
+ *
+ * El archivo trae un preámbulo (cliente, cuenta, moneda, sucursal) y cierra con
+ * saldo anterior y saldo final: esas filas tienen la misma cantidad de columnas
+ * pero NO empiezan con fecha, que es como se las descarta sin listarlas a mano.
+ */
+function parseCSVTransactions(buffer) {
+  // Los bancos uruguayos mandan windows-1252. Leerlo como utf-8 rompe cada
+  // acento y con eso las descripciones y los nombres de columna.
+  let texto = Buffer.isBuffer(buffer) ? buffer.toString('utf8') : String(buffer);
+  if (/�/.test(texto) && Buffer.isBuffer(buffer)) {
+    texto = new TextDecoder('windows-1252').decode(buffer);
+  }
+
+  const lineas = texto.split(/\r?\n/).filter((l) => l.trim());
+
+  // El encabezado es la fila que nombra fecha y al menos una columna de plata.
+  let cols = null;
+  let iHeader = -1;
+  for (let i = 0; i < lineas.length; i++) {
+    const c = splitCSVLine(lineas[i]).map(sinTildes);
+    if (c.includes('fecha') && (c.includes('debito') || c.includes('credito'))) {
+      cols = c; iHeader = i; break;
+    }
+  }
+  if (!cols) return [];
+
+  const idx = (nombre) => cols.indexOf(nombre);
+  const iFecha = idx('fecha');
+  const iDebito = idx('debito');
+  const iCredito = idx('credito');
+  const iConcepto = idx('concepto');
+  const iDescripcion = idx('descripcion');
+  const iReferencia = idx('referencia');
+
+  const transactions = [];
+  for (let i = iHeader + 1; i < lineas.length; i++) {
+    const c = splitCSVLine(lineas[i]);
+    const fechaRaw = (c[iFecha] || '').trim();
+    if (!ES_FECHA.test(fechaRaw)) continue;   // saldo anterior / saldo final
+
+    const debito = iDebito >= 0 ? parseAmount((c[iDebito] || '').trim()) : null;
+    const credito = iCredito >= 0 ? parseAmount((c[iCredito] || '').trim()) : null;
+
+    // El movimiento es el que tenga un importe distinto de cero; los bancos
+    // rellenan la otra columna con vacío o con 0,00.
+    let amount = null;
+    let type = null;
+    if (debito && Math.abs(debito) > 0) { amount = Math.abs(debito); type = 'debit'; }
+    else if (credito && Math.abs(credito) > 0) { amount = Math.abs(credito); type = 'credit'; }
+    if (amount === null) continue;
+
+    // Concepto y descripción son dos columnas y a veces sólo una trae algo.
+    const partes = [c[iConcepto], c[iDescripcion], iReferencia >= 0 ? null : c[1]]
+      .map((x) => (x || '').trim())
+      .filter(Boolean);
+    const description = cleanDescription(partes.join(' - ')) || 'Movimiento';
+
+    transactions.push({
+      date: parseDate(fechaRaw),
+      description,
+      amount,
+      type,
+      // Sin rawText a propósito: es la línea entera del resumen y termina
+      // guardada o logueada. Los otros parsers la incluyen; acá no hace falta.
+    });
+  }
+  return transactions;
+}
+
+/** ¿Este archivo parece un CSV de banco? Se decide por contenido, no por nombre. */
+function pareceCSV(buffer, mimeType, filename) {
+  if (/csv|excel|spreadsheet/i.test(mimeType || '')) return true;
+  if (/\.csv$/i.test(filename || '')) return true;
+  const cabeza = Buffer.isBuffer(buffer) ? buffer.slice(0, 2048).toString('latin1') : '';
+  return /(^|\n)[^\n]*,[^\n]*,/.test(cabeza) && !cabeza.startsWith('%PDF');
+}
+
 /**
  * Parsea el texto de un estado de cuenta y extrae transacciones.
  */
@@ -268,4 +386,4 @@ function cleanDescription(desc) {
   return cleaned;
 }
 
-module.exports = { extractTextFromPDF, parseTransactions };
+module.exports = { extractTextFromPDF, parseTransactions, parseCSVTransactions, pareceCSV };
