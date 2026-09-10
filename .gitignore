@@ -20,3 +20,20 @@ Thumbs.db
 # command text (including secrets pasted into ad-hoc curl/test commands
 # during a session) and must never be committed.
 .claude/
+
+# ── Resúmenes bancarios y cualquier extracto ─────────────────────
+# Datos financieros reales del usuario: movimientos, saldos y a veces el
+# número de cuenta. Se ignoran POR EXTENSIÓN y no por nombre porque el
+# próximo resumen se va a llamar distinto y nadie se va a acordar de
+# agregarlo — que es exactamente cómo settings.local.json terminó con
+# credenciales reales adentro durante cuatro meses y medio.
+#
+# Hoy no hay ningún .csv ni .pdf versionado, así que esto no tapa nada
+# legítimo. Si alguna vez hace falta commitear uno, `git add -f <archivo>`
+# lo fuerza — que es justo la fricción que se quiere acá.
+*.csv
+*.pdf
+*.xls
+*.xlsx
+*.ofx
+*.qif
