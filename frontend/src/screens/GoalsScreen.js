@@ -28,7 +28,7 @@ const FORM_VACIO = { name: '', target_amount: '', target_date: '', icon: 'trophy
  * meses" responde la pregunta que trae al usuario, y el porcentaje sólo la
  * ilustra.
  */
-function GoalCard({ goal, onDeposit, onDelete }) {
+function GoalCard({ goal, feas, onDeposit, onDelete }) {
   const current = parseFloat(goal.current_amount);
   const target = parseFloat(goal.target_amount);
   const progress = Math.min(current / target, 1);
@@ -109,6 +109,14 @@ function GoalCard({ goal, onDeposit, onDelete }) {
                 Hacé tu primer depósito para ver cuándo llegás
               </Txt>
             )}
+            {/* El "no llegas" va con las dos salidas, no solo. Un aviso sin
+                alternativa no ayuda a decidir nada. */}
+            {feas?.veredicto === 'no_alcanza' && feas.faltantePorMes > 0 ? (
+              <Txt variant="caption" color={COLORS.warning} style={{ marginTop: 4 }}>
+                A esa fecha no llegás: faltan {formatUYU(feas.faltantePorMes)}/mes.
+                {feas.objetivoPosible > 0 ? ` En el plazo entran ${formatUYU(feas.objetivoPosible)}.` : ''}
+              </Txt>
+            ) : null}
             {surplus?.amount > 0 ? (
               <Txt variant="caption" color={COLORS.income} style={{ marginTop: 4 }}>
                 💡 Vas {formatUYU(surplus.amount)} por debajo de tu promedio a esta altura del mes
@@ -118,6 +126,76 @@ function GoalCard({ goal, onDeposit, onDelete }) {
           <Button label="Ahorrar" size="sm" icon="add" onPress={onDeposit} />
         </View>
       )}
+    </Card>
+  );
+}
+
+/**
+ * ¿Te da?
+ *
+ * Es la pregunta que trae al usuario y la que una barra de progreso no puede
+ * contestar: el porcentaje dice cuánto lleva, no si va a llegar. Contestarla
+ * necesita el ingreso y el gasto reales, y eso lo tenemos porque el resumen
+ * del banco ya está cargado — una app de metas suelta no puede decirlo.
+ *
+ * Dos reglas de la card:
+ *  - Si el backend no puede comparar (menos de dos meses cerrados) no se
+ *    inventa un veredicto: se dice qué falta para poder darlo.
+ *  - Cuando NO da, la card no se limita a avisar. Ofrece las dos salidas
+ *    concretas — correr la fecha o bajar el objetivo — porque un "no llegás"
+ *    sin salida es sólo una mala noticia.
+ */
+function FeasibilityCard({ feas, metas }) {
+  if (!feas || metas === 0) return null;
+
+  if (feas.status === 'sin_datos') {
+    return (
+      <Card variant="base" label="¿Te da?" style={styles.bloque}>
+        <Txt variant="caption" color={COLORS.textMid}>
+          Con {feas.mesesMinimos} meses de resumen cargados puedo decirte si tus metas
+          entran en lo que te sobra por mes.
+        </Txt>
+      </Card>
+    );
+  }
+
+  const { disponible, cuotaTotal, faltante, ingreso, gasto, fijos, mesesGasto } = feas;
+  const sinMargen = feas.veredicto === 'sin_margen';
+  const da = feas.veredicto === 'alcanza' || feas.veredicto === 'ajustado';
+  // Ambar significa "cuidado con este numero", no "todavia no completaste el
+  // formulario": una meta sin fecha no es una advertencia.
+  const tono = da ? 'best' : (feas.veredicto === 'sin_fecha' ? 'base' : 'partial');
+
+  const titular = sinMargen
+    ? 'Hoy no te sobra nada'
+    : `Te sobran ${formatUYU(disponible)} por mes`;
+
+  const detalle = (() => {
+    if (sinMargen) return `Gastás ${formatUYU(gasto)} de los ${formatUYU(ingreso)} que entran.`;
+    if (feas.veredicto === 'sin_fecha') return 'Poné una fecha objetivo y te digo si llegás.';
+    if (feas.veredicto === 'alcanza') return `Tus metas piden ${formatUYU(cuotaTotal)} por mes. Entra.`;
+    if (feas.veredicto === 'ajustado') return `Tus metas piden ${formatUYU(cuotaTotal)} por mes. Entra justo.`;
+    return `Tus metas piden ${formatUYU(cuotaTotal)} por mes: faltan ${formatUYU(faltante)}.`;
+  })();
+
+  return (
+    <Card variant={tono} label="¿Te da?" style={styles.bloque}>
+      <Txt style={styles.feasTitular} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+        {titular}
+      </Txt>
+      <Txt variant="caption" color={COLORS.textMid} style={{ marginTop: 4 }}>{detalle}</Txt>
+
+      {fijos.total > 0 ? (
+        <Txt variant="caption" color={COLORS.textLow} style={{ marginTop: SPACING.xs }}>
+          De tu gasto, {formatUYU(fijos.total)} son fijos (suscripciones y cuentas).
+        </Txt>
+      ) : null}
+
+      {/* La regla de honestidad tiene componente, no letra chica: esto es un
+          promedio de meses cerrados, no una cifra de este mes. */}
+      <View style={styles.feasPie}>
+        <Badge variant="estimate" label={`Promedio de ${mesesGasto} ${mesesGasto === 1 ? 'mes' : 'meses'}`} />
+      </View>
     </Card>
   );
 }
@@ -134,11 +212,15 @@ export default function GoalsScreen() {
   const [form, setForm] = useState(FORM_VACIO);
   const [depositAmount, setDepositAmount] = useState('');
   const [saving, setSaving] = useState(false);
+  // Viabilidad: un solo objeto para TODAS las metas, porque comparten un unico
+  // margen mensual. Tres metas que solas entran pueden no entrar juntas.
+  const [feasibility, setFeasibility] = useState(null);
 
   const fetchGoals = useCallback(async () => {
     try {
       const { data } = await api.get('/goals');
       setGoals(data.goals);
+      setFeasibility(data.feasibility || null);
     } catch (_) {
       Toast.show({ type: 'error', text1: t('goals.errorLoad') });
     } finally {
@@ -276,6 +358,8 @@ export default function GoalsScreen() {
           </Card>
         ) : null}
 
+        <FeasibilityCard feas={feasibility} metas={activas.length} />
+
         {activas.length > 0 ? (
           <>
             <Txt variant="overline" color={COLORS.textLow} style={styles.seccion}>
@@ -285,6 +369,7 @@ export default function GoalsScreen() {
               <GoalCard
                 key={goal.id}
                 goal={goal}
+                feas={feasibility?.porMeta?.find((m) => m.id === goal.id) || null}
                 onDeposit={() => setDepositModal(goal.id)}
                 onDelete={() => deleteGoal(goal.id, goal.name)}
               />
@@ -434,6 +519,9 @@ const styles = StyleSheet.create({
   resumenMetas: { flexDirection: 'row', gap: SPACING.l, marginTop: SPACING.xs },
   resumenMeta: {},
   resumenValor: { fontFamily: FONTS.amountBold, fontSize: 14, lineHeight: 18, color: COLORS.textHigh, marginTop: 2 },
+
+  feasTitular: { fontFamily: FONTS.amountBold, fontSize: 20, lineHeight: 26, color: COLORS.textHigh },
+  feasPie: { flexDirection: 'row', marginTop: SPACING.s },
 
   goal: { marginTop: SPACING.s },
   goalTop: { flexDirection: 'row', alignItems: 'center' },

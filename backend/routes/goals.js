@@ -2,6 +2,7 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 const db = require('../db');
 const authMiddleware = require('../middleware/auth');
+const { calcFeasibility, calcMonthlyQuota } = require('../services/goalFeasibility');
 
 const router = express.Router();
 router.use(authMiddleware);
@@ -45,17 +46,8 @@ function calcProjection(deposits, currentAmount, targetAmount) {
   };
 }
 
-// Cuota mensual necesaria para llegar a la fecha objetivo
-function calcMonthlyQuota(currentAmount, targetAmount, targetDate) {
-  if (!targetDate) return null;
-  const now = new Date();
-  const deadline = new Date(targetDate);
-  const monthsLeft = (deadline - now) / (1000 * 60 * 60 * 24 * 30.44);
-  if (monthsLeft <= 0) return null;
-  const remaining = parseFloat(targetAmount) - parseFloat(currentAmount);
-  if (remaining <= 0) return 0;
-  return Math.ceil(remaining / monthsLeft);
-}
+// calcMonthlyQuota vive en services/goalFeasibility.js: la tarjeta de la meta y
+// el calculo de viabilidad tienen que dar exactamente el mismo numero.
 
 // Streak de días consecutivos con al menos un depósito
 function calcStreak(deposits) {
@@ -103,6 +95,9 @@ function calcMilestones(currentAmount, targetAmount) {
 //      se comparaba contra un promedio que él mismo había bajado.
 //   3. La ventana arranca en un límite de mes (DATE_TRUNC), no en
 //      NOW() - 6 months, que caía a mitad de marzo y metía otro mes truncado.
+//   4. Un DEPOSITO A UNA META no es gasto. Cada deposito escribe ademas una
+//      fila en transactions como 'debit' (ver POST /:id/deposits), asi que
+//      contarlo hacia que ahorrar te baje el ahorro detectado.
 //
 // Devuelve null — no 0 — cuando no hay con qué comparar: sin movimientos
 // cargados este mes el cálculo viejo daba el promedio entero ("ahorrás $26.000"
@@ -120,7 +115,7 @@ async function calcSavingsSurplus(userId) {
      previos AS (
        SELECT DATE_TRUNC('month', t.date) AS mes, SUM(ABS(t.amount)) AS total
        FROM transactions t, hoy
-       WHERE t.user_id = $1 AND t.type = 'debit'
+       WHERE t.user_id = $1 AND t.type = 'debit' AND t.goal_id IS NULL
          AND t.date >= hoy.mes_actual - INTERVAL '6 months'
          AND t.date <  hoy.mes_actual
          AND EXTRACT(DAY FROM t.date) <= hoy.dia
@@ -129,7 +124,7 @@ async function calcSavingsSurplus(userId) {
      actual AS (
        SELECT COALESCE(SUM(ABS(t.amount)), 0) AS total, COUNT(*) AS movs
        FROM transactions t, hoy
-       WHERE t.user_id = $1 AND t.type = 'debit'
+       WHERE t.user_id = $1 AND t.type = 'debit' AND t.goal_id IS NULL
          AND t.date >= hoy.mes_actual
      )
      SELECT (SELECT AVG(total) FROM previos)  AS avg_parcial,
@@ -188,7 +183,11 @@ router.get('/', async (req, res) => {
       };
     }));
 
-    res.json({ goals: goalsWithInsights });
+    // Un solo calculo para todas las metas: comparten un unico margen mensual,
+    // asi que la viabilidad no es una propiedad de cada meta por separado.
+    const feasibility = await calcFeasibility(req.userId, goals);
+
+    res.json({ goals: goalsWithInsights, feasibility });
   } catch (err) {
     console.error('GET /goals error:', err.message);
     res.status(500).json({ error: 'Error al obtener metas', detail: err.message });
