@@ -35,7 +35,7 @@ router.post(
       const result = await db.query(
         `INSERT INTO users (email, password_hash, name)
          VALUES ($1, $2, $3)
-         RETURNING id, email, name, plan, plan_expires_at, created_at`,
+         RETURNING id, email, name, plan, plan_expires_at, created_at, display_currency`,
         [email, passwordHash, name]
       );
 
@@ -44,7 +44,7 @@ router.post(
         expiresIn: process.env.JWT_EXPIRES_IN || '7d',
       });
 
-      res.status(201).json({ token, user: { id: user.id, email: user.email, name: user.name, plan: user.plan, plan_expires_at: user.plan_expires_at } });
+      res.status(201).json({ token, user: { id: user.id, email: user.email, name: user.name, plan: user.plan, plan_expires_at: user.plan_expires_at, display_currency: user.display_currency } });
     } catch (err) {
       console.error('Register error:', err);
       res.status(500).json({ error: 'Error al registrar usuario' });
@@ -69,7 +69,7 @@ router.post(
 
     try {
       const result = await db.query(
-        'SELECT id, email, name, plan, password_hash FROM users WHERE email = $1',
+        'SELECT id, email, name, plan, display_currency, password_hash FROM users WHERE email = $1',
         [email]
       );
 
@@ -87,7 +87,7 @@ router.post(
         expiresIn: process.env.JWT_EXPIRES_IN || '7d',
       });
 
-      res.json({ token, user: { id: user.id, email: user.email, name: user.name, plan: user.plan } });
+      res.json({ token, user: { id: user.id, email: user.email, name: user.name, plan: user.plan, display_currency: user.display_currency } });
     } catch (err) {
       console.error('Login error:', err);
       res.status(500).json({ error: 'Error al iniciar sesión' });
@@ -99,7 +99,7 @@ router.post(
 router.get('/me', authMiddleware, async (req, res) => {
   try {
     const result = await db.query(
-      'SELECT id, email, name, currency, plan, plan_expires_at, created_at FROM users WHERE id = $1',
+      'SELECT id, email, name, currency, display_currency, plan, plan_expires_at, created_at FROM users WHERE id = $1',
       [req.userId]
     );
     if (result.rows.length === 0) return res.status(404).json({ error: 'Usuario no encontrado' });

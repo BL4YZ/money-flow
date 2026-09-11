@@ -84,6 +84,31 @@ router.get('/export', async (req, res) => {
  * Pide la contraseña aunque el JWT ya esté validado: un token robado no debería
  * alcanzar para una acción irreversible.
  */
+// ─── PATCH /api/account/preferences ──────────────────────────
+//
+// Que cuenta mira esta persona por defecto. Vive en el servidor y no en el
+// telefono porque es una preferencia de la persona, no del dispositivo: quien
+// mira sobre todo su cuenta en dolares quiere encontrarla asi tambien despues
+// de reinstalar o desde otro telefono.
+//
+// 'todo' es un valor valido: significa ver las dos juntas, convertidas a pesos.
+router.patch('/preferences', async (req, res) => {
+  const { display_currency } = req.body || {};
+  if (!['UYU', 'USD', 'todo'].includes(display_currency)) {
+    return res.status(400).json({ error: 'Moneda no válida' });
+  }
+  try {
+    const { rows } = await db.query(
+      'UPDATE users SET display_currency = $1 WHERE id = $2 RETURNING display_currency',
+      [display_currency, req.userId]
+    );
+    res.json({ display_currency: rows[0].display_currency });
+  } catch (err) {
+    console.error('PATCH /account/preferences error:', err.message);
+    res.status(500).json({ error: 'Error al guardar la preferencia' });
+  }
+});
+
 router.delete('/', async (req, res) => {
   const { password } = req.body || {};
   if (!password) {

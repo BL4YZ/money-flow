@@ -193,7 +193,16 @@ export default function DashboardScreen() {
   // cuenta en dolares, y son cuentas distintas con resumenes distintos: verlas
   // sumadas en un total unico no es lo que nadie tiene en la cabeza. 'todo'
   // existe igual, convertido a pesos, para mirar el conjunto.
-  const [cuenta, setCuenta] = useState('UYU');
+  const [cuenta, setCuentaEstado] = useState(user?.display_currency || 'UYU');
+
+  // Cambiar de cuenta guarda la eleccion en el servidor, no en el telefono: es
+  // una preferencia de la persona, no del dispositivo. Se aplica en pantalla al
+  // instante y se guarda en segundo plano — si el guardado falla, lo unico que
+  // se pierde es que la proxima vez arranque en la otra, no la navegacion.
+  const setCuenta = (valor) => {
+    setCuentaEstado(valor);
+    api.patch('/account/preferences', { display_currency: valor }).catch(() => {});
+  };
   const [cuentas, setCuentas] = useState([]);
   // La moneda de los numeros la DICE el backend en la respuesta, no la deduce
   // la pantalla: si alguna vez no coincidieran, un total en dolares dibujado
@@ -451,6 +460,16 @@ export default function DashboardScreen() {
     );
   }
 
+  // Distingue "esta cuenta esta vacia" de "todavia no cargaste nada": son
+
+  // dos situaciones distintas y merecen dos mensajes distintos.
+
+  const cuentaVaciaPeroHayOtra = cuenta !== 'todo'
+
+    && cuentas.length > 0
+
+    && !cuentas.some((c) => c.currency === cuenta);
+
   const monedaVista = summary?.currency || 'UYU';
 
   const totalSpent = parseFloat(summary?.totals?.total_spent || 0);
@@ -528,24 +547,26 @@ export default function DashboardScreen() {
           card={false}
         />
 
-        {/* SELECTOR DE CUENTA. Solo aparece si la persona tiene mas de una: un
-            selector con una sola opcion es ruido. "Todo" convierte a pesos con
-            la cotizacion del dia de cada movimiento; las otras dos muestran la
-            cuenta en SU moneda, sin convertir nada. */}
-        {cuentas.length > 1 ? (
-          <Segmented
-            options={[
-              ...cuentas.map((c) => ({
-                value: c.currency,
-                label: c.currency === 'USD' ? 'US$ Dólares' : '$ Pesos',
-              })),
-              { value: 'todo', label: 'Todo' },
-            ]}
-            value={cuenta}
-            onChange={setCuenta}
-            style={{ marginTop: SPACING.m }}
-          />
-        ) : null}
+        {/* SELECTOR DE CUENTA, SIEMPRE VISIBLE.
+            Antes solo aparecia si ya habia movimientos en las dos monedas, y eso
+            lo volvia inencontrable: no podias mirar tu cuenta en dolares hasta
+            no tener dolares cargados, ni enterarte de que la vista existia.
+            Mirar una cuenta vacia es una respuesta valida —"no tengo nada aca"—
+            y ademas es donde uno entiende que puede cargar algo.
+
+            "Todo" convierte a pesos con la cotizacion del dia de cada
+            movimiento; las otras dos muestran la cuenta en SU moneda, sin
+            convertir nada. */}
+        <Segmented
+          options={[
+            { value: 'UYU', label: '$ Pesos' },
+            { value: 'USD', label: 'US$ Dólares' },
+            { value: 'todo', label: 'Todo' },
+          ]}
+          value={cuenta}
+          onChange={setCuenta}
+          style={{ marginTop: SPACING.m }}
+        />
 
         <View style={styles.utilRow}>
           {!isPremium ? (
@@ -722,11 +743,18 @@ export default function DashboardScreen() {
           </Card>
         ) : null}
 
+        {/* "No hay datos" a secas seria mentira estando parado en una cuenta
+            vacia mientras la otra tiene movimientos: lo que falta es de ESTA
+            cuenta. */}
         {sinDatos ? (
           <EmptyState
             icon="document-text-outline"
-            title={t('dashboard.noData')}
-            text={t('dashboard.noDataHint')}
+            title={cuentaVaciaPeroHayOtra
+              ? (cuenta === 'USD' ? 'Sin movimientos en dólares' : 'Sin movimientos en pesos')
+              : t('dashboard.noData')}
+            text={cuentaVaciaPeroHayOtra
+              ? 'Podés cargar uno con el + de arriba, o subir el resumen de esa cuenta.'
+              : t('dashboard.noDataHint')}
             style={styles.bloque}
           />
         ) : null}
