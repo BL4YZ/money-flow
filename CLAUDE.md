@@ -183,6 +183,12 @@ Feature flags derived from `isPremium` live in `PlanContext.buildFlags()` — ad
 
 `src/api/client.js`'s `BASE_URL` is a hardcoded string toggled by commenting/uncommenting between a local LAN IP and the Render production URL — there is no env-based switching. **Check which one is active before assuming why auth/network calls fail in dev.**
 
+**Render's free tier sleeps the service after 15 minutes, and waking it takes 42.5 seconds — measured against production.** The client timeout was 15 s, so the first screen after any idle period failed *every time*, and the failure looked exactly like "no internet". Reported as "me da error de conexión cuando intento iniciar sesión"; the endpoint itself was fine — the same request answered `401 Credenciales incorrectas` in 372 ms once the service was up. Three parts to the fix, and the middle one was the worst bug:
+- `despertarServidor()` pings `/health` (no DB, no token) on app start, so the service is coming up while the user is still typing. Fails silently — it is an optimisation, not a dependency.
+- **A network error is not an invalid token.** `AuthContext`'s startup effect deleted the stored token on *any* thrown error, so a cold start did not merely fail — it **logged the user out**. It now only clears the token on a real 401 (`esErrorDeRed`).
+- One retry with a 75 s budget when no response came back, which is the signature of a waking service. **Only GETs and login/register are retried**: a timeout does not say whether the server processed the request, so repeating an arbitrary POST would create the goal or the deposit twice.
+- Raising the timeout alone was rejected: it would leave every genuinely failed request spinning for over a minute. The login toast now also distinguishes the two cases instead of saying "Error de conexión" for both.
+
 ### Design system (`src/components/ui/`, `src/theme.js`)
 
 Every screen is built from one component library. Before this existed there were 9 screens, ~10.000 lines with ~2.350 of inline `StyleSheet`, and the same patterns redrawn per screen: **15 primary buttons, 7 inputs, 6 chips, 5 empty states under 3 naming schemes, 4 bottom sheets**, and 66 hex colours against 41 in `theme.js`. Now it is ~460 lines of screen-level style and **zero hex outside `theme.js`**. The design came from a Claude Design handoff kept in `design/` along with the brief that produced it.

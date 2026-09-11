@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { AppState } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
-import api from '../api/client';
+import api, { despertarServidor, esErrorDeRed } from '../api/client';
 import { registerPushToken } from '../utils/notifications';
 import { initPurchases } from '../services/purchases';
 
@@ -24,6 +24,9 @@ export function AuthProvider({ children }) {
   // Al arrancar la app, verificar si hay token guardado
   useEffect(() => {
     (async () => {
+      // Render duerme el servicio a los 15 minutos. Esto lo empieza a levantar
+      // apenas se abre la app, mientras el usuario todavia esta escribiendo.
+      despertarServidor();
       try {
         const token = await SecureStore.getItemAsync('auth_token');
         if (token) {
@@ -32,8 +35,12 @@ export function AuthProvider({ children }) {
           registerPushToken();            // fire-and-forget
           initPurchases(data.user.id);   // fire-and-forget
         }
-      } catch (_) {
-        await SecureStore.deleteItemAsync('auth_token');
+      } catch (err) {
+        // UN PROBLEMA DE RED NO ES UN TOKEN INVALIDO. Aca se borraba el token
+        // ante CUALQUIER error, asi que un arranque en frio de Render —45
+        // segundos, mas que el timeout— no solo fallaba: deslogueaba al
+        // usuario. Solo un 401 prueba que el token no sirve.
+        if (!esErrorDeRed(err)) await SecureStore.deleteItemAsync('auth_token');
       } finally {
         setLoading(false);
       }

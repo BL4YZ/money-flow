@@ -5,6 +5,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Toast from 'react-native-toast-message';
+import { esErrorDeRed } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { Txt, Input, Button, Segmented } from '../components/ui';
@@ -35,7 +36,18 @@ export default function LoginScreen() {
         await register(name.trim(), email.trim().toLowerCase(), password);
       }
     } catch (err) {
-      Toast.show({ type: 'error', text1: err.response?.data?.error || 'Error de conexión' });
+      // "Error de conexion" para TODO era enganoso: el caso frecuente no es que
+      // no haya internet, es que el servidor estaba dormido —Render lo apaga a
+      // los 15 minutos y tarda ~45s en levantar— y el reintento tampoco alcanzo.
+      // Decir que fue eso, y que sirve insistir, es distinto de sugerir que la
+      // app esta rota.
+      Toast.show(
+        esErrorDeRed(err)
+          ? { type: 'error',
+              text1: 'El servidor estaba en reposo',
+              text2: 'Tarda unos segundos en despertar. Proba de nuevo.' }
+          : { type: 'error', text1: err.response?.data?.error || 'No se pudo iniciar sesion' }
+      );
     } finally {
       setLoading(false);
     }
