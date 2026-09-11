@@ -5,6 +5,7 @@ const authMiddleware = require('../middleware/auth');
 const { calcFeasibility, calcMonthlyQuota } = require('../services/goalFeasibility');
 const { candidatosDeAhorro } = require('../services/savingsDetector');
 const { costoEnMetas } = require('../services/goalCost');
+const { recalcularSaldo } = require('../services/goalBalance');
 
 const router = express.Router();
 router.use(authMiddleware);
@@ -222,10 +223,21 @@ router.post('/', [
 
     const result = await db.query(
       `INSERT INTO goals (user_id, name, description, target_amount, current_amount, target_date)
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-      [req.userId, name, description, target_amount, current_amount || 0, target_date || null]
+       VALUES ($1, $2, $3, $4, 0, $5) RETURNING *`,
+      [req.userId, name, description, target_amount, target_date || null]
     );
-    const goal = result.rows[0];
+    let goal = result.rows[0];
+
+    // Un saldo inicial tambien es un deposito: si entrara directo en la columna,
+    // el historial no lo explicaria y la proyeccion diria "hace tu primer
+    // deposito" sobre una meta que ya tiene plata.
+    if (parseFloat(current_amount) > 0) {
+      await db.query(
+        'INSERT INTO goal_deposits (goal_id, user_id, amount, note) VALUES ($1, $2, $3, $4)',
+        [goal.id, req.userId, current_amount, 'Saldo inicial']
+      );
+      goal = await recalcularSaldo(db, goal.id);
+    }
     res.status(201).json({
       goal: {
         ...goal,
@@ -270,12 +282,14 @@ router.get('/candidates', async (req, res) => {
 });
 
 router.patch('/:id', async (req, res) => {
-  const { current_amount, name, target_amount, target_date, is_completed } = req.body;
+  // current_amount NO se acepta: el saldo sale de goal_deposits. Aceptarlo era
+  // la via mas facil para que el saldo y el historial contaran cosas distintas,
+  // y ningun cliente lo usaba. Para mover plata estan los depositos.
+  const { name, target_amount, target_date, is_completed } = req.body;
   const fields = [];
   const values = [];
   let i = 1;
 
-  if (current_amount !== undefined) { fields.push(`current_amount = $${i++}`); values.push(current_amount); }
   if (name !== undefined)           { fields.push(`name = $${i++}`);           values.push(name); }
   if (target_amount !== undefined)  { fields.push(`target_amount = $${i++}`);  values.push(target_amount); }
   if (target_date !== undefined)    { fields.push(`target_date = $${i++}`);    values.push(target_date); }
@@ -338,15 +352,11 @@ router.post('/:id/deposits', [
       [req.userId, `Ahorro: ${goal.name}`, parseFloat(amount), goal.id]
     );
 
-    // Actualizar current_amount en la meta
-    const newAmount = parseFloat(goal.current_amount) + parseFloat(amount);
-    const isCompleted = newAmount >= parseFloat(goal.target_amount);
-    const { rows } = await db.query(
-      `UPDATE goals SET current_amount = $1, is_completed = $2 WHERE id = $3 RETURNING *`,
-      [newAmount, isCompleted, goal.id]
-    );
+    // El saldo se DERIVA del historial. Sumarlo a mano acá es lo que dejaba
+    // current_amount y goal_deposits contando cosas distintas.
+    const actualizada = await recalcularSaldo(db, goal.id);
 
-    res.json({ goal: rows[0], deposited: parseFloat(amount), completed: isCompleted });
+    res.json({ goal: actualizada, deposited: parseFloat(amount), completed: actualizada.is_completed });
   } catch (err) {
     console.error('POST /goals/:id/deposits error:', err.message);
     res.status(500).json({ error: 'Error al registrar depósito' });
@@ -458,8 +468,6 @@ router.post('/link-transaction', [
     }
 
     const amount = Math.abs(parseFloat(tx.amount));
-    const newAmount   = parseFloat(goal.current_amount) + amount;
-    const isCompleted = newAmount >= parseFloat(goal.target_amount);
 
     client = await db.getClient();
     let actualizada;
@@ -473,18 +481,14 @@ router.post('/link-transaction', [
         'INSERT INTO goal_deposits (goal_id, user_id, amount, note, transaction_id) VALUES ($1, $2, $3, $4, $5)',
         [goal.id, req.userId, amount, tx.description, transaction_id]
       );
-      const r = await client.query(
-        'UPDATE goals SET current_amount = $1, is_completed = $2 WHERE id = $3 RETURNING *',
-        [newAmount, isCompleted, goal.id]
-      );
-      actualizada = r.rows[0];
+      actualizada = await recalcularSaldo(client, goal.id);
       await client.query('COMMIT');
     } catch (err) {
       await client.query('ROLLBACK');
       throw err;
     }
 
-    res.json({ goal: actualizada, credited: amount, completed: isCompleted });
+    res.json({ goal: actualizada, credited: amount, completed: actualizada.is_completed });
   } catch (err) {
     console.error('POST /goals/link-transaction error:', err.message);
     res.status(500).json({ error: 'Error al vincular el movimiento' });
@@ -517,9 +521,6 @@ router.delete('/link-transaction/:transactionId', async (req, res) => {
     if (!goal) return res.status(404).json({ error: 'Meta no encontrada' });
 
     const amount = Math.abs(parseFloat(tx.amount));
-    // No baja de cero aunque los datos hayan quedado torcidos por un vínculo
-    // doble anterior: un saldo negativo rompe el anillo y la proyección.
-    const newAmount = Math.max(parseFloat(goal.current_amount) - amount, 0);
 
     client = await db.getClient();
     let actualizada;
@@ -530,11 +531,10 @@ router.delete('/link-transaction/:transactionId', async (req, res) => {
         'DELETE FROM goal_deposits WHERE transaction_id = $1 AND user_id = $2',
         [tx.id, req.userId]
       );
-      const r = await client.query(
-        'UPDATE goals SET current_amount = $1, is_completed = $2 WHERE id = $3 RETURNING *',
-        [newAmount, newAmount >= parseFloat(goal.target_amount), goal.id]
-      );
-      actualizada = r.rows[0];
+      // Borrada la fila del historial, el saldo cae solo. Antes se restaba a
+      // mano, asi que si el DELETE no encontraba nada —una fila vieja sin
+      // transaction_id— el saldo bajaba igual y quedaba por debajo del historial.
+      actualizada = await recalcularSaldo(client, goal.id);
       await client.query('COMMIT');
     } catch (err) {
       await client.query('ROLLBACK');

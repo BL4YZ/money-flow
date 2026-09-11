@@ -129,6 +129,30 @@ async function initSchema() {
         ELSE 'Otros'
       END WHERE category = 'Ingreso';
 
+      -- REPARACIÓN DE SALDOS DE METAS, una sola vez.
+      --
+      -- goals.current_amount se escribía suelto desde cuatro lugares y sólo
+      -- dos de ellos dejaban una fila en goal_deposits, así que el saldo y el
+      -- historial contaban cosas distintas. En pantalla eso se veía como una
+      -- meta al 12% con $5.827 que al mismo tiempo decía "Hacé tu primer
+      -- depósito": el anillo lee el saldo y la proyección lee los depósitos.
+      --
+      -- Se repara SÓLO hacia arriba: si el saldo supera lo que explica el
+      -- historial, se agrega la fila que falta. Esa plata es real para el
+      -- usuario y borrarla sería destruir un dato suyo.
+      --
+      -- El caso inverso —historial mayor que el saldo— NO se toca acá: subir el
+      -- saldo hasta la suma podría revertir un "Deshacer" que el usuario sí
+      -- hizo. Lo reporta scripts/verify-goal-balance.js para mirarlo a mano.
+      --
+      -- Idempotente por construcción: después de correr, la condición es falsa.
+      INSERT INTO goal_deposits (goal_id, user_id, amount, note)
+      SELECT g.id, g.user_id, g.current_amount - COALESCE(d.total, 0), 'Saldo anterior'
+      FROM goals g
+      LEFT JOIN (SELECT goal_id, SUM(amount) AS total FROM goal_deposits GROUP BY goal_id) d
+        ON d.goal_id = g.id
+      WHERE g.current_amount > COALESCE(d.total, 0);
+
       CREATE TABLE IF NOT EXISTS budgets (
         id           SERIAL PRIMARY KEY,
         user_id      UUID NOT NULL,
