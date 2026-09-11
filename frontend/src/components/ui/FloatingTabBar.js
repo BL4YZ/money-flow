@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { View, Pressable, Animated, StyleSheet } from 'react-native';
+import { View, Pressable, Animated, PanResponder, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Txt from './Text';
@@ -42,6 +42,30 @@ export default function FloatingTabBar({ state, navigation, tabs }) {
     Animated.spring(x, { toValue: activo.x, ...MOTION.tabPill, useNativeDriver: true }).start();
   }, [state.index, activo && activo.x]);
 
+  // ARRASTRE, igual que el selector de moneda: se apoya el dedo y se corre
+  // entre las pestanas. Mismas dos trampas evitadas —el PanResponder se crea
+  // una sola vez, asi que lee de un ref y no de su closure; y mide por
+  // DESPLAZAMIENTO y no por posicion, porque `locationX` cambia de sistema de
+  // coordenadas al cruzar sobre un Pressable hijo.
+  //
+  // Solo navega cuando el indice CAMBIA: sin eso, un arrastre de dos pestanas
+  // dispararia una navegacion por cada cuadro del gesto.
+  const vivo = useRef({});
+  vivo.current = { ancho: activo && activo.width, indice: state.index, rutas: state.routes, navigation };
+
+  const pan = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_e, g) => Math.abs(g.dx) > 6 && Math.abs(g.dx) > Math.abs(g.dy) * 2,
+      onPanResponderGrant: () => { vivo.current.desde = vivo.current.indice; },
+      onPanResponderMove: (_e, g) => {
+        const v = vivo.current;
+        if (!v.ancho || v.desde == null) return;
+        const k = Math.max(0, Math.min(v.rutas.length - 1, v.desde + Math.round(g.dx / v.ancho)));
+        if (k !== v.indice) v.navigation.navigate(v.rutas[k].name);
+      },
+    }),
+  ).current;
+
   return (
     <View style={styles.wrapper} pointerEvents="box-none">
       {/* Fade del contenido que scrollea por detrás. */}
@@ -51,7 +75,11 @@ export default function FloatingTabBar({ state, navigation, tabs }) {
           adorno: deja ver que hay algo abajo y de paso hace que el fade de
           arriba tenga sentido. Sobre iOS 26 es el material del sistema; en el
           resto, desenfoque real con el canto iluminado a mano. Ver GlassSurface. */}
-      <GlassSurface style={[styles.barra, vidrio && styles.barraVidrio]} radius={RADIUS.full}>
+      <GlassSurface
+        style={[styles.barra, vidrio && styles.barraVidrio]}
+        radius={RADIUS.full}
+        {...pan.panHandlers}
+      >
         {activo ? (
           <Animated.View
             style={[
