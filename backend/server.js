@@ -23,6 +23,7 @@ console.log('Loading routes...');
 const authRoute = require('./routes/auth');
 console.log('auth OK');
 const uploadRoute = require('./routes/upload');
+const receiptsRoute = require('./routes/receipts');
 console.log('upload OK');
 const transactionsRoute = require('./routes/transactions');
 console.log('transactions OK');
@@ -120,6 +121,7 @@ app.use((req, res, next) => {
 
 app.use('/api/auth', authLimiter, authRoute);
 app.use('/api/upload', uploadRoute);
+app.use('/api/receipts', receiptsRoute);
 app.use('/api/transactions', transactionsRoute);
 app.use('/api/suggestions', suggestionsRoute);
 app.use('/api/prices', pricesRoute);

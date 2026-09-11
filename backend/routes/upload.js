@@ -39,6 +39,27 @@ router.post('/', requirePremium, async (req, res) => {
     return res.status(400).json({ error: 'Payload cifrado requerido' });
   }
 
+  // UNA IMAGEN NO ES UN PDF, y hasta acá se le pasaba igual a pdf-parse.
+  //
+  // La lista de tipos aceptados incluye image/jpeg, image/png y image/webp, y el
+  // selector de archivos de la app ofrece `image/*` — o sea que la foto de un
+  // ticket se podía elegir y el error que salía era "no se pudo leer el PDF".
+  // Una capacidad anunciada que no existía, igual que el "con IA avanzada" que
+  // hubo que sacar del texto.
+  //
+  // Va ANTES de descifrar: el mimeType viene en el request, no en el contenido,
+  // así que no hay razón para gastar un RSA en algo que se va a rechazar.
+  //
+  // Mientras la lectura de imágenes no esté, el error dice la verdad y manda al
+  // camino que SÍ funciona: el escáner del comprobante, que además saca el
+  // importe exacto del QR en vez de adivinarlo de la foto.
+  if ((mimeType || '').startsWith('image/')) {
+    return res.status(422).json({
+      error: 'Todavía no leemos fotos acá',
+      detail: 'Para un ticket, usá el escáner: leyendo el QR del comprobante el importe sale exacto. Los resúmenes del banco van en CSV o PDF.',
+    });
+  }
+
   try {
     // 1. Recover the AES key (RSA-OAEP) then decrypt: AES-256-CBC → base64 string of original file
     const keyBuffer = decryptAesKey(encryptedKey);
