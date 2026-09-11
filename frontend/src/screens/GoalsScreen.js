@@ -385,7 +385,7 @@ export default function GoalsScreen() {
         type: 'success',
         text1: data.completed
           ? t('goals.successGoalReached')
-          : t('goals.successDeposit', { amount: amount.toLocaleString('es-UY') }),
+          : `Ahorraste ${formatMoney(amount, metaDeposito?.currency)}`,
       });
     } catch (_) {
       Toast.show({ type: 'error', text1: t('goals.errorUpdate') });
@@ -451,6 +451,7 @@ export default function GoalsScreen() {
   const totalSaved = goals.reduce((s, g) => s + parseFloat(g.current_amount), 0);
   const totalTarget = goals.reduce((s, g) => s + parseFloat(g.target_amount), 0);
   const overall = totalTarget > 0 ? totalSaved / totalTarget : 0;
+  const metaDeposito = goals.find((g) => g.id === depositModal) || null;
   const bloqueado = !isPremium && goals.length >= 1;
 
   if (loading) {
@@ -659,11 +660,16 @@ export default function GoalsScreen() {
       </BottomSheet>
 
       {/* Depósito */}
+      {/* Un deposito va SIEMPRE en la moneda de la meta, y hay que decirlo: en
+          una meta en dolares, escribir "500" sin saber si son dolares o pesos
+          es una diferencia de cuarenta veces. */}
       <BottomSheet
         visible={!!depositModal}
         onClose={() => { setDepositModal(null); setDepositAmount(''); }}
-        title="Ahorrar"
-        subtitle="Se suma a lo que ya llevás en esta meta"
+        title={metaDeposito?.currency === 'USD' ? 'Ahorrar en dólares' : 'Ahorrar'}
+        subtitle={metaDeposito
+          ? `Se suma a ${formatMoney(parseFloat(metaDeposito.current_amount), metaDeposito.currency)} de ${metaDeposito.name}`
+          : 'Se suma a lo que ya llevás en esta meta'}
         primaryLabel={t('common.save')}
         onPrimary={addDeposit}
         primaryLoading={saving}

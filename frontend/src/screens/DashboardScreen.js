@@ -328,7 +328,10 @@ export default function DashboardScreen() {
 
   const openCreate = () => {
     setEditingId(null);
-    setForm(EMPTY_FORM);
+    // Arranca en la moneda de la cuenta que se esta mirando: si estas viendo la
+    // cuenta en dolares y tocas "+", lo que vas a cargar es casi seguro un
+    // movimiento en dolares. En "Todo" no hay respuesta obvia, asi que pesos.
+    setForm({ ...EMPTY_FORM, currency: cuenta === 'todo' ? 'UYU' : cuenta });
     setShowCatInput(false);
     setNewCatInput('');
     setModalVisible(true);
@@ -391,10 +394,17 @@ export default function DashboardScreen() {
           type: 'success',
           text1: form.type === 'debit' ? t('dashboard.successExpense') : t('dashboard.successIncome'),
         });
-        fetchTransactions(selectedCategory);
+        // Si lo cargado es de OTRA cuenta que la que se esta mirando, saltar a
+        // esa. Sin esto el movimiento se guarda bien y desaparece de la lista
+        // —queda filtrado— y parece que no se guardo.
+        if (cuenta !== 'todo' && form.currency !== cuenta) setCuenta(form.currency);
+        else fetchTransactions(selectedCategory);
       }
       closeModal();
       fetchSummary();
+      // La lista de cuentas cambia al cargar el PRIMER movimiento en dolares:
+      // sin esto el selector no aparece hasta recargar la app.
+      fetchCuentas();
     } catch (err) {
       Toast.show({ type: 'error', text1: err.response?.data?.error || t('dashboard.errorSave') });
     } finally {
