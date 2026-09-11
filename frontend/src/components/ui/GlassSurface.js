@@ -153,7 +153,12 @@ export default function GlassSurface({ style, children, radius, ...rest }) {
 
   if (nivel === 'liquid') {
     return (
-      <GlassView glassEffectStyle="regular" isInteractive style={style} {...rest}>
+      <GlassView
+        glassEffectStyle="regular"
+        isInteractive
+        style={[style, radius ? { borderRadius: radius } : null]}
+        {...rest}
+      >
         {children}
       </GlassView>
     );

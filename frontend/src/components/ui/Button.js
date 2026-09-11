@@ -3,7 +3,7 @@ import { Pressable, Animated, ActivityIndicator, View, StyleSheet } from 'react-
 import { LinearGradient } from 'expo-linear-gradient';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Txt from './Text';
-import { GlassEdge, GlassFondo } from './GlassSurface';
+import GlassSurface, { GlassEdge } from './GlassSurface';
 import { COLORS, GRADIENTS, RADIUS, SHADOWS, MOTION } from '../../theme';
 
 /**
@@ -101,6 +101,32 @@ export default function Button({
     fullWidth && styles.fullWidth,
   ];
 
+  // VIDRIO COMO CAJA, no como capa decorativa detrás.
+  //
+  // Estaba puesto con `pointerEvents="none"`, y eso anulaba justo lo que hace
+  // que el material se sienta líquido: `isInteractive` deforma el vidrio bajo
+  // el dedo, y para eso el vidrio tiene que RECIBIR el toque. Con el Pressable
+  // por fuera —el mismo patrón que ya usaban las variantes con gradiente— el
+  // área táctil sigue intacta y el material se entera del contacto.
+  if (p.vidrio && !inerte) {
+    return (
+      <Animated.View style={[{ transform: [{ scale }] }, fullWidth && styles.fullWidth, style]}>
+        <Pressable
+          onPress={onPress}
+          onPressIn={() => anim(0.98)}
+          onPressOut={() => anim(1)}
+        >
+          <GlassSurface
+            style={[caja, { borderWidth: p.border === 'transparent' ? 0 : 1.5, borderColor: p.border }]}
+            radius={s.radius}
+          >
+            {contenido}
+          </GlassSurface>
+        </Pressable>
+      </Animated.View>
+    );
+  }
+
   // Las variantes con gradiente lo pinta LinearGradient, y el Pressable queda
   // por fuera para no perder el área táctil.
   if (p.gradiente && !disabled) {
@@ -143,18 +169,13 @@ export default function Button({
         style={({ pressed }) => [
           caja,
           {
-            backgroundColor: pressed
-              ? (variant === 'primary' ? COLORS.primaryPressed : p.vidrio ? COLORS.glassFillPressed : p.bg)
-              : p.bg,
+            backgroundColor: pressed && variant === 'primary' ? COLORS.primaryPressed : p.bg,
             borderWidth: p.border === 'transparent' ? 0 : 1.5,
             borderColor: p.border,
           },
         ]}
       >
-        {/* El vidrio va DETRAS del contenido y sin capturar toques: el
-            Pressable de afuera conserva su area tactil entera. */}
-        {p.vidrio && !inerte ? <GlassFondo radius={s.radius} /> : null}
-        {!inerte && !p.vidrio ? <GlassEdge radius={s.radius} /> : null}
+        {!inerte ? <GlassEdge radius={s.radius} /> : null}
         {contenido}
       </Pressable>
     </Animated.View>
