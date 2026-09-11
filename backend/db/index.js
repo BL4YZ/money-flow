@@ -88,6 +88,13 @@ async function initSchema() {
       -- Vinculación de transacciones a metas (para auto-acreditar)
       ALTER TABLE transactions ADD COLUMN IF NOT EXISTS goal_id UUID;
 
+      -- De qué movimiento salió el depósito, cuando salió de uno. Es lo que
+      -- hace REVERSIBLE la acreditación: sin esto, deshacer un vínculo obliga
+      -- a adivinar cuál de los depósitos vino de ese movimiento comparando
+      -- monto y texto. Importa porque la acreditación la dispara una
+      -- sugerencia, y una sugerencia se equivoca.
+      ALTER TABLE goal_deposits ADD COLUMN IF NOT EXISTS transaction_id UUID;
+
       -- Identificador del movimiento segun el propio banco (fecha + su numero
       -- de referencia). Es lo que permite volver a subir el mismo resumen sin
       -- duplicar, y sobre todo CORREGIR un import anterior.

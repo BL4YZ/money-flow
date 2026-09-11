@@ -3,6 +3,7 @@ const { body, validationResult } = require('express-validator');
 const db = require('../db');
 const authMiddleware = require('../middleware/auth');
 const { calcFeasibility, calcMonthlyQuota } = require('../services/goalFeasibility');
+const { candidatosDeAhorro } = require('../services/savingsDetector');
 
 const router = express.Router();
 router.use(authMiddleware);
@@ -234,6 +235,33 @@ router.post('/', [
   }
 });
 
+// GET /api/goals/candidates — movimientos del banco que podrian ser un ahorro.
+//
+// Va ANTES de las rutas /:id: si quedara despues, Express leeria "candidates"
+// como un id de meta. Misma razon por la que DELETE /transactions/imported esta
+// antes de /:id.
+//
+// NO acredita nada: devuelve una lista para que el usuario confirme, con el
+// motivo por el que cada uno aparece. Ver services/savingsDetector.js — desde
+// el resumen no se puede saber si una transferencia fue a tu propia caja de
+// ahorro, asi que la app pregunta en vez de decidir.
+router.get('/candidates', async (req, res) => {
+  try {
+    // Sin metas activas no hay nada que acreditar, y la lista seria ruido.
+    const { rows } = await db.query(
+      'SELECT COUNT(*) FROM goals WHERE user_id = $1 AND is_completed = false',
+      [req.userId]
+    );
+    if (parseInt(rows[0].count, 10) === 0) return res.json({ candidates: [] });
+
+    const limite = Math.min(parseInt(req.query.limit, 10) || 8, 25);
+    res.json({ candidates: await candidatosDeAhorro(db, req.userId, limite) });
+  } catch (err) {
+    console.error('GET /goals/candidates error:', err.message);
+    res.status(500).json({ error: 'Error al buscar movimientos' });
+  }
+});
+
 router.patch('/:id', async (req, res) => {
   const { current_amount, name, target_amount, target_date, is_completed } = req.body;
   const fields = [];
@@ -367,9 +395,21 @@ router.get('/:id/insights', async (req, res) => {
   }
 });
 
-// ─── Vincular transacción a meta ───────────────────────────────────
-
-// POST /api/goals/link-transaction — linkea una transacción y acredita su monto a la meta
+// ─── Vincular un movimiento real del banco a una meta ──────────────
+//
+// Es la diferencia entre una meta y una planilla: "Ahorrar" a mano es escribir
+// un número y no prueba que la plata se haya movido. Esto acredita un
+// movimiento que el banco ya registró.
+//
+// Tres cosas que faltaban y que acá cuestan plata mal contada:
+//
+//  1. NO SE CHEQUEABA SI YA ESTABA VINCULADO. Vincular dos veces el mismo
+//     movimiento sumaba el monto dos veces y la meta quedaba inflada, sin
+//     forma de volver atrás desde la app.
+//  2. ACEPTABA UN INGRESO. Una transferencia al ahorro sale de la cuenta: es
+//     un 'debit'. Acreditar un 'credit' es meter el sueldo adentro de la meta.
+//  3. LOS TRES WRITES NO ERAN ATÓMICOS. Si fallaba el segundo, la transacción
+//     quedaba vinculada a una meta cuyo saldo nunca subió.
 router.post('/link-transaction', [
   body('transaction_id').notEmpty(),
   body('goal_id').notEmpty(),
@@ -378,13 +418,16 @@ router.post('/link-transaction', [
   if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
   const { transaction_id, goal_id } = req.body;
+  let client;
   try {
-    // Verificar ownership de ambos
+    // Ownership de los dos lados. No alcanza con el id: sin esto, cualquiera
+    // con un id ajeno acredita contra la meta de otro (ver "Authorization
+    // model" en CLAUDE.md — el WHERE user_id es el único límite real).
     const { rows: txRows } = await db.query(
       'SELECT * FROM transactions WHERE id = $1 AND user_id = $2',
       [transaction_id, req.userId]
     );
-    if (!txRows[0]) return res.status(404).json({ error: 'Transacción no encontrada' });
+    if (!txRows[0]) return res.status(404).json({ error: 'Movimiento no encontrado' });
 
     const { rows: goalRows } = await db.query(
       'SELECT * FROM goals WHERE id = $1 AND user_id = $2',
@@ -394,29 +437,109 @@ router.post('/link-transaction', [
 
     const tx   = txRows[0];
     const goal = goalRows[0];
+
+    if (tx.goal_id) {
+      return res.status(409).json({
+        error: tx.goal_id === goal_id
+          ? 'Ese movimiento ya está acreditado en esta meta'
+          : 'Ese movimiento ya está acreditado en otra meta',
+        goal_id: tx.goal_id,
+      });
+    }
+    if (tx.type !== 'debit') {
+      return res.status(400).json({ error: 'Solo se pueden acreditar egresos: un ahorro sale de la cuenta' });
+    }
+
     const amount = Math.abs(parseFloat(tx.amount));
-
-    // Linkear la transacción
-    await db.query('UPDATE transactions SET goal_id = $1 WHERE id = $2', [goal_id, transaction_id]);
-
-    // Registrar depósito en el historial
-    await db.query(
-      'INSERT INTO goal_deposits (goal_id, user_id, amount, note) VALUES ($1, $2, $3, $4)',
-      [goal.id, req.userId, amount, tx.description]
-    );
-
-    // Actualizar current_amount
-    const newAmount = parseFloat(goal.current_amount) + amount;
+    const newAmount   = parseFloat(goal.current_amount) + amount;
     const isCompleted = newAmount >= parseFloat(goal.target_amount);
-    const { rows } = await db.query(
-      'UPDATE goals SET current_amount = $1, is_completed = $2 WHERE id = $3 RETURNING *',
-      [newAmount, isCompleted, goal.id]
-    );
 
-    res.json({ goal: rows[0], credited: amount, completed: isCompleted });
+    client = await db.getClient();
+    let actualizada;
+    try {
+      await client.query('BEGIN');
+      await client.query('UPDATE transactions SET goal_id = $1 WHERE id = $2', [goal_id, transaction_id]);
+      // transaction_id en el depósito es lo que hace reversible el vínculo:
+      // sin él, deshacerlo obliga a adivinar cuál de los depósitos salió de
+      // este movimiento comparando monto y texto.
+      await client.query(
+        'INSERT INTO goal_deposits (goal_id, user_id, amount, note, transaction_id) VALUES ($1, $2, $3, $4, $5)',
+        [goal.id, req.userId, amount, tx.description, transaction_id]
+      );
+      const r = await client.query(
+        'UPDATE goals SET current_amount = $1, is_completed = $2 WHERE id = $3 RETURNING *',
+        [newAmount, isCompleted, goal.id]
+      );
+      actualizada = r.rows[0];
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    }
+
+    res.json({ goal: actualizada, credited: amount, completed: isCompleted });
   } catch (err) {
     console.error('POST /goals/link-transaction error:', err.message);
-    res.status(500).json({ error: 'Error al vincular transacción' });
+    res.status(500).json({ error: 'Error al vincular el movimiento' });
+  } finally {
+    if (client) client.release();
+  }
+});
+
+// DELETE /api/goals/link-transaction/:transactionId — deshacer el vínculo.
+//
+// Existe porque la acreditación la dispara una SUGERENCIA, y una sugerencia se
+// equivoca. Sin esto, un "sí" de más deja la meta inflada para siempre: no hay
+// ninguna otra forma de bajar current_amount desde la app.
+router.delete('/link-transaction/:transactionId', async (req, res) => {
+  let client;
+  try {
+    const { rows } = await db.query(
+      'SELECT * FROM transactions WHERE id = $1 AND user_id = $2',
+      [req.params.transactionId, req.userId]
+    );
+    const tx = rows[0];
+    if (!tx) return res.status(404).json({ error: 'Movimiento no encontrado' });
+    if (!tx.goal_id) return res.status(409).json({ error: 'Ese movimiento no está acreditado a ninguna meta' });
+
+    const { rows: goalRows } = await db.query(
+      'SELECT * FROM goals WHERE id = $1 AND user_id = $2',
+      [tx.goal_id, req.userId]
+    );
+    const goal = goalRows[0];
+    if (!goal) return res.status(404).json({ error: 'Meta no encontrada' });
+
+    const amount = Math.abs(parseFloat(tx.amount));
+    // No baja de cero aunque los datos hayan quedado torcidos por un vínculo
+    // doble anterior: un saldo negativo rompe el anillo y la proyección.
+    const newAmount = Math.max(parseFloat(goal.current_amount) - amount, 0);
+
+    client = await db.getClient();
+    let actualizada;
+    try {
+      await client.query('BEGIN');
+      await client.query('UPDATE transactions SET goal_id = NULL WHERE id = $1', [tx.id]);
+      await client.query(
+        'DELETE FROM goal_deposits WHERE transaction_id = $1 AND user_id = $2',
+        [tx.id, req.userId]
+      );
+      const r = await client.query(
+        'UPDATE goals SET current_amount = $1, is_completed = $2 WHERE id = $3 RETURNING *',
+        [newAmount, newAmount >= parseFloat(goal.target_amount), goal.id]
+      );
+      actualizada = r.rows[0];
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    }
+
+    res.json({ goal: actualizada, reverted: amount });
+  } catch (err) {
+    console.error('DELETE /goals/link-transaction error:', err.message);
+    res.status(500).json({ error: 'Error al deshacer el vínculo' });
+  } finally {
+    if (client) client.release();
   }
 });
 

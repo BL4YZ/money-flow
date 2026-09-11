@@ -200,6 +200,61 @@ function FeasibilityCard({ feas, metas }) {
   );
 }
 
+/**
+ * "¿Esto fue un ahorro?"
+ *
+ * Hasta acá, "Ahorrar" era escribir un número: no probaba que la plata se
+ * hubiera movido. Estos son movimientos que el banco ya registró, esperando que
+ * el usuario diga a qué meta van.
+ *
+ * Dos decisiones:
+ *  - Cada fila dice POR QUÉ aparece ("es una transferencia, monto redondo").
+ *    La app no sabe si esa transferencia fue a tu caja de ahorro o a un amigo
+ *    — el resumen no lo dice — así que muestra su evidencia y deja decidir.
+ *  - El "Deshacer" queda EN PANTALLA, no en un toast que se va. Lo que dispara
+ *    la acreditación es una sugerencia, y una sugerencia se equivoca; si la
+ *    forma de arreglarlo dura tres segundos, en la práctica no existe.
+ */
+function CandidatesCard({ candidatos, acreditados, onElegir, onDeshacer }) {
+  if (candidatos.length === 0 && acreditados.length === 0) return null;
+
+  return (
+    <Card variant="base" label="¿Esto fue un ahorro?" style={styles.bloque}>
+      {candidatos.length > 0 ? (
+        <Txt variant="caption" color={COLORS.textLow} style={{ marginBottom: SPACING.s }}>
+          Movimientos de tu banco que podrían ir a una meta.
+        </Txt>
+      ) : null}
+
+      {candidatos.map((c) => (
+        <Pressable key={c.id} onPress={() => onElegir(c)} style={styles.cand}>
+          <View style={styles.candInfo}>
+            <Txt variant="body" color={COLORS.textHigh} numberOfLines={1}>{c.description}</Txt>
+            <Txt variant="caption" color={COLORS.textLow} numberOfLines={1}>
+              {new Date(c.date).toLocaleDateString('es-UY', { day: 'numeric', month: 'short' })}
+              {c.motivos.length > 0 ? ` · ${c.motivos.join(', ')}` : ''}
+            </Txt>
+          </View>
+          <Txt style={styles.candMonto}>{formatUYU(c.amount)}</Txt>
+          <Ionicons name="chevron-forward" size={16} color={COLORS.textLow} />
+        </Pressable>
+      ))}
+
+      {acreditados.map((a) => (
+        <View key={a.id} style={styles.cand}>
+          <Ionicons name="checkmark-circle" size={18} color={COLORS.success} style={{ marginRight: SPACING.s }} />
+          <View style={styles.candInfo}>
+            <Txt variant="caption" color={COLORS.textMid} numberOfLines={1}>
+              {formatUYU(a.amount)} a {a.metaNombre}
+            </Txt>
+          </View>
+          <Button label="Deshacer" variant="ghost" size="sm" onPress={() => onDeshacer(a)} />
+        </View>
+      ))}
+    </Card>
+  );
+}
+
 export default function GoalsScreen() {
   const { t } = useLanguage();
   const { isPremium, showUpgrade } = usePlan();
@@ -215,12 +270,23 @@ export default function GoalsScreen() {
   // Viabilidad: un solo objeto para TODAS las metas, porque comparten un unico
   // margen mensual. Tres metas que solas entran pueden no entrar juntas.
   const [feasibility, setFeasibility] = useState(null);
+  // Movimientos del banco que podrian ser un ahorro, y los que el usuario ya
+  // acredito en esta sesion — estos ultimos siguen en pantalla con su
+  // "Deshacer", porque lo que los acredito fue una sugerencia.
+  const [candidatos, setCandidatos] = useState([]);
+  const [acreditados, setAcreditados] = useState([]);
+  const [linkModal, setLinkModal] = useState(null);
 
   const fetchGoals = useCallback(async () => {
     try {
       const { data } = await api.get('/goals');
       setGoals(data.goals);
       setFeasibility(data.feasibility || null);
+      // Falla en silencio: es una ayuda, no puede romper la pantalla de metas.
+      try {
+        const { data: c } = await api.get('/goals/candidates');
+        setCandidatos(c.candidates || []);
+      } catch (_) { setCandidatos([]); }
     } catch (_) {
       Toast.show({ type: 'error', text1: t('goals.errorLoad') });
     } finally {
@@ -275,6 +341,45 @@ export default function GoalsScreen() {
       Toast.show({ type: 'error', text1: t('goals.errorUpdate') });
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Acreditar un movimiento del banco a una meta. El backend rechaza acreditarlo
+  // dos veces (409) y rechaza un ingreso (400), asi que un doble tap no puede
+  // inflar la meta.
+  const acreditar = async (meta) => {
+    const mov = linkModal;
+    setSaving(true);
+    try {
+      const { data } = await api.post('/goals/link-transaction', {
+        transaction_id: mov.id,
+        goal_id: meta.id,
+      });
+      setGoals((prev) => prev.map((g) => (g.id === meta.id ? data.goal : g)));
+      setCandidatos((prev) => prev.filter((c) => c.id !== mov.id));
+      // Queda en pantalla con su "Deshacer" en vez de desaparecer.
+      setAcreditados((prev) => [{ ...mov, metaId: meta.id, metaNombre: meta.name }, ...prev]);
+      setLinkModal(null);
+      Toast.show({
+        type: 'success',
+        text1: data.completed ? '¡Meta completada!' : `Acreditado a ${meta.name}`,
+      });
+    } catch (e) {
+      Toast.show({ type: 'error', text1: e?.response?.data?.error || 'No se pudo acreditar' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deshacer = async (a) => {
+    try {
+      const { data } = await api.delete(`/goals/link-transaction/${a.id}`);
+      setGoals((prev) => prev.map((g) => (g.id === a.metaId ? data.goal : g)));
+      setAcreditados((prev) => prev.filter((x) => x.id !== a.id));
+      setCandidatos((prev) => [a, ...prev]);   // vuelve a la lista de sugerencias
+      Toast.show({ type: 'success', text1: 'Listo, lo saqué de la meta' });
+    } catch (_) {
+      Toast.show({ type: 'error', text1: 'No se pudo deshacer' });
     }
   };
 
@@ -359,6 +464,13 @@ export default function GoalsScreen() {
         ) : null}
 
         <FeasibilityCard feas={feasibility} metas={activas.length} />
+
+        <CandidatesCard
+          candidatos={candidatos}
+          acreditados={acreditados}
+          onElegir={setLinkModal}
+          onDeshacer={deshacer}
+        />
 
         {activas.length > 0 ? (
           <>
@@ -502,6 +614,31 @@ export default function GoalsScreen() {
           autoFocus
         />
       </BottomSheet>
+
+      {/* Elegir a que meta va el movimiento. No hay boton primario: la accion
+          ES elegir la meta, y un "confirmar" de mas solo agrega un paso. */}
+      <BottomSheet
+        visible={!!linkModal}
+        onClose={() => setLinkModal(null)}
+        title="¿A qué meta va?"
+        subtitle={linkModal ? `${formatUYU(linkModal.amount)} · ${linkModal.description}` : ''}
+      >
+        {activas.map((g) => (
+          <Pressable
+            key={g.id}
+            onPress={() => !saving && acreditar(g)}
+            style={styles.cand}
+          >
+            <View style={styles.candInfo}>
+              <Txt variant="body" color={COLORS.textHigh} numberOfLines={1}>{g.name}</Txt>
+              <Txt variant="caption" color={COLORS.textLow}>
+                {formatUYU(parseFloat(g.current_amount))} de {formatUYU(parseFloat(g.target_amount))}
+              </Txt>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={COLORS.textLow} />
+          </Pressable>
+        ))}
+      </BottomSheet>
     </View>
   );
 }
@@ -522,6 +659,10 @@ const styles = StyleSheet.create({
 
   feasTitular: { fontFamily: FONTS.amountBold, fontSize: 20, lineHeight: 26, color: COLORS.textHigh },
   feasPie: { flexDirection: 'row', marginTop: SPACING.s },
+
+  cand: { flexDirection: 'row', alignItems: 'center', paddingVertical: SPACING.s, gap: SPACING.s },
+  candInfo: { flex: 1, minWidth: 0 },
+  candMonto: { fontFamily: FONTS.amountBold, fontSize: 14, lineHeight: 18, color: COLORS.textHigh },
 
   goal: { marginTop: SPACING.s },
   goalTop: { flexDirection: 'row', alignItems: 'center' },
