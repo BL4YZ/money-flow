@@ -2,6 +2,7 @@ import React from 'react';
 import { View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
 import { useFonts } from 'expo-font';
 // Se importa el subpath de CADA peso, no la raíz del paquete: el index.js de
@@ -43,6 +44,16 @@ export default function App() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
+      {/* El paquete ya estaba instalado (lo trae react-navigation) pero nadie lo
+          usaba, asi que ningun componente sabia donde termina la pantalla
+          usable. Las hojas inferiores quedaban por debajo de la barra de gestos
+          de Android: su ultima fila se cortaba, y al no haber boton primario en
+          "A que meta va" lo que se cortaba era contenido.
+
+          `initialWindowMetrics` no es opcional aca: sin eso, `useSafeAreaInsets`
+          adentro de un <Modal> devuelve ceros en Android, que es exactamente
+          donde se necesita. */}
+      <SafeAreaProvider initialMetrics={initialWindowMetrics}>
       <LanguageProvider>
         <AuthProvider>
           <StatusBar style="light" />
@@ -50,6 +61,7 @@ export default function App() {
           <Toast />
         </AuthProvider>
       </LanguageProvider>
+      </SafeAreaProvider>
     </GestureHandlerRootView>
   );
 }

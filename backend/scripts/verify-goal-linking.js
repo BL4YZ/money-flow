@@ -65,6 +65,10 @@ const montoMeta = async (id) =>
     const sueldo  = await sembrarMov(uid, { desc: 'SUELDO', monto: 60000, tipo: 'credit', categoria: 'Salario' });
     const compra  = await sembrarMov(uid, { desc: 'SUPERMERCADO DISCO', monto: 3200, categoria: 'Supermercado' });
     const tipeado = await sembrarMov(uid, { desc: 'TRANSFERENCIA', monto: 2000, source: 'manual' });
+    // Un debito que el categorizador no reconocio y que no dice nada: no es
+    // candidato a nada. Reportado desde la app — 'MONTEVIDEO $195' aparecia
+    // ofrecido como posible ahorro, sin un solo motivo.
+    const opaco = await sembrarMov(uid, { desc: 'MONTEVIDEO', monto: 195 });
 
     // 1. El camino feliz.
     let r = await api('POST', '/goals/link-transaction', { transaction_id: ahorro, goal_id: meta.id });
@@ -106,6 +110,8 @@ const montoMeta = async (id) =>
     chequeo('NO ofrece una compra de supermercado', !ids.includes(compra), '');
     chequeo('NO ofrece lo cargado a mano', !ids.includes(tipeado), '');
     chequeo('NO ofrece un ingreso', !ids.includes(sueldo), '');
+    chequeo('NO ofrece un movimiento sin ningun motivo', !ids.includes(opaco),
+      'una fila sin explicacion no es una sugerencia');
     chequeo('explica por qué lo sugiere', (cands[0]?.motivos || []).length > 0,
       `"${cands[0]?.description}" → ${(cands[0]?.motivos || []).join(', ')}`);
 

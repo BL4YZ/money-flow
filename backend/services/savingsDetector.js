@@ -90,6 +90,13 @@ async function candidatosDeAhorro(db, userId, limite = 8) {
 
   return rows
     .map((tx) => ({ ...tx, amount: Math.abs(parseFloat(tx.amount)), ...puntuar(tx) }))
+    // SIN NINGUN MOTIVO NO ES UNA SUGERENCIA, ES UN MOVIMIENTO AL AZAR. La
+    // elegibilidad por evidencia negativa deja pasar todo lo que el
+    // categorizador no reconocio, y con datos reales eso es mucho: una compra
+    // en "MONTEVIDEO" de $195 aparecia ofrecida como posible ahorro, sin una
+    // sola linea que dijera por que. La tarjeta promete explicar cada fila; una
+    // fila sin explicacion la contradice, y ensucia las que si tienen.
+    .filter((c) => c.puntos > 0)
     // Empate de puntos: primero el más reciente. Un movimiento de ayer es más
     // fácil de reconocer para el usuario que uno de hace dos meses.
     .sort((a, b) => b.puntos - a.puntos || new Date(b.date) - new Date(a.date))

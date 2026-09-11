@@ -3,6 +3,7 @@ import {
   Modal, View, Pressable, Animated, ScrollView, KeyboardAvoidingView,
   Platform, Dimensions, StyleSheet,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Txt from './Text';
 import Button from './Button';
 import { COLORS, RADIUS, SPACING, FONTS, MOTION } from '../../theme';
@@ -30,6 +31,11 @@ export default function BottomSheet({
   onSecondary,
   style,
 }) {
+  // La hoja se ancla al borde inferior de la PANTALLA, no del area usable, asi
+  // que en un telefono con barra de gestos su ultimo elemento queda debajo de
+  // ella. Con boton primario apenas se notaba —un boton recortado 24px sigue
+  // pareciendo tocable—; sin boton, lo que se corta es contenido, y se ve roto.
+  const insets = useSafeAreaInsets();
   const alto = Dimensions.get('window').height;
   const y = useRef(new Animated.Value(alto)).current;
   const fade = useRef(new Animated.Value(0)).current;
@@ -65,7 +71,7 @@ export default function BottomSheet({
           style={styles.kav}
           pointerEvents="box-none"
         >
-          <Animated.View style={[styles.hoja, { transform: [{ translateY: y }] }, style]}>
+          <Animated.View style={[styles.hoja, { paddingBottom: 20 + insets.bottom }, { transform: [{ translateY: y }] }, style]}>
             <View style={styles.handle} />
             {title ? <Txt style={styles.titulo}>{title}</Txt> : null}
             {subtitle ? (
@@ -117,7 +123,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: RADIUS.xxl,
     paddingTop: 12,
     paddingHorizontal: 20,
-    paddingBottom: 20,
+    // paddingBottom sale del inset, arriba.
     maxHeight: '88%',
   },
   handle: {
