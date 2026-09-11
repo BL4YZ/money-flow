@@ -549,6 +549,26 @@ export default function DashboardScreen() {
           actionIcon="add"
           onActionPress={openCreate}
           card={false}
+          titleBadge={
+            // PREMIUM: solo el diamante, sin pastilla ni gradiente. Es un
+            // estado, no algo que haya que tocar, y al lado del nombre una
+            // pastilla dorada le gana la mirada al nombre. Como un tilde de
+            // verificado: se nota si lo buscas y no molesta si no.
+            //
+            // GRATIS es otra cosa: ahi la marca SI invita a tocar, asi que
+            // sigue siendo una pastilla, chica y apagada.
+            isPremium ? (
+              <Ionicons name="diamond" size={13} color={COLORS.premium} />
+            ) : (
+              <Pressable onPress={() => showUpgrade()} hitSlop={8}>
+                <Badge
+                  variant={isTrial ? 'streak' : 'statusMuted'}
+                  icon={isTrial ? 'timer-outline' : 'lock-closed'}
+                  label={isTrial ? `${trialDays}d` : t('premium.freeBadge')}
+                />
+              </Pressable>
+            )
+          }
         />
 
         {/* SELECTOR DE CUENTA, SIEMPRE VISIBLE.
@@ -572,19 +592,10 @@ export default function DashboardScreen() {
           style={{ marginTop: SPACING.m }}
         />
 
+        {/* La marca del plan se fue al lado del nombre: aca quedaban mezcladas
+            una etiqueta de estado y tres botones, y el separador flexible
+            existia solo para empujarla al otro extremo. */}
         <View style={styles.utilRow}>
-          {!isPremium ? (
-            <Pressable onPress={() => showUpgrade()}>
-              <Badge
-                variant={isTrial ? 'streak' : 'statusMuted'}
-                icon={isTrial ? 'timer-outline' : 'lock-closed'}
-                label={isTrial ? `${trialDays}d` : t('premium.freeBadge')}
-              />
-            </Pressable>
-          ) : (
-            <Badge variant="premium" label={t('premium.badge')} />
-          )}
-          <View style={{ flex: 1 }} />
           <Button
             label=""
             variant="ghost"
@@ -897,7 +908,7 @@ const styles = StyleSheet.create({
   bloque: { marginTop: SPACING.m },
   pressed: { opacity: 0.75 },
 
-  utilRow: { flexDirection: 'row', alignItems: 'center', marginTop: SPACING.s, gap: SPACING.xs },
+  utilRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', marginTop: SPACING.s, gap: SPACING.xs },
 
   monthRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',

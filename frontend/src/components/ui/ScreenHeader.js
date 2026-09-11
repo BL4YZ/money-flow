@@ -17,6 +17,10 @@ export default function ScreenHeader({
   subtitle,
   initials,          // muestra el avatar si viene
   onAvatarPress,
+  // Marca al lado del titulo, en la misma linea: es un ESTADO de quien mira
+  // (su plan, por ejemplo), no una accion. Por eso va pegada al nombre y no
+  // entre los botones, donde compite con cosas que se tocan.
+  titleBadge,
   actionIcon,
   onActionPress,
   card = true,
@@ -36,7 +40,12 @@ export default function ScreenHeader({
         ) : null}
 
         <View style={styles.medio}>
-          <Txt style={styles.titulo} numberOfLines={1}>{title}</Txt>
+          <View style={styles.tituloFila}>
+            {/* El titulo se encoge antes que la marca: un nombre largo recorta
+                el nombre, no borra el distintivo. */}
+            <Txt style={[styles.titulo, { flexShrink: 1 }]} numberOfLines={1}>{title}</Txt>
+            {titleBadge}
+          </View>
           {subtitle ? (
             <Txt variant="caption" color={COLORS.textLow} style={styles.sub} numberOfLines={2}>
               {subtitle}
@@ -81,6 +90,7 @@ const styles = StyleSheet.create({
   },
   avatarTxt: { fontFamily: FONTS.extrabold, fontSize: 14, lineHeight: 17, color: COLORS.textHigh },
   medio: { flex: 1, minWidth: 0 },
+  tituloFila: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   titulo: { fontFamily: FONTS.extrabold, fontSize: 20, lineHeight: 23, letterSpacing: -0.4, color: COLORS.textHigh },
   sub: { fontSize: 12.5, lineHeight: 16 },
   accion: {
