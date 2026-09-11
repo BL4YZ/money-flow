@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Pressable, StyleSheet } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Txt from './Text';
-import { GlassEdge } from './GlassSurface';
+import { GlassEdge, GlassFondo } from './GlassSurface';
 import { COLORS, RADIUS, FONTS, TYPE } from '../../theme';
 
 /**
@@ -21,9 +21,9 @@ export default function Chip({ label, active, onPress, icon, style }) {
         style,
       ]}
     >
-      {/* El canto va en los DOS estados: es lo que hace que el chip elegido y
-          el que no se lean como el mismo material, cambiando solo de color. */}
-      <GlassEdge radius={RADIUS.full} />
+      {/* En reposo es vidrio de verdad; elegido, su color con el canto. Asi el
+          contraste entre los dos estados sigue siendo evidente. */}
+      {active ? <GlassEdge radius={RADIUS.full} /> : <GlassFondo radius={RADIUS.full} />}
       {icon ? (
         <Ionicons
           name={icon}
@@ -62,6 +62,7 @@ export function SortChip({ label, active, desc, onPress, style }) {
 export function Segmented({ options, value, onChange, tone, style }) {
   return (
     <View style={[styles.track, style]}>
+      <GlassFondo radius={RADIUS.full} />
       {options.map((o) => {
         const val = typeof o === 'string' ? o : o.value;
         const label = typeof o === 'string' ? o : o.label;
@@ -118,7 +119,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 14,
   },
-  chipIdle:   { backgroundColor: COLORS.glassFill,     borderColor: COLORS.glassBorder },
+  chipIdle:   { backgroundColor: 'transparent',        borderColor: COLORS.glassBorder },
   chipActive: { backgroundColor: COLORS.primarySoft,   borderColor: COLORS.primaryBorderSoft },
   pressed:    { opacity: 0.7 },
   chipTxt:       { fontSize: 13, lineHeight: 16 },
@@ -128,7 +129,8 @@ const styles = StyleSheet.create({
   track: {
     flexDirection: 'row',
     alignSelf: 'flex-start',
-    backgroundColor: COLORS.glassFill,
+    backgroundColor: 'transparent',
+    overflow: 'hidden',
     borderWidth: 1.5,
     borderColor: COLORS.glassBorder,
     borderRadius: RADIUS.full,

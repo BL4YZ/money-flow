@@ -47,6 +47,19 @@ export const nivelDeVidrio = () => {
   return 'solido';
 };
 
+// Lo dice una vez en la consola de Metro al arrancar. "No veo el efecto" tiene
+// tres causas posibles —el material del sistema, el desenfoque o nada— y desde
+// afuera no hay forma de distinguirlas mirando una captura.
+if (__DEV__) {
+  const nivel = nivelDeVidrio();
+  console.log(
+    `[vidrio] nivel: ${nivel}` +
+    (nivel === 'liquid' ? '  (Liquid Glass real de iOS 26)'
+      : nivel === 'blur' ? '  (desenfoque real; Liquid Glass necesita iOS 26)'
+      : '  (sin modulo nativo: queda el velo plano)'),
+  );
+}
+
 /**
  * El canto iluminado, suelto y reutilizable.
  *
@@ -68,6 +81,59 @@ export function GlassEdge({ radius, style }) {
       ]}
       pointerEvents="none"
     />
+  );
+}
+
+/**
+ * Vidrio como FONDO de un control que ya existe.
+ *
+ * Se dibuja en una capa absoluta detrás del contenido, así que el Pressable de
+ * arriba conserva su área táctil y su manejo de gestos intactos: el control no
+ * se reestructura, se le cambia el material.
+ *
+ * Acá antes había sólo un tinte —blanco al 7%— y por eso "no se notaba": sobre
+ * el fondo de la app daba #232221 contra el #201e1c que ya tenía, tres puntos
+ * por canal. El desenfoque de verdad es lo que hace la diferencia, no el velo.
+ *
+ * En iOS 26 usa `isInteractive`, que es la parte realmente líquida: el material
+ * de Apple se deforma y responde al toque. Eso no se puede imitar.
+ */
+export function GlassFondo({ radius, style }) {
+  const nivel = nivelDeVidrio();
+
+  if (nivel === 'liquid') {
+    return (
+      <GlassView
+        glassEffectStyle="regular"
+        isInteractive
+        style={[StyleSheet.absoluteFill, radius ? { borderRadius: radius } : null, style]}
+        pointerEvents="none"
+      />
+    );
+  }
+
+  if (nivel === 'blur') {
+    return (
+      <View
+        style={[StyleSheet.absoluteFill, styles.recorta, radius ? { borderRadius: radius } : null, style]}
+        pointerEvents="none"
+      >
+        <BlurView intensity={26} tint="light" style={StyleSheet.absoluteFill} />
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: COLORS.glassFill }]} />
+        <GlassEdge />
+      </View>
+    );
+  }
+
+  // Sin módulo nativo queda el velo solo. Se ve plano, pero se ve.
+  return (
+    <View
+      style={[StyleSheet.absoluteFill, styles.recorta, radius ? { borderRadius: radius } : null,
+        { backgroundColor: COLORS.glassFill }, style]}
+      pointerEvents="none"
+    >
+      <GlassEdge />
+    </View>
   );
 }
 

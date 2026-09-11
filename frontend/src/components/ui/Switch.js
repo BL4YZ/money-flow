@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { Pressable, Animated, StyleSheet } from 'react-native';
-import { GlassEdge } from './GlassSurface';
+import { GlassEdge, GlassFondo } from './GlassSurface';
 import { COLORS, RADIUS, MOTION } from '../../theme';
 
 const ANCHO = 46;
@@ -38,7 +38,7 @@ export default function Toggle({ value, onValueChange, disabled, style }) {
         style,
       ]}
     >
-      <GlassEdge radius={RADIUS.full} />
+      {value ? <GlassEdge radius={RADIUS.full} /> : <GlassFondo radius={RADIUS.full} />}
       <Animated.View
         style={[
           styles.knob,
@@ -61,7 +61,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 2,
   },
-  trackOff: { backgroundColor: COLORS.glassFill,     borderColor: COLORS.glassBorder },
+  trackOff: { backgroundColor: 'transparent',        borderColor: COLORS.glassBorder },
   trackOn:  { backgroundColor: COLORS.primary,       borderColor: COLORS.primary },
   knob: { width: KNOB, height: KNOB, borderRadius: KNOB / 2, overflow: 'hidden' },
   disabled: { opacity: 0.45 },

@@ -24,16 +24,22 @@ export const COLORS = {
   // vidrio y no como una capa translúcida. En el material de Apple ese brillo
   // sale de la luz refractándose en el borde; acá es una línea de un pixel, que
   // es todo lo que se puede hacer sin shaders.
-  glassTint: 'rgba(32,30,28,0.55)',
-  glassEdge: 'rgba(255,255,255,0.16)',
-  glassBorder: 'rgba(255,255,255,0.10)',
+  glassTint: 'rgba(32,30,28,0.45)',
+  // MEDIDO, no elegido a ojo: el canto al 0.16 sobre la superficie daba #444240
+  // contra un #201e1c — una linea de 1,5px con seis puntos de diferencia, o sea
+  // invisible. Al 0.38 da #757472 y recien ahi se lee como un borde iluminado.
+  glassEdge: 'rgba(255,255,255,0.38)',
+  glassBorder: 'rgba(255,255,255,0.18)',
 
   // Relleno para controles CHICOS (botones, chips, el riel del toggle). Va mas
   // opaco que `glassTint` porque detras no hay desenfoque: un chip de 30px no
   // muestra blur util y ponerle uno a cada uno de una lista cuesta caro en
   // Android. El vidrio de verdad se reserva para las superficies grandes.
-  glassFill: 'rgba(255,255,255,0.07)',
-  glassFillPressed: 'rgba(255,255,255,0.12)',
+  // El 0.07 daba #232221 sobre el fondo, contra el #201e1c de surfaceRaised: tres
+  // puntos por canal. Por eso "no se notaba el cambio" — literalmente no habia
+  // cambio. Este es el velo que va ENCIMA del desenfoque, no en lugar de el.
+  glassFill: 'rgba(255,255,255,0.14)',
+  glassFillPressed: 'rgba(255,255,255,0.24)',
   borderStrong: '#46403a',
 
   // Marca: un primary (hueso) + un accent (turquesa)

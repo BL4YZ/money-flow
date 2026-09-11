@@ -3,7 +3,7 @@ import { Pressable, Animated, ActivityIndicator, View, StyleSheet } from 'react-
 import { LinearGradient } from 'expo-linear-gradient';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Txt from './Text';
-import { GlassEdge } from './GlassSurface';
+import { GlassEdge, GlassFondo } from './GlassSurface';
 import { COLORS, GRADIENTS, RADIUS, SHADOWS, MOTION } from '../../theme';
 
 /**
@@ -37,9 +37,12 @@ function paleta(variant, disabled) {
   }
   switch (variant) {
     case 'secondary':
-      return { bg: COLORS.glassFill, border: COLORS.glassBorder, fg: COLORS.textHigh, vidrio: true };
+      return { bg: 'transparent', border: COLORS.glassBorder, fg: COLORS.textHigh, vidrio: true };
+    // `ghost` tambien es vidrio ahora, pero sin borde: son los botones de la
+    // fila de utilidades y del pie de las hojas, y eran los unicos controles
+    // que seguian sin material ninguno.
     case 'ghost':
-      return { bg: 'transparent', border: 'transparent', fg: COLORS.textMid };
+      return { bg: 'transparent', border: 'transparent', fg: COLORS.textMid, vidrio: true };
     case 'destructive':
       return { bg: COLORS.errorSoft, border: COLORS.errorBorder, fg: COLORS.expense, iconFg: COLORS.error };
     case 'premiumLocked':
@@ -148,9 +151,10 @@ export default function Button({
           },
         ]}
       >
-        {/* Ni en `ghost` ni deshabilitado: el primero no tiene superficie que
-            iluminar y el segundo no tiene que parecer tocable. */}
-        {!inerte && variant !== 'ghost' ? <GlassEdge radius={s.radius} /> : null}
+        {/* El vidrio va DETRAS del contenido y sin capturar toques: el
+            Pressable de afuera conserva su area tactil entera. */}
+        {p.vidrio && !inerte ? <GlassFondo radius={s.radius} /> : null}
+        {!inerte && !p.vidrio ? <GlassEdge radius={s.radius} /> : null}
         {contenido}
       </Pressable>
     </Animated.View>
