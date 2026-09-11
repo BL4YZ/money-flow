@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, ScrollView, StyleSheet, ActivityIndicator, Pressable,
-  RefreshControl, Alert,
+  RefreshControl, Alert, Animated,
 } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Toast from 'react-native-toast-message';
@@ -205,6 +205,10 @@ export default function DashboardScreen() {
     api.patch('/account/preferences', { display_currency: valor }).catch(() => {});
   };
   const [cuentas, setCuentas] = useState([]);
+  // Distingue "abrir la app" de "cambiar de vista": solo lo primero justifica
+  // un spinner que tape todo.
+  const primeraCarga = useRef(true);
+  const fade = useRef(new Animated.Value(1)).current;
   // La moneda de los numeros la DICE el backend en la respuesta, no la deduce
   // la pantalla: si alguna vez no coincidieran, un total en dolares dibujado
   // con el signo del peso es exactamente el error que hay que evitar.
@@ -304,13 +308,34 @@ export default function DashboardScreen() {
   // `cuenta` va en las dependencias: sin eso, cambiar de pesos a dolares
   // recreaba los fetch pero no volvia a ejecutarlos, asi que el selector se
   // movia y la pantalla seguia mostrando los numeros de la otra cuenta.
+  //
+  // EL SPINNER DE PANTALLA COMPLETA ES SOLO PARA LA PRIMERA CARGA. Ponerlo en
+  // cada cambio de cuenta o de mes desmonta la pantalla entera y la vuelve a
+  // montar: eso es el parpadeo. Cambiar de cuenta no es cargar la app de nuevo,
+  // es pasar de una vista a otra, y se lee como transicion o se lee como que
+  // algo se rompio.
   useEffect(() => {
-    setLoading(true);
-    fetchSummary();
-    fetchTransactions(selectedCategory);
-    fetchBudgets();
-    fetchCuentas();
-    fetchUpcomingBills();
+    const primera = primeraCarga.current;
+    primeraCarga.current = false;
+
+    if (primera) setLoading(true);
+    else Animated.timing(fade, { toValue: 0.45, duration: 110, useNativeDriver: true }).start();
+
+    (async () => {
+      // allSettled y no all: si UNO de estos rechaza, `all` corta y el fade
+      // nunca vuelve a 1 — la pantalla queda al 45% de opacidad para siempre.
+      // Que falle una parte no puede dejar la vista a medio encender.
+      await Promise.allSettled([
+        fetchSummary(),
+        fetchTransactions(selectedCategory),
+        fetchBudgets(),
+        fetchCuentas(),
+        fetchUpcomingBills(),
+      ]);
+      // Vuelve mas lento de lo que se fue: una entrada suave se lee como que el
+      // contenido llego, y una salida rapida evita que se vea el dato viejo.
+      if (!primera) Animated.timing(fade, { toValue: 1, duration: 230, useNativeDriver: true }).start();
+    })();
   }, [selectedMonth, cuenta]);
 
   const onRefresh = () => {
@@ -530,6 +555,7 @@ export default function DashboardScreen() {
       <Glow />
       <RefreshBadge refreshing={refreshing} />
 
+      <Animated.View style={{ flex: 1, opacity: fade }}>
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
@@ -715,7 +741,10 @@ export default function DashboardScreen() {
               </Txt>
               <Badge variant="statusMuted" label={String(transactions.length)} />
             </View>
-            {txLoading ? (
+            {/* El spinner solo cuando no hay NADA que mostrar. Si ya hay filas,
+                se quedan mientras llegan las nuevas: cambiarlas por un spinner
+                durante 300 ms es el mismo parpadeo, en chico. */}
+            {txLoading && transactions.length === 0 ? (
               <ActivityIndicator color={COLORS.primary} style={{ marginVertical: SPACING.m }} />
             ) : (
               transactions.map((tx) => (
@@ -779,6 +808,7 @@ export default function DashboardScreen() {
         {/* Aire para la tab bar flotante. */}
         <View style={{ height: 110 }} />
       </ScrollView>
+      </Animated.View>
 
       {/* Alta / edición de movimiento */}
       <BottomSheet
