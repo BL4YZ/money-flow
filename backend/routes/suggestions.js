@@ -37,7 +37,7 @@ router.post('/', requirePremium, async (req, res) => {
       `SELECT
          category,
          to_char(date, 'YYYY-MM') as month,
-         SUM(amount) as total
+         SUM(amount_uyu) as total
        FROM transactions
        WHERE user_id = $1
          AND type = 'debit'
@@ -56,7 +56,7 @@ router.post('/', requirePremium, async (req, res) => {
     // criterio que goalFeasibility y calcSavingsSurplus.
     const { rows: promedios } = await db.query(
       `SELECT category, AVG(total) AS mensual, COUNT(*) AS meses FROM (
-         SELECT category, DATE_TRUNC('month', date) AS mes, SUM(ABS(amount)) AS total
+         SELECT category, DATE_TRUNC('month', date) AS mes, SUM(ABS(amount_uyu)) AS total
          FROM transactions
          WHERE user_id = $1 AND type = 'debit' AND goal_id IS NULL
            AND date >= DATE_TRUNC('month', NOW()) - INTERVAL '6 months'

@@ -46,6 +46,25 @@ export function formatUYU(n, { signo = false } = {}) {
 }
 
 /**
+ * Un importe CON su moneda. "US$ 50" y "$50" son cantidades muy distintas y
+ * hasta acá se veían igual: todo salía con el mismo "$", así que un gasto de
+ * cincuenta dólares parecía cincuenta pesos.
+ *
+ * En Uruguay el peso se escribe "$" y el dólar "US$" — nunca "$" solo para el
+ * dólar, justamente porque se confunden. Los decimales sólo van en dólares,
+ * donde cincuenta centavos son veinte pesos y sí importan.
+ */
+export function formatMoney(n, currency = 'UYU', { signo = false } = {}) {
+  const v = Number(n);
+  if (!Number.isFinite(v)) return '—';
+  if (currency !== 'USD') return formatUYU(v, { signo });
+  const abs = Math.abs(v);
+  const txt = 'US$ ' + abs.toLocaleString('es-UY', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  if (!signo) return (v < 0 ? '−' : '') + txt;
+  return (v < 0 ? '−' : '+') + txt;
+}
+
+/**
  * "$45/L", "$139/kg", "$4,90/un" — la única forma honesta de comparar envases
  * de distinto tamaño. Vivía duplicada en SearchScreen y ShoppingScreen.
  *

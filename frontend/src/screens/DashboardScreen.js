@@ -14,7 +14,7 @@ import RefreshBadge from '../components/RefreshBadge';
 import SecuritySheet from '../components/SecuritySheet';
 import {
   Txt, Card, Input, Chip, Segmented, Badge, Button, BottomSheet,
-  EmptyState, ProgressBar, ScreenHeader, Glow, BarChart, formatUYU,
+  EmptyState, ProgressBar, ScreenHeader, Glow, BarChart, formatUYU, formatMoney,
 } from '../components/ui';
 import {
   COLORS, SPACING, RADIUS, FONTS, categoryColor,
@@ -65,6 +65,10 @@ function formatDate(dateStr) {
 
 const EMPTY_FORM = {
   type: 'debit', amount: '', description: '', category: 'Otros',
+  // Arranca en pesos porque es lo comun, pero se puede cambiar: en Uruguay
+  // mucha gente tiene cuenta en pesos y cuenta en dolares, y hay quien cobra
+  // directamente en dolares.
+  currency: 'UYU',
   date: new Date().toISOString().slice(0, 10),
 };
 
@@ -85,11 +89,17 @@ function TxRow({ tx, onEdit, onDelete }) {
         </Txt>
         <Txt variant="caption" color={COLORS.textLow} style={styles.txMeta}>
           {formatDate(tx.date)} · {tx.category || 'Otros'}
+          {/* El equivalente en pesos del dia del movimiento. Va abajo y en
+              gris porque el importe real es el de arriba: esto es referencia,
+              y ademas NO es lo que valdria hoy. */}
+          {tx.currency === 'USD' && tx.amount_uyu
+            ? ` · ${formatUYU(parseFloat(tx.amount_uyu))} al cambio del día`
+            : ''}
         </Txt>
       </View>
       <View style={styles.txRight}>
         <Txt style={[styles.txAmount, { color: esGasto ? COLORS.expense : COLORS.income }]}>
-          {esGasto ? '−' : '+'}{formatUYU(parseFloat(tx.amount))}
+          {esGasto ? '−' : '+'}{formatMoney(parseFloat(tx.amount), tx.currency)}
         </Txt>
         <Pressable onPress={onDelete} hitSlop={8} style={{ marginTop: 4 }}>
           <Ionicons name="trash-outline" size={13} color={COLORS.textLow} />
@@ -305,6 +315,7 @@ export default function DashboardScreen() {
     setForm({
       type: tx.type,
       amount: String(parseFloat(tx.amount)),
+      currency: tx.currency || 'UYU',
       description: tx.description,
       category: tx.category || 'Otros',
       date: tx.date?.slice(0, 10) || new Date().toISOString().slice(0, 10),
@@ -344,6 +355,7 @@ export default function DashboardScreen() {
         amount: parseFloat(form.amount),
         type: form.type,
         category: form.category,
+        currency: form.currency,
       };
       if (editingId) {
         const { data } = await api.patch(`/transactions/${editingId}`, payload);
@@ -687,6 +699,18 @@ export default function DashboardScreen() {
           onChange={(v) => setForm((f) => ({ ...f, type: v }))}
           tone={form.type === 'debit' ? COLORS.expense : COLORS.income}
           style={{ marginBottom: SPACING.m }}
+        />
+
+        {/* La moneda va ANTES del importe, no despues: se elige al empezar a
+            escribir el numero, no cuando ya lo escribiste pensando en otra. */}
+        <Segmented
+          options={[
+            { value: 'UYU', label: '$ Pesos' },
+            { value: 'USD', label: 'US$ Dólares' },
+          ]}
+          value={form.currency}
+          onChange={(v) => setForm((f) => ({ ...f, currency: v }))}
+          style={{ marginBottom: SPACING.s }}
         />
 
         <Input

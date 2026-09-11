@@ -46,7 +46,7 @@ const CATEGORIA = "Supermercado";
  */
 async function perfilDeCompra(userId, meses = 3) {
   const { rows } = await db.query(
-    `SELECT date, description, amount
+    `SELECT date, description, amount_uyu AS amount
        FROM transactions
       WHERE user_id = $1
         AND category = $2
@@ -63,6 +63,9 @@ async function perfilDeCompra(userId, meses = 3) {
   let sinAtribuir = 0;
 
   for (const t of rows) {
+    // El query trae amount_uyu con alias `amount`: lo que se compara contra los
+    // precios de las tiendas tiene que estar en pesos, y una cuenta en dolares
+    // sumaria 40 veces menos si entrara con su importe nominal.
     const monto = Math.abs(Number(t.amount) || 0);
     total += monto;
     const match = PATRONES_TIENDA.find((p) => p.re.test(t.description || ""));

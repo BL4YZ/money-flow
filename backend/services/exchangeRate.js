@@ -87,4 +87,53 @@ function convertUsdToUyu(usdAmount, rate) {
   return Math.round(usdAmount * rate * 100) / 100;
 }
 
-module.exports = { getUsdToUyuRate, convertUsdToUyu };
+/**
+ * Cotización del USD el día `fechaISO` (o el último día hábil anterior).
+ *
+ * POR QUÉ HISTÓRICA Y NO LA DE HOY. Un movimiento en dólares hay que guardarlo
+ * con la cotización del día en que ocurrió. Si se convierte siempre con la de
+ * hoy, un ahorro en dólares "crece" cuando sube el dólar — y eso es mentira: no
+ * ahorraste más, cambió el tipo de cambio. Lo mismo al revés hunde un gasto
+ * viejo. La conversión tiene que quedar CONGELADA en el momento del movimiento.
+ *
+ * El servicio del BCU ya recibe rango de fechas (lo usa `fetchLatestUsdRate`
+ * para esquivar fines de semana), así que esto no necesita nada nuevo de su
+ * lado: se pide una ventana que termina en la fecha pedida y se toma la última
+ * entrada, que resuelve feriados y sábados igual.
+ *
+ * Se cachea POR FECHA y sin vencimiento: la cotización de un día pasado no
+ * cambia nunca. Sólo el día de hoy puede moverse, y ese va por getUsdToUyuRate.
+ */
+const cachePorFecha = new Map();
+
+async function getUsdToUyuRateOn(fechaISO) {
+  const fecha = String(fechaISO).slice(0, 10);
+  if (cachePorFecha.has(fecha)) return cachePorFecha.get(fecha);
+
+  const hasta = new Date(`${fecha}T12:00:00Z`);
+  if (Number.isNaN(hasta.getTime())) return getUsdToUyuRate();
+  const desde = new Date(hasta.getTime() - 10 * 24 * 60 * 60 * 1000);
+
+  try {
+    const { data: xml } = await axios.post(BCU_URL, buildRequestXml(isoDate(desde), isoDate(hasta)), {
+      headers: { "Content-Type": "text/xml; charset=utf-8", SOAPAction: '""' },
+      timeout: 10000,
+    });
+    const blocks =
+      String(xml).match(/<datoscotizaciones\.dato[^>]*>[\s\S]*?<\/datoscotizaciones\.dato>/g) || [];
+    if (blocks.length === 0) throw new Error("sin cotizaciones para la ventana");
+
+    const rate = parseFloat(blocks[blocks.length - 1].match(/<TCV>([\d.]+)<\/TCV>/)?.[1]);
+    if (!rate || rate <= 0) throw new Error("cotización inválida");
+
+    cachePorFecha.set(fecha, rate);
+    return rate;
+  } catch (err) {
+    // Si el BCU no contesta se usa la de hoy, que es una aproximación y NO se
+    // cachea por fecha: la próxima importación vuelve a intentar la correcta.
+    console.error(`[exchangeRate] sin cotización para ${fecha}:`, err.message);
+    return getUsdToUyuRate();
+  }
+}
+
+module.exports = { getUsdToUyuRate, getUsdToUyuRateOn, convertUsdToUyu };

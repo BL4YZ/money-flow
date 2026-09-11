@@ -64,10 +64,10 @@ async function calcFeasibility(userId, goals) {
     db.query(
       `WITH meses AS (
          SELECT DATE_TRUNC('month', date) AS mes,
-                SUM(CASE WHEN type = 'credit' THEN ABS(amount) ELSE 0 END) AS ingreso,
+                SUM(CASE WHEN type = 'credit' THEN ABS(amount_uyu) ELSE 0 END) AS ingreso,
                 -- goal_id IS NULL: un depósito a una meta no es gasto, es la
                 -- misma plata cambiada de lugar.
-                SUM(CASE WHEN type = 'debit' AND goal_id IS NULL THEN ABS(amount) ELSE 0 END) AS gasto
+                SUM(CASE WHEN type = 'debit' AND goal_id IS NULL THEN ABS(amount_uyu) ELSE 0 END) AS gasto
          FROM transactions
          WHERE user_id = $1
            AND date >= DATE_TRUNC('month', NOW()) - INTERVAL '${MESES_VENTANA} months'

@@ -86,12 +86,12 @@ function puntuar(tx) {
  */
 async function candidatosDeAhorro(db, userId, limite = 8) {
   const { rows } = await db.query(
-    `SELECT id, date, description, amount, category
+    `SELECT id, date, description, amount, amount_uyu, currency, category
      FROM transactions
      WHERE user_id = $1
        AND type = 'debit'
        AND goal_id IS NULL                       -- no acreditado todavía
-       AND ABS(amount) >= $2
+       AND ABS(amount_uyu) >= $2   -- el minimo esta en pesos
        AND date >= CURRENT_DATE - INTERVAL '${DIAS} days'
        AND (category IS NULL OR category <> ALL($3::text[]))
      ORDER BY date DESC

@@ -153,6 +153,33 @@ async function initSchema() {
         ON d.goal_id = g.id
       WHERE g.current_amount > COALESCE(d.total, 0);
 
+      -- MULTIMONEDA. En Uruguay se cobra en pesos y se ahorra en dolares, y
+      -- mucha gente tiene las dos cuentas; tambien hay quien cobra en dolares.
+      -- Hasta aca todo se sumaba como si fuera una sola moneda.
+      --
+      -- Tres columnas, y la tercera es la que sostiene la regla:
+      --   currency   en que moneda esta el importe original
+      --   rate_uyu   cuantos pesos valia UNA unidad de esa moneda ESE DIA
+      --   amount_uyu el importe en pesos, GENERADO por la base
+      --
+      -- rate_uyu se congela en la fecha del movimiento a proposito. Convertir
+      -- siempre con la cotizacion de hoy hace que un ahorro en dolares "crezca"
+      -- cuando sube el dolar, y eso es falso: no ahorraste mas, cambio el tipo
+      -- de cambio. Ver services/exchangeRate.js.
+      --
+      -- amount_uyu es GENERATED ALWAYS ... STORED y no una columna que alguien
+      -- mantenga: es la misma leccion que goals.current_amount, que se separo
+      -- de su historial justamente por ser un numero guardado a mano. Asi la
+      -- base no deja que se desincronice.
+      ALTER TABLE transactions ADD COLUMN IF NOT EXISTS currency VARCHAR(10) NOT NULL DEFAULT 'UYU';
+      ALTER TABLE transactions ADD COLUMN IF NOT EXISTS rate_uyu NUMERIC(14,4) NOT NULL DEFAULT 1;
+      ALTER TABLE transactions ADD COLUMN IF NOT EXISTS amount_uyu NUMERIC(18,2)
+        GENERATED ALWAYS AS (amount * rate_uyu) STORED;
+
+      -- Moneda preferida para MOSTRAR. Distinta de la moneda de cada movimiento:
+      -- esto es como quiere ver los totales el usuario, no en que opero.
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS display_currency VARCHAR(10) NOT NULL DEFAULT 'UYU';
+
       CREATE TABLE IF NOT EXISTS budgets (
         id           SERIAL PRIMARY KEY,
         user_id      UUID NOT NULL,

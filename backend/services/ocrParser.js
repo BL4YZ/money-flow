@@ -163,6 +163,31 @@ function detectarColumnas(filas, ancho) {
 }
 
 /**
+ * En qué moneda está la cuenta del resumen.
+ *
+ * En Uruguay una persona tiene cuenta en pesos y cuenta en dólares, y cada
+ * resumen es de UNA de las dos. La moneda está en el preámbulo del archivo —
+ * las filas de arriba que no empiezan con fecha, las mismas que el parser ya
+ * descarta — así que no hay que pedírsela al usuario.
+ *
+ * Sólo mira el preámbulo, no los movimientos: una descripción puede decir
+ * "COMPRA USA" o "DOLAR" sin que la cuenta sea en dólares.
+ *
+ * Devuelve null si no encuentra nada, y ahí decide quien llame — adivinar la
+ * moneda de una cuenta es multiplicar o dividir por 40 los importes de alguien.
+ */
+function detectarMoneda(lineasPreambulo) {
+  const texto = lineasPreambulo.map((c) => c.join(' ')).join(' ').toLowerCase();
+  // Sin \b a propósito: no hace falta acá y es justo donde se cuela el error de
+  // escaping que ya mordió tres veces en este repo — un \b escrito desde un
+  // script de Python se guarda como el carácter backspace 0x08, que es
+  // invisible al leer el archivo y hace que la regex no matchee nunca.
+  if (/(d[oó]lar|dolares|d[oó]lares|usd|u\$s|us\$)/.test(texto)) return 'USD';
+  if (/(peso|pesos|uyu|\$u)/.test(texto)) return 'UYU';
+  return null;
+}
+
+/**
  * Transacciones de un CSV de banco.
  *
  * El archivo trae un preámbulo (cliente, cuenta, moneda, sucursal) y cierra con
@@ -184,6 +209,9 @@ function parseCSVTransactions(buffer) {
   // pero no fecha, así que caen solas.
   const filas = lineas.filter((c) => ES_FECHA.test((c[0] || '').trim()));
   if (filas.length === 0) return [];
+
+  // El preámbulo es todo lo que viene antes del primer movimiento.
+  const moneda = detectarMoneda(lineas.slice(0, lineas.indexOf(filas[0])));
   const ancho = Math.max(...filas.map((f) => f.length));
 
   const { saldo, importes } = detectarColumnas(filas, ancho);
@@ -266,6 +294,9 @@ function parseCSVTransactions(buffer) {
       amount,
       type,
       externalId,
+      // La moneda es de la CUENTA, no de cada fila: un resumen es de una cuenta
+      // sola. null cuando el preámbulo no la dice, y ahí decide la ruta.
+      currency: moneda,
       // Sin rawText a propósito: es la línea entera del resumen y termina
       // guardada o logueada.
     });
@@ -487,4 +518,4 @@ function cleanDescription(desc) {
   return cleaned;
 }
 
-module.exports = { extractTextFromPDF, parseTransactions, parseCSVTransactions, pareceCSV };
+module.exports = { extractTextFromPDF, parseTransactions, parseCSVTransactions, pareceCSV, detectarMoneda };

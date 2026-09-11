@@ -7,6 +7,7 @@ const { detectSubscriptions } = require('../services/subscriptionDetector');
 // nueve reglas y OTRO vocabulario de salida ('Comida', 'Ingreso'), asi que un
 // mismo comercio caia en dos categorias distintas segun por donde entraba.
 const { categorize } = require('../services/categorizer');
+const { getUsdToUyuRateOn } = require('../services/exchangeRate');
 
 const router = express.Router();
 router.use(authMiddleware);
@@ -67,20 +68,20 @@ router.get('/summary', async (req, res) => {
     const byCategory = await db.query(
       `SELECT
          category,
-         SUM(CASE WHEN type = 'debit' THEN amount ELSE 0 END) as total_spent,
-         SUM(CASE WHEN type = 'credit' THEN amount ELSE 0 END) as total_income,
+         SUM(CASE WHEN type = 'debit' THEN amount_uyu ELSE 0 END) as total_spent,
+         SUM(CASE WHEN type = 'credit' THEN amount_uyu ELSE 0 END) as total_income,
          COUNT(*) as transaction_count
        FROM transactions
        WHERE user_id = $1 AND to_char(date, 'YYYY-MM') = $2
        GROUP BY category
-       ORDER BY (SUM(CASE WHEN type = 'debit' THEN amount ELSE 0 END) + SUM(CASE WHEN type = 'credit' THEN amount ELSE 0 END)) DESC`,
+       ORDER BY (SUM(CASE WHEN type = 'debit' THEN amount_uyu ELSE 0 END) + SUM(CASE WHEN type = 'credit' THEN amount_uyu ELSE 0 END)) DESC`,
       [req.userId, targetMonth]
     );
 
     const totals = await db.query(
       `SELECT
-         SUM(CASE WHEN type = 'debit' THEN amount ELSE 0 END) as total_spent,
-         SUM(CASE WHEN type = 'credit' THEN amount ELSE 0 END) as total_income
+         SUM(CASE WHEN type = 'debit' THEN amount_uyu ELSE 0 END) as total_spent,
+         SUM(CASE WHEN type = 'credit' THEN amount_uyu ELSE 0 END) as total_income
        FROM transactions
        WHERE user_id = $1 AND to_char(date, 'YYYY-MM') = $2`,
       [req.userId, targetMonth]
@@ -89,7 +90,7 @@ router.get('/summary', async (req, res) => {
     const monthly = await db.query(
       `SELECT
          to_char(date, 'YYYY-MM') as month,
-         SUM(CASE WHEN type = 'debit' THEN amount ELSE 0 END) as spent
+         SUM(CASE WHEN type = 'debit' THEN amount_uyu ELSE 0 END) as spent
        FROM transactions
        WHERE user_id = $1 AND date >= NOW() - INTERVAL '6 months'
        GROUP BY to_char(date, 'YYYY-MM')
@@ -123,15 +124,21 @@ router.post(
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
-    const { date, description, amount, type, category, subcategory } = req.body;
+    const { date, description, amount, type, category, subcategory, currency } = req.body;
 
     try {
       const finalCategory = category || categorize(description);
+
+      // Un movimiento cargado a mano tambien puede ser en dolares: mucha gente
+      // tiene cuenta en pesos y cuenta en dolares. La cotizacion se congela en
+      // la FECHA del movimiento, no en la de hoy — ver services/exchangeRate.js.
+      const moneda = currency === 'USD' ? 'USD' : 'UYU';
+      const cotizacion = moneda === 'USD' ? await getUsdToUyuRateOn(date) : 1;
       const result = await db.query(
-        `INSERT INTO transactions (user_id, date, description, amount, type, category, subcategory, source)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, 'manual')
+        `INSERT INTO transactions (user_id, date, description, amount, type, category, subcategory, source, currency, rate_uyu)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, 'manual', $8, $9)
          RETURNING *`,
-        [req.userId, date, description, amount, type, finalCategory, subcategory]
+        [req.userId, date, description, amount, type, finalCategory, subcategory, moneda, cotizacion]
       );
 
       // Auto-detectar suscripción si es un débito que coincide con un servicio conocido

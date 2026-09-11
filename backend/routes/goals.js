@@ -116,7 +116,7 @@ async function calcSavingsSurplus(userId) {
               DATE_TRUNC('month', NOW())   AS mes_actual
      ),
      previos AS (
-       SELECT DATE_TRUNC('month', t.date) AS mes, SUM(ABS(t.amount)) AS total
+       SELECT DATE_TRUNC('month', t.date) AS mes, SUM(ABS(t.amount_uyu)) AS total
        FROM transactions t, hoy
        WHERE t.user_id = $1 AND t.type = 'debit' AND t.goal_id IS NULL
          AND t.date >= hoy.mes_actual - INTERVAL '6 months'

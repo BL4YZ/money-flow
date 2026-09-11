@@ -9,7 +9,7 @@ import SecuritySheet from '../components/SecuritySheet';
 import { usePlan } from '../context/PlanContext';
 import { useLanguage } from '../context/LanguageContext';
 import {
-  Txt, Card, Badge, Button, ProgressBar, ScreenHeader, Glow, formatUYU,
+  Txt, Card, Badge, Button, Segmented, ProgressBar, ScreenHeader, Glow, formatUYU,
 } from '../components/ui';
 import { COLORS, SPACING, RADIUS, FONTS, SHADOWS } from '../theme';
 
@@ -25,6 +25,11 @@ export default function UploadScreen() {
 
   const [uploading, setUploading] = useState(false);
   const [uploadPhase, setUploadPhase] = useState('encrypting');
+  // De que cuenta es el resumen. El backend la detecta sola del preambulo del
+  // archivo; esto es el override para cuando el archivo no la dice, porque
+  // adivinar entre pesos y dolares es multiplicar o dividir por 40 los
+  // importes de alguien. 'auto' deja decidir al preambulo.
+  const [moneda, setMoneda] = useState('auto');
   const [result, setResult] = useState(null);
   const [fileName, setFileName] = useState(null);
   const [seguridadVisible, setSeguridadVisible] = useState(false);
@@ -67,18 +72,27 @@ export default function UploadScreen() {
 
       setUploadPhase('uploading');
 
-      const { data } = await api.post('/upload', payload, {
+      const { data } = await api.post('/upload', {
+        ...payload,
+        ...(moneda === 'auto' ? {} : { currency: moneda }),
+      }, {
         headers: { 'Content-Type': 'application/json' },
         timeout: 60000,
       });
 
       setResult(data);
+      // Se dice EN QUE MONEDA entro, y si la detecto el archivo o se asumio.
+      // Sin esto, un resumen en dolares que entre como pesos solo se descubre
+      // cuando los totales quedan cuarenta veces mas chicos.
+      const detalleMoneda = data.currency === 'USD'
+        ? 'Leido como cuenta en dolares'
+        : (data.currencyDetected ? 'Leido como cuenta en pesos' : 'Se asumio cuenta en pesos');
       Toast.show({
         type: 'success',
         text1: t('upload.successUpload', { count: data.inserted }),
         text2: data.subscriptionsDetected > 0
-          ? t('upload.successSubs', { n: data.subscriptionsDetected })
-          : undefined,
+          ? `${detalleMoneda} · ${t('upload.successSubs', { n: data.subscriptionsDetected })}`
+          : detalleMoneda,
       });
     } catch (err) {
       Toast.show({ type: 'error', text1: err.response?.data?.error || t('upload.errorUpload') });
@@ -171,6 +185,26 @@ export default function UploadScreen() {
           </View>
         </Pressable>
 
+        {/* En Uruguay una persona tiene cuenta en pesos y cuenta en dolares, y
+            cada resumen es de UNA de las dos. Normalmente la moneda esta en el
+            preambulo del archivo y esto queda en "Detectar"; el override existe
+            porque los bancos no siempre la escriben, y asumir mal multiplica o
+            divide por cuarenta todos los importes. */}
+        <View style={styles.moneda}>
+          <Txt variant="overline" color={COLORS.textLow} style={{ marginBottom: SPACING.xs }}>
+            Moneda de la cuenta
+          </Txt>
+          <Segmented
+            options={[
+              { value: 'auto', label: 'Detectar' },
+              { value: 'UYU', label: '$ Pesos' },
+              { value: 'USD', label: 'US$ Dólares' },
+            ]}
+            value={moneda}
+            onChange={setMoneda}
+          />
+        </View>
+
         <Button
           label="Borrar lo importado y empezar de nuevo"
           variant="ghost"
@@ -240,6 +274,7 @@ function Stat({ label, value, color }) {
 }
 
 const styles = StyleSheet.create({
+  moneda: { marginTop: SPACING.m },
   root: { flex: 1, backgroundColor: COLORS.bg },
   content: { paddingHorizontal: SPACING.m, paddingTop: 60 },
   bloque: { marginTop: SPACING.m },

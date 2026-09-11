@@ -49,7 +49,7 @@ async function costoEnMetas(db, userId, goals, cuotaDe) {
     `SELECT category, AVG(total) AS mensual, COUNT(*) AS meses FROM (
        SELECT COALESCE(category, 'Otros') AS category,
               DATE_TRUNC('month', date) AS mes,
-              SUM(ABS(amount)) AS total
+              SUM(ABS(amount_uyu)) AS total
        FROM transactions
        WHERE user_id = $1 AND type = 'debit' AND goal_id IS NULL
          AND date >= DATE_TRUNC('month', NOW()) - INTERVAL '${MESES_VENTANA} months'

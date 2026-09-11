@@ -7,6 +7,7 @@ const { extractTextFromPDF, parseTransactions, parseCSVTransactions, pareceCSV }
 const { detectSubscriptions } = require('../services/subscriptionDetector');
 const { categorize } = require('../services/categorizer');
 const { getPublicKeyPem, decryptAesKey } = require('../services/uploadKeys');
+const { getUsdToUyuRateOn } = require('../services/exchangeRate');
 
 const router = express.Router();
 router.use(authMiddleware);
@@ -110,10 +111,33 @@ router.post('/', requirePremium, async (req, res) => {
       });
     }
 
-    // 3. Categorizar y preparar para inserción
+    // 3. Categorizar y resolver la moneda de cada movimiento.
+    //
+    // Un resumen es de UNA cuenta, y en Uruguay la gente tiene una en pesos y
+    // otra en dolares. La moneda sale del preambulo del archivo; si el cliente
+    // la manda explicita, gana la del cliente (el usuario esta mirando su propio
+    // resumen y sabe cual es). Si no hay ninguna de las dos, se asume UYU.
+    const monedaDelArchivo = req.body.currency
+      || parsedTransactions.find((t) => t.currency)?.currency
+      || 'UYU';
+
+    // La cotizacion se congela en la FECHA DE CADA MOVIMIENTO, no en la de hoy:
+    // con la de hoy, un gasto en dolares de enero cambia de valor cada vez que
+    // se mira. Se pide una sola vez por fecha distinta — exchangeRate cachea por
+    // fecha porque la cotizacion de un dia pasado no cambia nunca.
+    const cotizaciones = new Map();
+    if (monedaDelArchivo === 'USD') {
+      const fechas = [...new Set(parsedTransactions.map((t) => t.date))];
+      await Promise.all(fechas.map(async (f) => {
+        cotizaciones.set(f, await getUsdToUyuRateOn(f));
+      }));
+    }
+
     const toInsert = parsedTransactions.map(tx => ({
       ...tx,
       category: categorize(tx.description),
+      currency: monedaDelArchivo,
+      rateUyu: monedaDelArchivo === 'USD' ? (cotizaciones.get(tx.date) || 1) : 1,
     }));
 
     // 4. Insertar en BD (ignorar duplicados por fecha+descripción+monto)
@@ -136,16 +160,19 @@ router.post('/', requirePremium, async (req, res) => {
         // decirle al usuario qué pasó de verdad. Antes se contaba `inserted++`
         // aunque el ON CONFLICT no hubiera insertado nada.
         const r = await db.query(
-          `INSERT INTO transactions (user_id, date, description, amount, type, category, raw_text, source, external_id)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, 'ocr', $8)
+          `INSERT INTO transactions (user_id, date, description, amount, type, category, raw_text, source, external_id, currency, rate_uyu)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, 'ocr', $8, $9, $10)
            ON CONFLICT (user_id, external_id) WHERE external_id IS NOT NULL
            DO UPDATE SET
              description = EXCLUDED.description,
              amount      = EXCLUDED.amount,
              type        = EXCLUDED.type,
-             category    = EXCLUDED.category
+             category    = EXCLUDED.category,
+             currency    = EXCLUDED.currency,
+             rate_uyu    = EXCLUDED.rate_uyu
            RETURNING (xmax = 0) AS es_nueva`,
-          [req.userId, tx.date, tx.description, tx.amount, tx.type, tx.category, tx.rawText, tx.externalId || null]
+          [req.userId, tx.date, tx.description, tx.amount, tx.type, tx.category, tx.rawText, tx.externalId || null,
+           tx.currency, tx.rateUyu]
         );
         if (r.rows[0] && r.rows[0].es_nueva) inserted++;
         else updated++;
@@ -172,6 +199,10 @@ router.post('/', requirePremium, async (req, res) => {
 
     res.json({
       success: true,
+      // Que moneda se uso, para que la app pueda avisarlo en vez de que el
+      // usuario descubra despues que su resumen en dolares entro como pesos.
+      currency: monedaDelArchivo,
+      currencyDetected: !!parsedTransactions.find((t) => t.currency),
       inserted,
       updated,
       skipped,
