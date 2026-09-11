@@ -201,6 +201,7 @@ export default function DashboardScreen() {
   // se pierde es que la proxima vez arranque en la otra, no la navegacion.
   const setCuenta = (valor) => {
     setCuentaEstado(valor);
+    setSelectedCategory(null);
     api.patch('/account/preferences', { display_currency: valor }).catch(() => {});
   };
   const [cuentas, setCuentas] = useState([]);
@@ -300,6 +301,9 @@ export default function DashboardScreen() {
     }
   };
 
+  // `cuenta` va en las dependencias: sin eso, cambiar de pesos a dolares
+  // recreaba los fetch pero no volvia a ejecutarlos, asi que el selector se
+  // movia y la pantalla seguia mostrando los numeros de la otra cuenta.
   useEffect(() => {
     setLoading(true);
     fetchSummary();
@@ -307,7 +311,7 @@ export default function DashboardScreen() {
     fetchBudgets();
     fetchCuentas();
     fetchUpcomingBills();
-  }, [selectedMonth]);
+  }, [selectedMonth, cuenta]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -648,7 +652,9 @@ export default function DashboardScreen() {
           />
         ) : null}
 
-        <View style={styles.seccionHead}>
+        {/* Sin movimientos no hay nada que desglosar: el titulo solo dejaria un
+            encabezado colgando arriba del estado vacio. */}
+        <View style={[styles.seccionHead, sinDatos && { display: 'none' }]}>
           <Txt variant="h2" style={styles.seccionTitulo}>{t('dashboard.breakdown')}</Txt>
           {selectedCategory ? (
             <Pressable onPress={() => handleCategoryTap(selectedCategory)} hitSlop={8}>
