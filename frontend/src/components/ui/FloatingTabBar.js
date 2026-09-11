@@ -3,6 +3,7 @@ import { View, Pressable, Animated, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Txt from './Text';
+import GlassSurface, { nivelDeVidrio } from './GlassSurface';
 import { COLORS, GRADIENTS, RADIUS, SHADOWS, FONTS, MOTION } from '../../theme';
 
 /**
@@ -21,6 +22,9 @@ export default function FloatingTabBar({ state, navigation, tabs }) {
   const w = useRef(new Animated.Value(0)).current;
 
   const activo = medidas[state.index];
+  // Con vidrio el fondo opaco tiene que salir, o no se ve nada detras. Se
+  // calcula una vez: no cambia durante la vida de la app.
+  const vidrio = nivelDeVidrio() !== 'solido';
 
   useEffect(() => {
     if (!activo) return;
@@ -35,7 +39,11 @@ export default function FloatingTabBar({ state, navigation, tabs }) {
       {/* Fade del contenido que scrollea por detrás. */}
       <LinearGradient colors={GRADIENTS.scrollFade} style={styles.fade} pointerEvents="none" />
 
-      <View style={styles.barra}>
+      {/* La barra flota SOBRE el contenido, asi que ser de vidrio no es un
+          adorno: deja ver que hay algo abajo y de paso hace que el fade de
+          arriba tenga sentido. Sobre iOS 26 es el material del sistema; en el
+          resto, desenfoque real con el canto iluminado a mano. Ver GlassSurface. */}
+      <GlassSurface style={[styles.barra, vidrio && styles.barraVidrio]} radius={RADIUS.full}>
         {activo ? (
           <Animated.View style={[styles.pill, { left: x, width: w }]} pointerEvents="none" />
         ) : null}
@@ -72,7 +80,7 @@ export default function FloatingTabBar({ state, navigation, tabs }) {
             </Pressable>
           );
         })}
-      </View>
+      </GlassSurface>
     </View>
   );
 }
@@ -89,7 +97,6 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
     marginHorizontal: 14,
     marginBottom: 26,
-    backgroundColor: COLORS.surfaceRaised,
     borderWidth: 1.5,
     borderColor: COLORS.border,
     borderRadius: RADIUS.full,
@@ -97,6 +104,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     ...SHADOWS.ambient,
   },
+  // Sobre vidrio el borde opaco delata el truco: pasa a una linea clara, que es
+  // como se ve el canto de un cristal y no como un marco dibujado alrededor.
+  barraVidrio: { borderColor: COLORS.glassBorder },
   pill: {
     position: 'absolute',
     top: 7,

@@ -13,6 +13,20 @@ export const COLORS = {
 
   borderSubtle: '#262421',
   border: '#34302c',
+
+  // ── Vidrio ────────────────────────────────────────────────────────
+  // Para la barra de navegación cuando se dibuja sobre el contenido en vez de
+  // taparlo. Van con alfa a propósito: lo que se ve detrás es la pantalla.
+  //
+  // `glassTint` es el velo que le da cuerpo al desenfoque — sin él el vidrio
+  // desaparece sobre un fondo oscuro y la barra queda flotando sin borde.
+  // `glassEdge` es el brillo del canto superior: es LO que hace que se lea como
+  // vidrio y no como una capa translúcida. En el material de Apple ese brillo
+  // sale de la luz refractándose en el borde; acá es una línea de un pixel, que
+  // es todo lo que se puede hacer sin shaders.
+  glassTint: 'rgba(32,30,28,0.55)',
+  glassEdge: 'rgba(255,255,255,0.16)',
+  glassBorder: 'rgba(255,255,255,0.10)',
   borderStrong: '#46403a',
 
   // Marca: un primary (hueso) + un accent (turquesa)
