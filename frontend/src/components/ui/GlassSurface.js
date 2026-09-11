@@ -23,10 +23,12 @@ import { COLORS } from '../../theme';
  * navegación. Mismo patrón que `services/purchases.js`.
  */
 let GlassView = null;
+let GlassContainerNativo = null;
 let hayLiquidGlass = () => false;
 try {
   const glass = require('expo-glass-effect');
   GlassView = glass.GlassView;
+  GlassContainerNativo = glass.GlassContainer;
   hayLiquidGlass = glass.isLiquidGlassAvailable;
 } catch (_) {}
 
@@ -133,6 +135,57 @@ export function GlassFondo({ radius, style }) {
       pointerEvents="none"
     >
       <GlassEdge />
+    </View>
+  );
+}
+
+/**
+ * Agrupa varios elementos de vidrio para que SE FUNDAN entre sí.
+ *
+ * Es la parte que le da el nombre a Liquid Glass: cuando dos piezas de vidrio
+ * se acercan a menos de `spacing`, Apple las une como dos gotas, y al separarse
+ * se estiran y se cortan. No hay forma de imitarlo — es el motor de Metal del
+ * sistema.
+ *
+ * Fuera de iOS 26 es un `View` común, así que se puede usar sin condicionales
+ * en quien lo llama: los hijos se acomodan igual, simplemente no se funden.
+ */
+export function GlassGrupo({ spacing = 24, style, children, ...rest }) {
+  if (nivelDeVidrio() === 'liquid' && GlassContainerNativo) {
+    return (
+      <GlassContainerNativo spacing={spacing} style={style} {...rest}>
+        {children}
+      </GlassContainerNativo>
+    );
+  }
+  return <View style={style} {...rest}>{children}</View>;
+}
+
+/**
+ * Pieza de vidrio TEÑIDA — el pill de un selector, por ejemplo. En iOS 26 es un
+ * `GlassView` con `tintColor`, que es lo que se funde con el resto del grupo;
+ * en el resto, el color liso de siempre, que es lo que ya se veía.
+ */
+export function GlassPieza({ tinte, radius, interactivo = false, style, children, ...rest }) {
+  if (nivelDeVidrio() === 'liquid') {
+    return (
+      <GlassView
+        glassEffectStyle="regular"
+        tintColor={tinte}
+        // Por defecto NO: una pieza que no recibe toques —un pill decorativo
+        // detrás de las etiquetas— no puede deformarse bajo el dedo, y pedirlo
+        // igual sería decir que hace algo que no hace.
+        isInteractive={interactivo}
+        style={[style, radius ? { borderRadius: radius } : null]}
+        {...rest}
+      >
+        {children}
+      </GlassView>
+    );
+  }
+  return (
+    <View style={[style, { backgroundColor: tinte }, radius ? { borderRadius: radius } : null]} {...rest}>
+      {children}
     </View>
   );
 }

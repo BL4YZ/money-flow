@@ -1,9 +1,9 @@
-import React from 'react';
-import { View, Pressable, StyleSheet } from 'react-native';
+import React, { useRef, useState, useEffect } from 'react';
+import { View, Pressable, Animated, StyleSheet } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Txt from './Text';
-import { GlassEdge, GlassFondo } from './GlassSurface';
-import { COLORS, RADIUS, FONTS, TYPE } from '../../theme';
+import { GlassEdge, GlassFondo, GlassGrupo, GlassPieza } from './GlassSurface';
+import { COLORS, RADIUS, FONTS, TYPE, MOTION } from '../../theme';
 
 /**
  * Chips. Reemplaza catChip, chip, sortChip, itemChip, freqBtn y chartToggleBtn
@@ -60,31 +60,60 @@ export function SortChip({ label, active, desc, onPress, style }) {
  * seleccionado con el color del dato en vez del hueso neutro.
  */
 export function Segmented({ options, value, onChange, tone, style }) {
+  // TODOS LOS SEGMENTOS MIDEN IGUAL, y eso no es cosmético: con anchos
+  // distintos el pill tendría que animar `width`, que obliga a salir del hilo
+  // nativo. Se mide el más ancho y se aplica a todos, así el pill sólo se
+  // traslada. Además es como se ven los segmented de iOS.
+  const [ancho, setAncho] = useState(0);
+  const x = useRef(new Animated.Value(0)).current;
+  const i = options.findIndex((o) => (typeof o === 'string' ? o : o.value) === value);
+
+  useEffect(() => {
+    if (ancho === 0 || i < 0) return;
+    Animated.spring(x, { toValue: i * ancho, ...MOTION.snappy, useNativeDriver: true }).start();
+  }, [i, ancho]);
+
+  const activo = i >= 0;
+  const tinte = tone || COLORS.primary;
+
   return (
-    <View style={[styles.track, style]}>
+    // El grupo es lo que hace que el pill y el riel se fundan al moverse, como
+    // dos gotas que se tocan. Fuera de iOS 26 es un View y no pasa nada.
+    <GlassGrupo spacing={28} style={[styles.track, style]}>
       <GlassFondo radius={RADIUS.full} />
-      {options.map((o) => {
+
+      {/* El pill DESLIZA en vez de saltar de un segmento a otro. Antes el fondo
+          simplemente cambiaba de lugar, y sin movimiento no hay nada que se
+          funda ni que se lea como continuidad. */}
+      {activo && ancho > 0 ? (
+        <GlassPieza
+          tinte={tinte}
+          radius={RADIUS.full}
+          style={[styles.pill, { width: ancho, transform: [{ translateX: x }] }]}
+          pointerEvents="none"
+        />
+      ) : null}
+
+      {options.map((o, k) => {
         const val = typeof o === 'string' ? o : o.value;
         const label = typeof o === 'string' ? o : o.label;
-        const activo = val === value;
-        const bg = tone && activo ? tone : COLORS.primary;
-        const fg = tone && activo ? COLORS.onExpense : COLORS.onPrimary;
+        const esActivo = val === value;
+        const fg = tone && esActivo ? COLORS.onExpense : esActivo ? COLORS.onPrimary : COLORS.textMid;
         return (
           <Pressable
             key={val}
             onPress={() => onChange && onChange(val)}
-            style={[styles.segment, activo && { backgroundColor: bg }]}
+            onLayout={(ev) => {
+              const w = ev.nativeEvent.layout.width;
+              setAncho((prev) => (w > prev ? w : prev));   // el más ancho manda
+            }}
+            style={[styles.segment, ancho > 0 && { width: ancho }]}
           >
-            {/* Solo el seleccionado: el canto marca lo que esta por encima, y
-                un riel entero iluminado no distingue nada. */}
-            {activo ? <GlassEdge radius={RADIUS.full} /> : null}
-            <Txt style={[styles.segmentTxt, { color: activo ? fg : COLORS.textMid }]}>
-              {label}
-            </Txt>
+            <Txt style={[styles.segmentTxt, { color: fg }]}>{label}</Txt>
           </Pressable>
         );
       })}
-    </View>
+    </GlassGrupo>
   );
 }
 
@@ -137,11 +166,14 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   segment: {
-    overflow: 'hidden',
     borderRadius: RADIUS.full,
     paddingVertical: 9,
     paddingHorizontal: 18,
+    alignItems: 'center',
   },
+  // Va detrás de las etiquetas: el texto del seleccionado tiene que leerse
+  // POR ENCIMA del vidrio, no a través de él.
+  pill: { position: 'absolute', top: 4, bottom: 4, left: 4 },
   segmentTxt: { fontFamily: FONTS.bold, fontSize: 13, lineHeight: 16 },
 
   itemChip: { paddingVertical: 7, paddingRight: 8, paddingLeft: 14 },
