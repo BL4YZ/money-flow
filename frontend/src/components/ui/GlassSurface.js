@@ -47,6 +47,30 @@ export const nivelDeVidrio = () => {
   return 'solido';
 };
 
+/**
+ * El canto iluminado, suelto y reutilizable.
+ *
+ * ES ESTO —y no la transparencia— LO QUE UNIFICA. En iOS 26 no todo es
+ * translúcido: un botón principal sigue siendo del color de su acción. Lo que
+ * comparten todos los controles es la línea de luz en el borde de arriba, como
+ * si una fuente de luz estuviera por encima de la pantalla. Por eso va también
+ * sobre los botones de color, que NO se vuelven vidrio: perderían el color, que
+ * en esta app es el dato (ver la regla de colores de dato vs. feedback).
+ */
+export function GlassEdge({ radius, style }) {
+  return (
+    <LinearGradient
+      colors={[COLORS.glassEdge, 'transparent']}
+      style={[
+        styles.canto,
+        radius ? { borderTopLeftRadius: radius, borderTopRightRadius: radius } : null,
+        style,
+      ]}
+      pointerEvents="none"
+    />
+  );
+}
+
 export default function GlassSurface({ style, children, radius, ...rest }) {
   const nivel = nivelDeVidrio();
 

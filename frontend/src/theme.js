@@ -27,6 +27,13 @@ export const COLORS = {
   glassTint: 'rgba(32,30,28,0.55)',
   glassEdge: 'rgba(255,255,255,0.16)',
   glassBorder: 'rgba(255,255,255,0.10)',
+
+  // Relleno para controles CHICOS (botones, chips, el riel del toggle). Va mas
+  // opaco que `glassTint` porque detras no hay desenfoque: un chip de 30px no
+  // muestra blur util y ponerle uno a cada uno de una lista cuesta caro en
+  // Android. El vidrio de verdad se reserva para las superficies grandes.
+  glassFill: 'rgba(255,255,255,0.07)',
+  glassFillPressed: 'rgba(255,255,255,0.12)',
   borderStrong: '#46403a',
 
   // Marca: un primary (hueso) + un accent (turquesa)

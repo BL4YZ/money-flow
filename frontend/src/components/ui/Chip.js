@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Pressable, StyleSheet } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Txt from './Text';
+import { GlassEdge } from './GlassSurface';
 import { COLORS, RADIUS, FONTS, TYPE } from '../../theme';
 
 /**
@@ -20,6 +21,9 @@ export default function Chip({ label, active, onPress, icon, style }) {
         style,
       ]}
     >
+      {/* El canto va en los DOS estados: es lo que hace que el chip elegido y
+          el que no se lean como el mismo material, cambiando solo de color. */}
+      <GlassEdge radius={RADIUS.full} />
       {icon ? (
         <Ionicons
           name={icon}
@@ -70,6 +74,9 @@ export function Segmented({ options, value, onChange, tone, style }) {
             onPress={() => onChange && onChange(val)}
             style={[styles.segment, activo && { backgroundColor: bg }]}
           >
+            {/* Solo el seleccionado: el canto marca lo que esta por encima, y
+                un riel entero iluminado no distingue nada. */}
+            {activo ? <GlassEdge radius={RADIUS.full} /> : null}
             <Txt style={[styles.segmentTxt, { color: activo ? fg : COLORS.textMid }]}>
               {label}
             </Txt>
@@ -105,12 +112,13 @@ const styles = StyleSheet.create({
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
+    overflow: 'hidden',      // el canto es absoluto: sin esto asoma en las esquinas
     borderRadius: RADIUS.full,
     borderWidth: 1.5,
     paddingVertical: 8,
     paddingHorizontal: 14,
   },
-  chipIdle:   { backgroundColor: COLORS.surfaceRaised, borderColor: COLORS.border },
+  chipIdle:   { backgroundColor: COLORS.glassFill,     borderColor: COLORS.glassBorder },
   chipActive: { backgroundColor: COLORS.primarySoft,   borderColor: COLORS.primaryBorderSoft },
   pressed:    { opacity: 0.7 },
   chipTxt:       { fontSize: 13, lineHeight: 16 },
@@ -120,13 +128,14 @@ const styles = StyleSheet.create({
   track: {
     flexDirection: 'row',
     alignSelf: 'flex-start',
-    backgroundColor: COLORS.surfaceRaised,
+    backgroundColor: COLORS.glassFill,
     borderWidth: 1.5,
-    borderColor: COLORS.border,
+    borderColor: COLORS.glassBorder,
     borderRadius: RADIUS.full,
     padding: 4,
   },
   segment: {
+    overflow: 'hidden',
     borderRadius: RADIUS.full,
     paddingVertical: 9,
     paddingHorizontal: 18,

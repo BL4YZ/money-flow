@@ -3,6 +3,7 @@ import { Pressable, Animated, ActivityIndicator, View, StyleSheet } from 'react-
 import { LinearGradient } from 'expo-linear-gradient';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Txt from './Text';
+import { GlassEdge } from './GlassSurface';
 import { COLORS, GRADIENTS, RADIUS, SHADOWS, MOTION } from '../../theme';
 
 /**
@@ -12,6 +13,13 @@ import { COLORS, GRADIENTS, RADIUS, SHADOWS, MOTION } from '../../theme';
  *
  * `premiumLocked` es dorado y no gris a propósito: el gris se leía como roto o
  * deshabilitado, cuando lo que comunica es valor, no falta de permiso.
+ *
+ * VIDRIO: `secondary` y `ghost` son superficies —no significan nada por su
+ * color— así que pasan a vidrio. Las demás NO: en `primary`, `destructive`,
+ * `premiumLocked` y `action` el color ES la información, y volverlas
+ * translúcidas borraría la única jerarquía que tiene una pantalla llena de
+ * botones. Lo que sí comparten todas es el canto iluminado, que es lo que hace
+ * que se lean como un mismo material aunque unas sean de color y otras no.
  */
 
 const SIZES = {
@@ -29,7 +37,7 @@ function paleta(variant, disabled) {
   }
   switch (variant) {
     case 'secondary':
-      return { bg: COLORS.primarySoft, border: COLORS.primaryBorderSoft, fg: COLORS.textHigh };
+      return { bg: COLORS.glassFill, border: COLORS.glassBorder, fg: COLORS.textHigh, vidrio: true };
     case 'ghost':
       return { bg: 'transparent', border: 'transparent', fg: COLORS.textMid };
     case 'destructive':
@@ -107,6 +115,7 @@ export default function Button({
             end={{ x: 1, y: 1 }}
             style={caja}
           >
+            <GlassEdge radius={s.radius} />
             {contenido}
           </LinearGradient>
         </Pressable>
@@ -131,12 +140,17 @@ export default function Button({
         style={({ pressed }) => [
           caja,
           {
-            backgroundColor: pressed && variant === 'primary' ? COLORS.primaryPressed : p.bg,
+            backgroundColor: pressed
+              ? (variant === 'primary' ? COLORS.primaryPressed : p.vidrio ? COLORS.glassFillPressed : p.bg)
+              : p.bg,
             borderWidth: p.border === 'transparent' ? 0 : 1.5,
             borderColor: p.border,
           },
         ]}
       >
+        {/* Ni en `ghost` ni deshabilitado: el primero no tiene superficie que
+            iluminar y el segundo no tiene que parecer tocable. */}
+        {!inerte && variant !== 'ghost' ? <GlassEdge radius={s.radius} /> : null}
         {contenido}
       </Pressable>
     </Animated.View>

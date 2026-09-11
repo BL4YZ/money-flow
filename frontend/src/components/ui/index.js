@@ -12,7 +12,7 @@
  */
 
 export { default as Txt, Amount, formatUYU, formatMoney, formatUnitPrice } from './Text';
-export { default as GlassSurface, nivelDeVidrio } from './GlassSurface';
+export { default as GlassSurface, GlassEdge, nivelDeVidrio } from './GlassSurface';
 export { default as Button } from './Button';
 export { default as Card } from './Card';
 export { default as Input } from './Input';
