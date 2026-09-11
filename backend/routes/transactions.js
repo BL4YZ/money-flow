@@ -13,9 +13,15 @@ const router = express.Router();
 router.use(authMiddleware);
 
 // ─── GET /api/transactions ────────────────────────────────────
-// Query params: month (YYYY-MM), category, limit, offset
+// Query params: month (YYYY-MM), category, currency (UYU|USD), limit, offset
+//
+// `currency` NO es un detalle de presentación: en Uruguay una persona tiene
+// cuenta en pesos y cuenta en dólares, y son cuentas DISTINTAS con resúmenes
+// distintos. Verlas sumadas en un solo total en pesos no es lo que nadie tiene
+// en la cabeza cuando abre el banco. Sin el parámetro se devuelve todo junto,
+// que sigue siendo útil para mirar el conjunto.
 router.get('/', async (req, res) => {
-  const { month, category, limit = 50, offset = 0 } = req.query;
+  const { month, category, currency, limit = 50, offset = 0 } = req.query;
 
   let whereClause = 'WHERE user_id = $1';
   const params = [req.userId];
@@ -30,6 +36,12 @@ router.get('/', async (req, res) => {
   if (category) {
     whereClause += ` AND category = $${paramIndex}`;
     params.push(category);
+    paramIndex++;
+  }
+
+  if (currency === 'UYU' || currency === 'USD') {
+    whereClause += ` AND currency = $${paramIndex}`;
+    params.push(currency);
     paramIndex++;
   }
 
@@ -58,48 +70,91 @@ router.get('/', async (req, res) => {
   }
 });
 
+// ─── GET /api/transactions/accounts ──────────────────────────
+//
+// Que cuentas tiene esta persona, de verdad. Sirve para NO mostrar un selector
+// de moneda a quien solo opera en pesos: una pestaña vacia de dolares es ruido
+// para la mayoria, y para quien tiene las dos es lo primero que busca.
+//
+// Va antes de /:id, si no Express lee "accounts" como un id.
+router.get('/accounts', async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT currency,
+              COUNT(*)::int AS movimientos,
+              MAX(date) AS ultimo,
+              SUM(CASE WHEN type = 'debit'  THEN amount ELSE 0 END)::float AS gastado,
+              SUM(CASE WHEN type = 'credit' THEN amount ELSE 0 END)::float AS ingresado
+         FROM transactions
+        WHERE user_id = $1
+        GROUP BY currency
+        ORDER BY COUNT(*) DESC`,
+      [req.userId]
+    );
+    res.json({ accounts: rows });
+  } catch (err) {
+    console.error('GET /transactions/accounts error:', err.message);
+    res.status(500).json({ error: 'Error al obtener las cuentas' });
+  }
+});
+
 // ─── GET /api/transactions/summary ───────────────────────────
 // Resumen por categoría para el dashboard
 router.get('/summary', async (req, res) => {
-  const { month } = req.query;
+  const { month, currency } = req.query;
   const targetMonth = month || new Date().toISOString().slice(0, 7);
+
+  // Mirando UNA cuenta se suma en SU moneda: dentro de la cuenta en dólares
+  // todo ya está en dólares y pasarlo a pesos sería inventar una conversión que
+  // el usuario no pidió. Sin filtro se suma en pesos, que es la única forma de
+  // poner las dos juntas en un mismo número.
+  const unaCuenta = currency === 'UYU' || currency === 'USD';
+  const monto = unaCuenta ? 'amount' : 'amount_uyu';
+  const filtroMoneda = unaCuenta ? 'AND currency = $3' : '';
+  const argsMes = unaCuenta ? [req.userId, targetMonth, currency] : [req.userId, targetMonth];
 
   try {
     const byCategory = await db.query(
       `SELECT
          category,
-         SUM(CASE WHEN type = 'debit' THEN amount_uyu ELSE 0 END) as total_spent,
-         SUM(CASE WHEN type = 'credit' THEN amount_uyu ELSE 0 END) as total_income,
+         SUM(CASE WHEN type = 'debit' THEN ${monto} ELSE 0 END) as total_spent,
+         SUM(CASE WHEN type = 'credit' THEN ${monto} ELSE 0 END) as total_income,
          COUNT(*) as transaction_count
        FROM transactions
-       WHERE user_id = $1 AND to_char(date, 'YYYY-MM') = $2
+       WHERE user_id = $1 AND to_char(date, 'YYYY-MM') = $2 ${filtroMoneda}
        GROUP BY category
-       ORDER BY (SUM(CASE WHEN type = 'debit' THEN amount_uyu ELSE 0 END) + SUM(CASE WHEN type = 'credit' THEN amount_uyu ELSE 0 END)) DESC`,
-      [req.userId, targetMonth]
+       ORDER BY (SUM(CASE WHEN type = 'debit' THEN ${monto} ELSE 0 END) + SUM(CASE WHEN type = 'credit' THEN ${monto} ELSE 0 END)) DESC`,
+      argsMes
     );
 
     const totals = await db.query(
       `SELECT
-         SUM(CASE WHEN type = 'debit' THEN amount_uyu ELSE 0 END) as total_spent,
-         SUM(CASE WHEN type = 'credit' THEN amount_uyu ELSE 0 END) as total_income
+         SUM(CASE WHEN type = 'debit' THEN ${monto} ELSE 0 END) as total_spent,
+         SUM(CASE WHEN type = 'credit' THEN ${monto} ELSE 0 END) as total_income
        FROM transactions
-       WHERE user_id = $1 AND to_char(date, 'YYYY-MM') = $2`,
-      [req.userId, targetMonth]
+       WHERE user_id = $1 AND to_char(date, 'YYYY-MM') = $2 ${filtroMoneda}`,
+      argsMes
     );
 
     const monthly = await db.query(
       `SELECT
          to_char(date, 'YYYY-MM') as month,
-         SUM(CASE WHEN type = 'debit' THEN amount_uyu ELSE 0 END) as spent
+         SUM(CASE WHEN type = 'debit' THEN ${monto} ELSE 0 END) as spent
        FROM transactions
        WHERE user_id = $1 AND date >= NOW() - INTERVAL '6 months'
+         ${unaCuenta ? 'AND currency = $2' : ''}
        GROUP BY to_char(date, 'YYYY-MM')
        ORDER BY to_char(date, 'YYYY-MM') ASC`,
-      [req.userId]
+      unaCuenta ? [req.userId, currency] : [req.userId]
     );
 
     res.json({
       month: targetMonth,
+      // En que moneda estan los numeros de esta respuesta. Sin esto la app
+      // tendria que acordarse sola de que pregunto, y un total en dolares
+      // dibujado con el signo del peso es exactamente el error que hay que evitar.
+      currency: unaCuenta ? currency : 'UYU',
+      convertido: !unaCuenta,
       byCategory: byCategory.rows,
       totals: totals.rows[0],
       monthlyTrend: monthly.rows,

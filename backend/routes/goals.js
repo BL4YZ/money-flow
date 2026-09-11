@@ -6,6 +6,7 @@ const { calcFeasibility, calcMonthlyQuota } = require('../services/goalFeasibili
 const { candidatosDeAhorro } = require('../services/savingsDetector');
 const { costoEnMetas } = require('../services/goalCost');
 const { recalcularSaldo } = require('../services/goalBalance');
+const { getUsdToUyuRateOn } = require('../services/exchangeRate');
 
 const router = express.Router();
 router.use(authMiddleware);
@@ -211,7 +212,12 @@ router.post('/', [
   const errors = validationResult(req);
   if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
+  // La MONEDA de la meta se elige al crearla y no se cambia despues: los
+  // depositos se guardan en la moneda de la meta, asi que cambiarla dejaria un
+  // historial que dice una cosa y un objetivo que dice otra. En Uruguay una meta
+  // para una casa o un auto casi siempre esta en dolares.
   const { name, description, target_amount, current_amount, target_date } = req.body;
+  const moneda = req.body.currency === 'USD' ? 'USD' : 'UYU';
   try {
     const { rows: planRows } = await db.query('SELECT plan FROM users WHERE id = $1', [req.userId]);
     if (planRows[0]?.plan !== 'premium') {
@@ -222,9 +228,9 @@ router.post('/', [
     }
 
     const result = await db.query(
-      `INSERT INTO goals (user_id, name, description, target_amount, current_amount, target_date)
-       VALUES ($1, $2, $3, $4, 0, $5) RETURNING *`,
-      [req.userId, name, description, target_amount, target_date || null]
+      `INSERT INTO goals (user_id, name, description, target_amount, current_amount, target_date, currency)
+       VALUES ($1, $2, $3, $4, 0, $5, $6) RETURNING *`,
+      [req.userId, name, description, target_amount, target_date || null, moneda]
     );
     let goal = result.rows[0];
 
@@ -467,7 +473,25 @@ router.post('/link-transaction', [
       return res.status(400).json({ error: 'Solo se pueden acreditar egresos: un ahorro sale de la cuenta' });
     }
 
-    const amount = Math.abs(parseFloat(tx.amount));
+    // El deposito se guarda EN LA MONEDA DE LA META. Si el movimiento esta en
+    // otra, se convierte con la cotizacion del dia del movimiento — la misma que
+    // ya tiene guardada — y el importe original queda escrito en la nota, para
+    // que despues se pueda entender de donde salio el numero.
+    const montoOriginal = Math.abs(parseFloat(tx.amount));
+    const monedaTx = tx.currency || 'UYU';
+    let amount = montoOriginal;
+    let nota = tx.description;
+
+    if (monedaTx !== goal.currency) {
+      if (goal.currency === 'UYU') {
+        amount = Math.abs(parseFloat(tx.amount_uyu));         // ya viene en pesos
+      } else {
+        const tasa = await getUsdToUyuRateOn(tx.date);
+        amount = Math.abs(parseFloat(tx.amount_uyu)) / tasa;  // pesos -> dolares
+      }
+      amount = Math.round(amount * 100) / 100;
+      nota = `${tx.description} (${monedaTx} ${montoOriginal})`;
+    }
 
     client = await db.getClient();
     let actualizada;
@@ -479,7 +503,7 @@ router.post('/link-transaction', [
       // este movimiento comparando monto y texto.
       await client.query(
         'INSERT INTO goal_deposits (goal_id, user_id, amount, note, transaction_id) VALUES ($1, $2, $3, $4, $5)',
-        [goal.id, req.userId, amount, tx.description, transaction_id]
+        [goal.id, req.userId, amount, nota, transaction_id]
       );
       actualizada = await recalcularSaldo(client, goal.id);
       await client.query('COMMIT');
@@ -520,8 +544,6 @@ router.delete('/link-transaction/:transactionId', async (req, res) => {
     const goal = goalRows[0];
     if (!goal) return res.status(404).json({ error: 'Meta no encontrada' });
 
-    const amount = Math.abs(parseFloat(tx.amount));
-
     client = await db.getClient();
     let actualizada;
     try {
@@ -541,7 +563,9 @@ router.delete('/link-transaction/:transactionId', async (req, res) => {
       throw err;
     }
 
-    res.json({ goal: actualizada, reverted: amount });
+    // Lo revertido es lo que decia el historial, no el importe del movimiento:
+    // si las monedas diferian, el deposito valia otra cosa.
+    res.json({ goal: actualizada, reverted: parseFloat(goal.current_amount) - parseFloat(actualizada.current_amount) });
   } catch (err) {
     console.error('DELETE /goals/link-transaction error:', err.message);
     res.status(500).json({ error: 'Error al deshacer el vínculo' });

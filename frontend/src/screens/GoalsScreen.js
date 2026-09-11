@@ -10,8 +10,8 @@ import { usePlan } from '../context/PlanContext';
 import { useLanguage } from '../context/LanguageContext';
 import RefreshBadge from '../components/RefreshBadge';
 import {
-  Txt, Card, Input, Button, Badge, BottomSheet, EmptyState,
-  ProgressBar, ProgressRing, ScreenHeader, Glow, formatUYU,
+  Txt, Card, Input, Button, Badge, Segmented, BottomSheet, EmptyState,
+  ProgressBar, ProgressRing, ScreenHeader, Glow, formatUYU, formatMoney,
 } from '../components/ui';
 import { COLORS, SPACING, RADIUS, FONTS, categoryColor } from '../theme';
 
@@ -21,7 +21,11 @@ const GOAL_ICONS = [
   'trophy-outline', 'star-outline',
 ];
 
-const FORM_VACIO = { name: '', target_amount: '', target_date: '', icon: 'trophy-outline' };
+// La moneda se elige al crear la meta y no se cambia despues: los depositos se
+// guardan en la moneda de la meta, asi que cambiarla dejaria un historial que
+// dice una cosa y un objetivo que dice otra. En Uruguay una meta para una casa
+// o un auto casi siempre esta en dolares.
+const FORM_VACIO = { name: '', target_amount: '', target_date: '', icon: 'trophy-outline', currency: 'UYU' };
 
 /**
  * Tarjeta de meta. La línea de proyección es lo más importante: "llegás en ~4
@@ -51,14 +55,14 @@ function GoalCard({ goal, feas, onDeposit, onDelete }) {
       if (m === 1) return 'Llegás en ~1 mes';
       return `Llegás en ~${m} meses`;
     }
-    if (quota) return `Necesitás ${formatUYU(quota)}/mes para llegar`;
+    if (quota) return `Necesitás ${formatMoney(quota, goal.currency)}/mes para llegar`;
     return null;
   })();
 
   const subText = (() => {
     if (goal.is_completed || !projText) return null;
-    if (proj?.status === 'ok' && quota) return `Ahorrando ${formatUYU(quota)}/mes llegarías antes`;
-    if (proj?.status === 'ok') return `Ritmo actual: ${formatUYU(proj.avgPerMonth)}/mes`;
+    if (proj?.status === 'ok' && quota) return `Ahorrando ${formatMoney(quota, goal.currency)}/mes llegarías antes`;
+    if (proj?.status === 'ok') return `Ritmo actual: ${formatMoney(proj.avgPerMonth, goal.currency)}/mes`;
     return 'Hacé tu primer depósito para ver la proyección';
   })();
 
@@ -78,9 +82,9 @@ function GoalCard({ goal, feas, onDeposit, onDelete }) {
           </View>
 
           <View style={styles.goalAmounts}>
-            <Txt style={[styles.goalCurrent, { color: tono }]}>{formatUYU(current)}</Txt>
+            <Txt style={[styles.goalCurrent, { color: tono }]}>{formatMoney(current, goal.currency)}</Txt>
             <Txt variant="caption" color={COLORS.textLow} style={styles.goalSep}> de </Txt>
-            <Txt style={styles.goalTarget}>{formatUYU(target)}</Txt>
+            <Txt style={styles.goalTarget}>{formatMoney(target, goal.currency)}</Txt>
           </View>
         </View>
       </View>
@@ -114,7 +118,7 @@ function GoalCard({ goal, feas, onDeposit, onDelete }) {
             {feas?.veredicto === 'no_alcanza' && feas.faltantePorMes > 0 ? (
               <Txt variant="caption" color={COLORS.warning} style={{ marginTop: 4 }}>
                 A esa fecha no llegás: faltan {formatUYU(feas.faltantePorMes)}/mes.
-                {feas.objetivoPosible > 0 ? ` En el plazo entran ${formatUYU(feas.objetivoPosible)}.` : ''}
+                {feas.objetivoPosible > 0 ? ` En el plazo entran ${formatMoney(feas.objetivoPosible, goal.currency)}.` : ''}
               </Txt>
             ) : null}
             {surplus?.amount > 0 ? (
@@ -235,7 +239,7 @@ function CandidatesCard({ candidatos, acreditados, onElegir, onDeshacer }) {
               {c.motivos.length > 0 ? ` · ${c.motivos.join(', ')}` : ''}
             </Txt>
           </View>
-          <Txt style={styles.candMonto}>{formatUYU(c.amount)}</Txt>
+          <Txt style={styles.candMonto}>{formatMoney(c.amount, c.currency)}</Txt>
           <Ionicons name="chevron-forward" size={16} color={COLORS.textLow} />
         </Pressable>
       ))}
@@ -352,6 +356,7 @@ export default function GoalsScreen() {
         name: form.name.trim(),
         target_amount: parseFloat(form.target_amount),
         target_date: form.target_date || undefined,
+        currency: form.currency,
       });
       setGoals((prev) => [data.goal, ...prev]);
       setModalVisible(false);
@@ -626,6 +631,17 @@ export default function GoalsScreen() {
           placeholder={t('goals.namePlaceholder')}
           style={{ marginTop: SPACING.m, marginBottom: SPACING.s }}
         />
+        {/* La moneda va ANTES del objetivo: se elige al empezar a escribir el
+            numero, no despues de haberlo pensado en otra. */}
+        <Segmented
+          options={[
+            { value: 'UYU', label: '$ Pesos' },
+            { value: 'USD', label: 'US$ Dólares' },
+          ]}
+          value={form.currency}
+          onChange={(v) => setForm((f) => ({ ...f, currency: v }))}
+          style={{ marginBottom: SPACING.s }}
+        />
         <Input
           money
           value={form.target_amount}
@@ -668,7 +684,7 @@ export default function GoalsScreen() {
         visible={!!linkModal}
         onClose={() => setLinkModal(null)}
         title="¿A qué meta va?"
-        subtitle={linkModal ? `${formatUYU(linkModal.amount)} · ${linkModal.description}` : ''}
+        subtitle={linkModal ? `${formatMoney(linkModal.amount, linkModal.currency)} · ${linkModal.description}` : ''}
       >
         {activas.map((g) => (
           <Pressable
@@ -679,7 +695,7 @@ export default function GoalsScreen() {
             <View style={styles.candInfo}>
               <Txt variant="body" color={COLORS.textHigh} numberOfLines={1}>{g.name}</Txt>
               <Txt variant="caption" color={COLORS.textLow}>
-                {formatUYU(parseFloat(g.current_amount))} de {formatUYU(parseFloat(g.target_amount))}
+                {formatMoney(parseFloat(g.current_amount), g.currency)} de {formatMoney(parseFloat(g.target_amount), g.currency)}
               </Txt>
             </View>
             <Ionicons name="chevron-forward" size={16} color={COLORS.textLow} />

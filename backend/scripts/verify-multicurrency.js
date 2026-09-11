@@ -110,6 +110,37 @@ async function mov(uid, fecha, desc, monto, tipo, moneda, tasa) {
       Math.abs(f.gasto - gastoEsperado) < gastoEsperado * 0.1,
       `US$100/mes -> $${f.gasto} (aprox $${Math.round(gastoEsperado)})`);
     chequeo('...y no como si fueran 100 pesos', f.gasto > 1000, `$${f.gasto}`);
+    // 7. LAS CUENTAS SE VEN POR SEPARADO. Un resumen en pesos y uno en dolares
+    //    son cuentas distintas; sumarlas en un solo total no es lo que nadie
+    //    tiene en la cabeza cuando abre el banco.
+    const { rows: cuentas } = await db.query(
+      `SELECT currency, COUNT(*)::int AS n FROM transactions WHERE user_id = $1 GROUP BY currency ORDER BY currency`,
+      [uid2]);
+    chequeo('las dos cuentas existen por separado',
+      cuentas.length === 2 && cuentas.every((c) => c.n === 6),
+      cuentas.map((c) => `${c.currency}:${c.n}`).join(' '));
+
+    const { rows: soloUsd } = await db.query(
+      `SELECT SUM(amount)::float AS total FROM transactions WHERE user_id = $1 AND currency = 'USD'`, [uid2]);
+    chequeo('mirando la cuenta en dolares suma en dolares', soloUsd[0].total === 600,
+      `6 meses x US$100 = US$${soloUsd[0].total}`);
+
+    // 8. UNA META EN DOLARES. Se guarda en su moneda, y la cuota se compara
+    //    contra el margen en pesos con la cotizacion de HOY.
+    const { rows: metaUsd } = await db.query(
+      `INSERT INTO goals (user_id, name, target_amount, current_amount, target_date, currency)
+       VALUES ($1, 'Casa', 20000, 0, (CURRENT_DATE + INTERVAL '10 months')::date, 'USD') RETURNING *`,
+      [uid2]);
+    const fUsd = await calcFeasibility(uid2, metaUsd);
+    const m = fUsd.porMeta[0];
+    chequeo('la meta guarda su moneda', m.currency === 'USD', `${m.currency}`);
+    chequeo('la cuota se muestra en dolares', m.cuota > 1800 && m.cuota < 2100,
+      `US$${m.cuota}/mes para US$20.000 en 10 meses`);
+    chequeo('y se compara en pesos', m.cuotaUyu > m.cuota * 30,
+      `US$${m.cuota} = $${m.cuotaUyu} al cambio de hoy`);
+    chequeo('el veredicto usa los pesos, no los dolares',
+      m.veredicto === 'no_alcanza',
+      `cuota $${m.cuotaUyu} vs margen $${fUsd.disponible} -> ${m.veredicto}`);
   } finally {
     for (const uid of creados) {
       await db.query('DELETE FROM transactions WHERE user_id = $1', [uid]);

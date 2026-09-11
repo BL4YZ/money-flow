@@ -115,7 +115,7 @@ function TxRow({ tx, onEdit, onDelete }) {
  * "lo presupuestado" y "el excedente" en vez de pintarla toda de rojo — una
  * barra al 100% no distingue gastar justo de gastar el doble.
  */
-function CategoryRow({ cat, total, totalIncome, active, onPress, budget, onSetBudget }) {
+function CategoryRow({ cat, total, totalIncome, active, onPress, budget, onSetBudget, currency = 'UYU' }) {
   const gasto = parseFloat(cat.total_spent);
   const ingreso = parseFloat(cat.total_income);
   const esIngreso = gasto === 0 && ingreso > 0;
@@ -145,8 +145,8 @@ function CategoryRow({ cat, total, totalIncome, active, onPress, budget, onSetBu
           </Txt>
           <View style={styles.catRight}>
             <Txt style={[styles.catAmount, esIngreso && { color: COLORS.income }]}>
-              {esIngreso ? '+' : ''}{formatUYU(monto)}
-              {budget ? ` / ${formatUYU(budget)}` : ''}
+              {esIngreso ? '+' : ''}{formatMoney(monto, currency)}
+              {budget ? ` / ${formatMoney(budget, currency)}` : ''}
             </Txt>
             {!esIngreso ? (
               <Pressable onPress={onSetBudget} hitSlop={8} style={{ marginLeft: 6 }}>
@@ -189,6 +189,16 @@ export default function DashboardScreen() {
   const [upcomingBills, setUpcomingBills] = useState([]);
   const [budgets, setBudgets] = useState({});          // { category: amount }
   const [budgetModal, setBudgetModal] = useState(null); // { category } | null
+  // QUE CUENTA se esta mirando. En Uruguay una persona tiene cuenta en pesos y
+  // cuenta en dolares, y son cuentas distintas con resumenes distintos: verlas
+  // sumadas en un total unico no es lo que nadie tiene en la cabeza. 'todo'
+  // existe igual, convertido a pesos, para mirar el conjunto.
+  const [cuenta, setCuenta] = useState('UYU');
+  const [cuentas, setCuentas] = useState([]);
+  // La moneda de los numeros la DICE el backend en la respuesta, no la deduce
+  // la pantalla: si alguna vez no coincidieran, un total en dolares dibujado
+  // con el signo del peso es exactamente el error que hay que evitar.
+
   const [budgetInput, setBudgetInput] = useState('');
   const [savingBudget, setSavingBudget] = useState(false);
 
@@ -196,7 +206,9 @@ export default function DashboardScreen() {
 
   const fetchSummary = useCallback(async () => {
     try {
-      const { data } = await api.get('/transactions/summary', { params: { month: selectedMonth } });
+      const { data } = await api.get('/transactions/summary', {
+        params: { month: selectedMonth, ...(cuenta === 'todo' ? {} : { currency: cuenta }) },
+      });
       setSummary(data);
     } catch (err) {
       console.error(err);
@@ -204,13 +216,14 @@ export default function DashboardScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [selectedMonth]);
+  }, [selectedMonth, cuenta]);
 
   const fetchTransactions = useCallback(async (category = null) => {
     setTxLoading(true);
     try {
       const params = { month: selectedMonth, limit: 60 };
       if (category) params.category = category;
+      if (cuenta !== 'todo') params.currency = cuenta;
       const { data } = await api.get('/transactions', { params });
       setTransactions(data.transactions || []);
     } catch (err) {
@@ -218,7 +231,17 @@ export default function DashboardScreen() {
     } finally {
       setTxLoading(false);
     }
-  }, [selectedMonth]);
+  }, [selectedMonth, cuenta]);
+
+  // Que cuentas tiene de verdad esta persona. Sin esto habria que mostrarle un
+  // selector de moneda a alguien que solo opera en pesos, y eso es ruido para
+  // la mayoria; para quien tiene las dos, es lo primero que busca.
+  const fetchCuentas = useCallback(async () => {
+    try {
+      const { data } = await api.get('/transactions/accounts');
+      setCuentas(data.accounts || []);
+    } catch (_) { setCuentas([]); }
+  }, []);
 
   const fetchUpcomingBills = useCallback(async () => {
     try {
@@ -273,6 +296,7 @@ export default function DashboardScreen() {
     fetchSummary();
     fetchTransactions(selectedCategory);
     fetchBudgets();
+    fetchCuentas();
     fetchUpcomingBills();
   }, [selectedMonth]);
 
@@ -417,6 +441,8 @@ export default function DashboardScreen() {
     );
   }
 
+  const monedaVista = summary?.currency || 'UYU';
+
   const totalSpent = parseFloat(summary?.totals?.total_spent || 0);
   const totalIncome = parseFloat(summary?.totals?.total_income || 0);
   const balance = totalIncome - totalSpent;
@@ -492,6 +518,25 @@ export default function DashboardScreen() {
           card={false}
         />
 
+        {/* SELECTOR DE CUENTA. Solo aparece si la persona tiene mas de una: un
+            selector con una sola opcion es ruido. "Todo" convierte a pesos con
+            la cotizacion del dia de cada movimiento; las otras dos muestran la
+            cuenta en SU moneda, sin convertir nada. */}
+        {cuentas.length > 1 ? (
+          <Segmented
+            options={[
+              ...cuentas.map((c) => ({
+                value: c.currency,
+                label: c.currency === 'USD' ? 'US$ Dólares' : '$ Pesos',
+              })),
+              { value: 'todo', label: 'Todo' },
+            ]}
+            value={cuenta}
+            onChange={setCuenta}
+            style={{ marginTop: SPACING.m }}
+          />
+        ) : null}
+
         <View style={styles.utilRow}>
           {!isPremium ? (
             <Pressable onPress={() => showUpgrade()}>
@@ -544,22 +589,22 @@ export default function DashboardScreen() {
               ) : null}
             </View>
             <Txt style={styles.balance}>
-              {balance >= 0 ? '' : '−'}{formatUYU(Math.abs(balance))}
+              {balance >= 0 ? '' : '−'}{formatMoney(Math.abs(balance), monedaVista)}
             </Txt>
             <View style={styles.balanceMetrics}>
               <View style={styles.balanceMetric}>
                 <Txt variant="caption" color={COLORS.textLow}>{t('dashboard.incomeLabel')}</Txt>
-                <Txt style={[styles.metricValue, { color: COLORS.income }]}>+{formatUYU(totalIncome)}</Txt>
+                <Txt style={[styles.metricValue, { color: COLORS.income }]}>+{formatMoney(totalIncome, monedaVista)}</Txt>
               </View>
               <View style={styles.balanceMetric}>
                 <Txt variant="caption" color={COLORS.textLow}>{t('dashboard.expensesLabel')}</Txt>
-                <Txt style={[styles.metricValue, { color: COLORS.expense }]}>−{formatUYU(totalSpent)}</Txt>
+                <Txt style={[styles.metricValue, { color: COLORS.expense }]}>−{formatMoney(totalSpent, monedaVista)}</Txt>
               </View>
             </View>
           </Card>
         ) : totalSpent > 0 ? (
           <Card variant="raised" label={t('dashboard.totalExpenses')} style={styles.bloque}>
-            <Txt style={[styles.balance, { color: COLORS.expense }]}>{formatUYU(totalSpent)}</Txt>
+            <Txt style={[styles.balance, { color: COLORS.expense }]}>{formatMoney(totalSpent, monedaVista)}</Txt>
           </Card>
         ) : null}
 
@@ -588,6 +633,7 @@ export default function DashboardScreen() {
               <CategoryRow
                 key={i}
                 cat={cat}
+                currency={monedaVista}
                 total={totalSpent}
                 totalIncome={totalIncome}
                 active={selectedCategory === cat.category}

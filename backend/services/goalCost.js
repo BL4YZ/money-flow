@@ -23,6 +23,8 @@
  * y el promedio divide por los meses que tienen movimientos, no por la ventana.
  */
 
+const { getUsdToUyuRate } = require('./exchangeRate');
+
 const MESES_VENTANA = 6;
 const MESES_MINIMOS = 2;
 const TOP = 4;
@@ -43,7 +45,11 @@ async function costoEnMetas(db, userId, goals, cuotaDe) {
   if (conCuota.length === 0) return { status: 'sin_meta' };
 
   const meta = conCuota[0];
-  const cuota = cuotaDe(meta);
+  // El gasto viene en pesos, asi que una cuota en dolares hay que pasarla a
+  // pesos para dividir. Con la cotizacion de HOY: es una comparacion hacia
+  // adelante, no el registro de algo que ya paso.
+  const cotizacion = meta.currency === 'USD' ? await getUsdToUyuRate() : 1;
+  const cuota = cuotaDe(meta) * cotizacion;
 
   const { rows } = await db.query(
     `SELECT category, AVG(total) AS mensual, COUNT(*) AS meses FROM (
@@ -78,7 +84,13 @@ async function costoEnMetas(db, userId, goals, cuotaDe) {
 
   return {
     status: 'ok',
-    meta: { id: meta.id, name: meta.name, cuota },
+    meta: {
+      id: meta.id,
+      name: meta.name,
+      cuota: Math.round(cuota),            // en pesos, que es como se compara
+      cuotaPropia: Math.round(cuotaDe(meta)),
+      currency: meta.currency || 'UYU',
+    },
     meses,
     categorias,
   };

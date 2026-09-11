@@ -28,6 +28,7 @@
  * `status: 'sin_datos'`. Un cálculo de viabilidad sobre un mes es una anécdota.
  */
 const db = require('../db');
+const { getUsdToUyuRate } = require('./exchangeRate');
 
 const MESES_VENTANA  = 6;
 const MESES_MINIMOS  = 2;
@@ -114,18 +115,30 @@ async function calcFeasibility(userId, goals) {
   };
   fijos.total = fijos.suscripciones + fijos.cuentas;
 
+  // COTIZACION DE HOY, no la del dia de cada movimiento — y la diferencia es de
+  // fondo. Registrar un gasto pasado usa la cotizacion de SU dia porque es un
+  // hecho que ya ocurrio. Esto es al reves: una proyeccion hacia adelante. "Para
+  // esa meta en dolares necesitas US$500 por mes" hay que compararlo contra los
+  // pesos que te sobran HOY, porque es hoy cuando decidis si te da.
   const activas = goals.filter((g) => !g.is_completed);
+  const hayUSD = activas.some((g) => g.currency === 'USD');
+  const cotizacion = hayUSD ? await getUsdToUyuRate() : 1;
+  const aPesos = (monto, moneda) => (moneda === 'USD' ? monto * cotizacion : monto);
 
   const porMeta = activas.map((g) => {
     const cuota     = calcMonthlyQuota(g.current_amount, g.target_amount, g.target_date);
-    const restante  = parseFloat(g.target_amount) - parseFloat(g.current_amount);
+    // La cuota se muestra en la moneda de la meta y se COMPARA en pesos.
+    const cuotaUyu  = cuota === null ? null : aPesos(cuota, g.currency);
+    const restante  = aPesos(parseFloat(g.target_amount) - parseFloat(g.current_amount), g.currency);
     const mesesReales = disponible > 0 ? restante / disponible : null;
 
     const m = {
       id: g.id,
       name: g.name,
       cuota,
-      veredicto: veredicto(cuota, disponible),
+      currency: g.currency || 'UYU',
+      cuotaUyu: cuotaUyu === null ? null : Math.round(cuotaUyu),
+      veredicto: veredicto(cuotaUyu, disponible),
       // A qué fecha llegaría destinando TODO el margen a esta meta. Es el techo,
       // no una promesa: si hay varias metas, el margen se reparte.
       mesesAlRitmo: mesesReales === null ? null : Math.round(mesesReales * 10) / 10,
@@ -136,8 +149,11 @@ async function calcFeasibility(userId, goals) {
     // bajar el objetivo a lo que sí entra en el plazo.
     if (m.veredicto === 'no_alcanza' && g.target_date) {
       const mesesPlazo = (new Date(g.target_date) - new Date()) / (1000 * 60 * 60 * 24 * 30.44);
-      m.faltantePorMes  = Math.round(cuota - disponible);
-      m.objetivoPosible = Math.round(parseFloat(g.current_amount) + disponible * mesesPlazo);
+      // Lo que falta se dice en PESOS porque es contra el margen en pesos; el
+      // objetivo alcanzable, en la moneda de la meta, que es como esta escrita.
+      m.faltantePorMes  = Math.round(cuotaUyu - disponible);
+      m.objetivoPosible = Math.round(
+        parseFloat(g.current_amount) + (disponible * mesesPlazo) / (g.currency === 'USD' ? cotizacion : 1));
     }
     return m;
   });
@@ -145,7 +161,9 @@ async function calcFeasibility(userId, goals) {
   // El chequeo que ninguna barrita individual hace: las metas comparten UN
   // margen. Tres metas que "alcanzan" por separado pueden no entrar juntas.
   const conCuota   = porMeta.filter((m) => m.cuota !== null && m.cuota > 0);
-  const cuotaTotal = conCuota.reduce((s, m) => s + m.cuota, 0);
+  // La suma tiene que ser en pesos: sumar una cuota en dolares con una en pesos
+  // da un numero que no es ninguna de las dos cosas.
+  const cuotaTotal = conCuota.reduce((s, m) => s + m.cuotaUyu, 0);
 
   return {
     status: 'ok',
@@ -155,7 +173,8 @@ async function calcFeasibility(userId, goals) {
     gasto,
     disponible,
     fijos,
-    cuotaTotal,
+    cuotaTotal: Math.round(cuotaTotal),
+    cotizacion: hayUSD ? cotizacion : null,
     metasConFecha: conCuota.length,
     metasSinFecha: porMeta.length - conCuota.length,
     veredicto: conCuota.length === 0 ? 'sin_fecha' : veredicto(cuotaTotal, disponible),
