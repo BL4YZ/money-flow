@@ -37,3 +37,21 @@ Thumbs.db
 *.xlsx
 *.ofx
 *.qif
+
+# ── Tickets y comprobantes de compra ─────────────────────────────
+# Misma razón que los resúmenes, y además dicen QUÉ compró la persona, dónde
+# y a qué hora — más revelador que el resumen, que sólo dice el comercio.
+#
+# Acá NO se puede ignorar por extensión como con los .csv: un ticket es una
+# foto, y `*.png` o `*.jpg` se llevaría puestos los íconos y las imágenes de
+# `frontend/assets/`, que sí van versionados. Así que se ignoran las CARPETAS
+# donde uno los deja, y las imágenes sueltas SÓLO en la raíz del repo —
+# `/*.jpg` con la barra al principio no alcanza a los assets.
+recibos/
+tickets/
+comprobantes/
+/*.jpg
+/*.jpeg
+/*.png
+/*.heic
+/*.webp
