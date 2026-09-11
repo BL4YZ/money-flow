@@ -40,6 +40,10 @@ export const COLORS = {
   // cambio. Este es el velo que va ENCIMA del desenfoque, no en lugar de el.
   glassFill: 'rgba(255,255,255,0.14)',
   glassFillPressed: 'rgba(255,255,255,0.24)',
+  // El pill de la barra: una zona MAS DENSA del mismo cristal, no una pieza
+  // aparte. Es un color con alfa y no un GlassView a proposito — ver la nota en
+  // FloatingTabBar sobre por que el material de Apple no se puede trasladar.
+  glassPill: 'rgba(255,255,255,0.16)',
   borderStrong: '#46403a',
 
   // Marca: un primary (hueso) + un accent (turquesa)

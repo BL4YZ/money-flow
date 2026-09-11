@@ -3,7 +3,7 @@ import { View, Pressable, Animated, PanResponder, StyleSheet } from 'react-nativ
 import { LinearGradient } from 'expo-linear-gradient';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Txt from './Text';
-import GlassSurface, { GlassPieza, nivelDeVidrio } from './GlassSurface';
+import GlassSurface, { nivelDeVidrio } from './GlassSurface';
 import { COLORS, GRADIENTS, RADIUS, SHADOWS, FONTS, MOTION } from '../../theme';
 
 /**
@@ -90,16 +90,17 @@ export default function FloatingTabBar({ state, navigation, tabs }) {
         estilo="clear"
         {...pan.panHandlers}
       >
-        {/* VIDRIO SOBRE VIDRIO, como el pill de WhatsApp. Un rectangulo de color
-            solido encima de una barra transparente se lee como una mancha
-            pintada; una pieza de vidrio tenue se lee como parte del mismo
-            cristal, apenas mas densa donde estas parado.
-            Sin GlassContainer: la fusion entre piezas ya se probo en el
-            selector de moneda y dibujaba una mancha oscura. */}
+        {/* EL PILL NO ES UN GlassView, Y NO PUEDE SERLO MIENTRAS SE TRASLADE.
+            El material de Apple muestrea lo que tiene detras para refractarlo, y
+            moverlo con un `transform` deja rastro: aparecia una mancha en la
+            barra en cada cambio de pestana. Es una limitacion del material, no
+            algo que se arregle con parametros.
+            Lo que si se puede es el ASPECTO: un blanco con alfa sobre el vidrio
+            de la barra se lee como una zona mas densa del mismo cristal —que es
+            lo que hace el pill de WhatsApp— y siendo una View comun se traslada
+            en el hilo nativo sin artefactos. */}
         {activo ? (
-          <GlassPieza
-            tinte={COLORS.primarySoft}
-            radius={RADIUS.full}
+          <Animated.View
             style={[styles.pill, { width: activo.width, transform: [{ translateX: x }] }]}
             pointerEvents="none"
           />
@@ -170,6 +171,7 @@ const styles = StyleSheet.create({
     top: 7,
     bottom: 7,
     left: 0,          // la posicion la pone translateX, que si es nativo
+    backgroundColor: COLORS.glassPill,
     borderRadius: RADIUS.full,
   },
   item: {
