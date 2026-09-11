@@ -206,6 +206,11 @@ module.exports = [
   { q: 'notebook i5', cat: 'hogar', minResults: 1, noneMatch: /\bi7\b|\bi3\b/i, label: 'regresión: i5 no es i7' },
   { q: 'notebook i7', cat: 'hogar', minResults: 1, noneMatch: /\bi5\b|\bi3\b/i, label: 'regresión: i7 no es i5' },
   { q: 'coca cola 2 litros', cat: 'supermercado', minResults: 1, qty: { qty: 2000, base: 'ml' }, label: 'regresión: "2 L" = "2 litros"' },
+  // El carrito elegia "Atun lomito EMIGRANTE en aceite 3 un. 240 g" ($281, 720 g)
+  // sobre la lata suelta de 170 g ($106) porque sale mejor el kilo. Quien pide
+  // "atun x1" quiere UNA lata: el total subia $175 comprando el triple de atun,
+  // y por eso el carrito optimo salia mas caro que comprar todo en una tienda.
+  { q: 'atun emigrante lomito', cat: 'supermercado', minResults: 2, noneMatch: /[2-9]\s*un\.?\s|[2-9]\s*x\s*[0-9]/i, label: 'regresión: un pack de 3 no es una lata' },
 
   // ─── N. Substring accidental (reportado probando a mano) ────────
   // "ipad" salia 1ro un "DISipADOr CPU Cougar": la palabra contiene el token

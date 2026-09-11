@@ -22,6 +22,7 @@ const {
   isNegatedMention,
   withUnitPrices,
   compareByValue,
+  markOffPackItems,
   markOffUnitItems,
   markOffCategoryItems,
   topPerStore,
@@ -214,6 +215,12 @@ async function scrapeItem(item, category = null) {
   // (un sobre de 15 g de polvo entre botellas de litros) — ver markOffUnitItems.
   relevant = markOffUnitItems(relevant);
 
+  // Multipacks, cuando hay unidades sueltas con que comparar. SOLO EN EL
+  // CARRITO, no en el buscador: ahi mostrar el pack de 3 junto a la lata suelta
+  // es informacion util, porque es una lista para navegar. Aca alimenta un
+  // TOTAL, y comprar tres latas cuando se pidio una cambia la lista.
+  relevant = markOffPackItems(relevant);
+
   // Categoría real de la tienda: separa productos que comparten sustantivo
   // pero no son lo mismo (agua mineral vs agua lavandina, aceite comestible
   // vs aceite de motor). Ver productMatcher.markOffCategoryItems.
@@ -230,6 +237,11 @@ async function scrapeItem(item, category = null) {
     // Unidad incomparable: no puede ganar sólo por tener el precio absoluto
     // más bajo. Castigo, no exclusión — si es lo único de esa tienda, aparece.
     if (p._offUnit) score *= 0.6;
+    // Mismo castigo que la unidad incomparable y por la misma razon: un pack
+    // gana por precio por kilo y se cuela en el total un producto que el
+    // usuario no pidio. Castigo y no exclusion: si es lo unico que esa tienda
+    // tiene, se muestra igual.
+    if (p._offPack) score *= 0.6;
     if (p._offCategory) score *= 0.5;
     const existing = byStore[p.storeId];
     if (!existing || score > existing._score || (score === existing._score && compareByValue(p, existing) < 0)) {
@@ -319,9 +331,14 @@ function buildComparison(items, itemResults) {
   // se comparan ofertas con la misma unidad base y una cantidad parecida
   // (+-10%), y las que no tienen con quien compararse aportan cero.
   //
-  // Tambien explica por que optimalTotal puede superar el total de una sola
-  // tienda: el mejor valor por unidad suele venir en envase grande. Comparar
-  // esos dos totales en pesos no significa nada — miden canastas distintas.
+  // NOTA HISTORICA, porque este comentario decia lo contrario. Antes avisaba
+  // que optimalTotal podia superar el total de una sola tienda y que compararlos
+  // "no significa nada, miden canastas distintas" — y era cierto: el carrito se
+  // quedaba con multipacks por precio por kilo. Se arreglo en el origen
+  // (markOffPackItems): un pack de 3 ya no gana cuando hay latas sueltas, asi
+  // que los dos totales miden la MISMA canasta y compararlos si significa algo.
+  // Si alguna vez vuelve a haber diferencias grandes, el sospechoso es un
+  // producto de otro tamano colandose, no la formula.
   const CANT_TOLERANCIA = 0.1;
   const itemSavings = itemResults.reduce((sum, ir) => {
     const elegido = ir.cheapest;

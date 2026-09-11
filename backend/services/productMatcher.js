@@ -413,7 +413,10 @@ function parseQuantity(name) {
   if (multi) {
     const fam = familyFor(multi[3]);
     if (fam) {
-      return { qty: toNumber(multi[1]) * toNumber(multi[2]) * fam.factor, unit: fam.base };
+      // `pack` se conserva: la cantidad total no distingue un envase grande
+      // de varias unidades juntas, y para un carrito esa diferencia es la que
+      // importa — 3 latas de 240 g no son una lata de 720 g.
+      return { qty: toNumber(multi[1]) * toNumber(multi[2]) * fam.factor, unit: fam.base, pack: toNumber(multi[1]) };
     }
   }
 
@@ -429,9 +432,9 @@ function parseQuantity(name) {
   const count = countMatch ? toNumber(countMatch[1]) : null;
 
   // Conteo + medida = multipack implícito ("4 un. 30 m" → 120 m)
-  if (measure && count && count > 1) return { qty: measure.qty * count, unit: measure.unit };
-  if (measure) return measure;
-  if (count) return { qty: count, unit: 'un' };
+  if (measure && count && count > 1) return { qty: measure.qty * count, unit: measure.unit, pack: count };
+  if (measure) return { ...measure, pack: 1 };
+  if (count) return { qty: count, unit: 'un', pack: 1 };
   return null;
 }
 
@@ -472,6 +475,7 @@ function withUnitPrices(items) {
       unitLabel: disp.label,
       unitQty: q.qty,
       unitBase: q.unit,
+      packCount: q.pack || 1,
     };
   });
 }
@@ -701,6 +705,37 @@ function markOffUnitItems(items) {
   return items.map((i) => (
     i.unitBase && i.unitBase !== dominante ? { ...i, _offUnit: true } : i
   ));
+}
+
+/**
+ * Marca los MULTIPACKS cuando en el mismo set hay unidades sueltas.
+ *
+ * EL CASO QUE LO MOTIVÓ. Una lista pedía "atún emigrante lomito x1". Tata vende
+ * la lata de 170 g a $106; Disco, Géant y Devoto listan "Atún lomito EMIGRANTE
+ * en aceite 3 un. 240 g" a $281 — 720 g en total, y mejor precio por kilo. El
+ * carrito elegía ese y el total subía $175. No era más caro: eran TRES LATAS.
+ * Reportado como "el carrito óptimo dice $1.098 y Tata tiene todo por $957".
+ *
+ * POR QUÉ NO SE RESUELVE CON EL TAMAÑO. El primer intento marcó los envases
+ * lejos de la mediana, y falló por una razón que vale anotar: Disco, Géant y
+ * Devoto comparten catálogo, así que el mismo pack aparecía tres veces y la
+ * mediana de [170, 345, 720, 720, 720] daba 720. La heurística terminaba
+ * marcando la lata suelta de 170 g, que es exactamente lo que el usuario quiso.
+ * Contar productos no funciona cuando tres tiendas son un mismo catálogo.
+ *
+ * Lo que sí es una señal limpia está en el nombre y ya lo parseaba
+ * `parseQuantity`: "3 un." es un multipack. Sólo que descartaba el número
+ * después de multiplicarlo. Quien escribe "atún x1" quiere UNA lata; que el
+ * kilo salga más barato comprando tres es un buen consejo, pero no es el precio
+ * de su lista.
+ *
+ * Sólo marca si en el set hay alguna unidad suelta con la que comparar: si todo
+ * lo que existe son packs, el pack ES el producto.
+ */
+function markOffPackItems(items) {
+  const haySueltos = items.some((i) => i.packCount === 1);
+  if (!haySueltos) return items;
+  return items.map((i) => (i.packCount > 1 ? { ...i, _offPack: true } : i));
 }
 
 function compareByValue(a, b) {
@@ -965,6 +1000,7 @@ module.exports = {
   withUnitPrices,
   compareByValue,
   markOffUnitItems,
+  markOffPackItems,
   markOffCategoryItems,
   topPerStore,
   requiredTokens,

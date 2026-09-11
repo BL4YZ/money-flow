@@ -19,7 +19,7 @@
  */
 require('dotenv').config({ path: require('path').resolve(__dirname, '../.env') });
 const { __testing } = require('../routes/shopping');
-const { parseQuantity, compareByValue } = require('../services/productMatcher');
+const { parseQuantity } = require('../services/productMatcher');
 
 const LISTA = process.argv.slice(2).length
   ? process.argv.slice(2)
@@ -42,8 +42,10 @@ const unit = (p) => (p.unitPrice != null ? `$${Math.round(p.unitPrice)}/${p.unit
     const res = await __testing.scrapeItem({ name: termino, quantity: 1, id: 0 }, 'supermercado');
     const ofertas = Object.values(res.byStore || {});
     if (ofertas.length === 0) { porItem.push({ termino, elegido: null, ofertas: [] }); continue; }
-    // Lo mismo que hace la ruta: el mejor VALOR POR UNIDAD.
-    const elegido = [...ofertas].sort(compareByValue)[0];
+    // `cheapest` lo calcula la propia ruta (score primero, valor despues). Antes
+    // este script re-ordenaba por compareByValue a secas e ignoraba el score,
+    // asi que no medía lo que la app hace realmente.
+    const elegido = res.cheapest || null;
     porItem.push({ termino, elegido, ofertas });
   }
 
