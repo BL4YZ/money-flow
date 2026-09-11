@@ -13,7 +13,7 @@ import {
   Txt, Card, Input, Button, Badge, BottomSheet, EmptyState,
   ProgressBar, ProgressRing, ScreenHeader, Glow, formatUYU,
 } from '../components/ui';
-import { COLORS, SPACING, RADIUS, FONTS } from '../theme';
+import { COLORS, SPACING, RADIUS, FONTS, categoryColor } from '../theme';
 
 const GOAL_ICONS = [
   'home-outline', 'car-outline', 'airplane-outline', 'laptop-outline',
@@ -255,6 +255,49 @@ function CandidatesCard({ candidatos, acreditados, onElegir, onDeshacer }) {
   );
 }
 
+/**
+ * El gasto del mes, medido en la cuota de la meta.
+ *
+ *   "Restaurantes  $4.200/mes  0,4 meses"
+ *
+ * NO dice que nada sea un derroche, y es a proposito. Si $4.200 de delivery es
+ * un derroche depende del ingreso de esa persona y de su vida; la app no lo sabe
+ * y llamarlo asi seria un juicio moral disfrazado de estadistica. Lo que hace es
+ * una division entre dos numeros que el usuario ya conoce — lo que gasta, y la
+ * cuota que el mismo se puso — y lo deja decidir.
+ *
+ * Tampoco marca categorias como prescindibles: las ordena por monto, sin
+ * adjetivos. El usuario sabe que la luz no es opcional.
+ */
+function CostCard({ costos }) {
+  if (!costos || costos.status !== 'ok') return null;
+
+  return (
+    <Card variant="base" label="Medido en tu meta" style={styles.bloque}>
+      <Txt variant="caption" color={COLORS.textLow} style={{ marginBottom: SPACING.s }}>
+        Tu gasto mensual, en cuotas de {costos.meta.name} ({formatUYU(costos.meta.cuota)}/mes).
+      </Txt>
+
+      {costos.categorias.map((c) => (
+        <View key={c.categoria} style={styles.costoFila}>
+          <View style={styles.costoPunto}>
+            <View style={[styles.costoDot, { backgroundColor: categoryColor(c.categoria) }]} />
+            <Txt variant="body" color={COLORS.textHigh} numberOfLines={1}>{c.categoria}</Txt>
+          </View>
+          <Txt style={styles.costoMonto}>{formatUYU(c.mensual)}</Txt>
+          <Txt variant="caption" color={COLORS.textMid} style={styles.costoMeses}>
+            {c.mesesDeCuota.toLocaleString('es-UY')} {c.mesesDeCuota === 1 ? 'mes' : 'meses'}
+          </Txt>
+        </View>
+      ))}
+
+      <View style={styles.feasPie}>
+        <Badge variant="estimate" label={`Promedio de ${costos.meses} ${costos.meses === 1 ? 'mes' : 'meses'}`} />
+      </View>
+    </Card>
+  );
+}
+
 export default function GoalsScreen() {
   const { t } = useLanguage();
   const { isPremium, showUpgrade } = usePlan();
@@ -276,12 +319,14 @@ export default function GoalsScreen() {
   const [candidatos, setCandidatos] = useState([]);
   const [acreditados, setAcreditados] = useState([]);
   const [linkModal, setLinkModal] = useState(null);
+  const [costos, setCostos] = useState(null);
 
   const fetchGoals = useCallback(async () => {
     try {
       const { data } = await api.get('/goals');
       setGoals(data.goals);
       setFeasibility(data.feasibility || null);
+      setCostos(data.costos || null);
       // Falla en silencio: es una ayuda, no puede romper la pantalla de metas.
       try {
         const { data: c } = await api.get('/goals/candidates');
@@ -471,6 +516,8 @@ export default function GoalsScreen() {
           onElegir={setLinkModal}
           onDeshacer={deshacer}
         />
+
+        <CostCard costos={costos} />
 
         {activas.length > 0 ? (
           <>
@@ -663,6 +710,12 @@ const styles = StyleSheet.create({
   cand: { flexDirection: 'row', alignItems: 'center', paddingVertical: SPACING.s, gap: SPACING.s },
   candInfo: { flex: 1, minWidth: 0 },
   candMonto: { fontFamily: FONTS.amountBold, fontSize: 14, lineHeight: 18, color: COLORS.textHigh },
+
+  costoFila: { flexDirection: 'row', alignItems: 'center', paddingVertical: 6, gap: SPACING.s },
+  costoPunto: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 7 },
+  costoDot: { width: 8, height: 8, borderRadius: 4 },
+  costoMonto: { fontFamily: FONTS.amount, fontSize: 13, lineHeight: 17, color: COLORS.textHigh },
+  costoMeses: { width: 66, textAlign: 'right' },
 
   goal: { marginTop: SPACING.s },
   goalTop: { flexDirection: 'row', alignItems: 'center' },

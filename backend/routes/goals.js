@@ -4,6 +4,7 @@ const db = require('../db');
 const authMiddleware = require('../middleware/auth');
 const { calcFeasibility, calcMonthlyQuota } = require('../services/goalFeasibility');
 const { candidatosDeAhorro } = require('../services/savingsDetector');
+const { costoEnMetas } = require('../services/goalCost');
 
 const router = express.Router();
 router.use(authMiddleware);
@@ -188,7 +189,13 @@ router.get('/', async (req, res) => {
     // asi que la viabilidad no es una propiedad de cada meta por separado.
     const feasibility = await calcFeasibility(req.userId, goals);
 
-    res.json({ goals: goalsWithInsights, feasibility });
+    // "Restaurantes: $4.200/mes — 1,3 meses de tu Notebook". Se le pasa
+    // calcMonthlyQuota para que la tarjeta de la meta y esta conversion no
+    // puedan discrepar sobre cuanto es la cuota.
+    const costos = await costoEnMetas(db, req.userId, goals,
+      (g) => calcMonthlyQuota(g.current_amount, g.target_amount, g.target_date));
+
+    res.json({ goals: goalsWithInsights, feasibility, costos });
   } catch (err) {
     console.error('GET /goals error:', err.message);
     res.status(500).json({ error: 'Error al obtener metas', detail: err.message });

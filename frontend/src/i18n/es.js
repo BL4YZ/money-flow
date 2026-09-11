@@ -257,7 +257,7 @@ export default {
     analyze: 'Analizar mis gastos',
     analyzing: 'Claude está analizando tus gastos...',
     analyzingHint: 'Tarda unos 5 segundos',
-    savingPotential: 'POTENCIAL DE AHORRO MENSUAL',
+    savingPotential: 'AHORRO EN SUSCRIPCIONES',
     refresh: 'Actualizar análisis',
     priceComparator: 'Comparador de precios',
     title: 'Sugerencias',

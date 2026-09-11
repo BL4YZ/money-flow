@@ -39,13 +39,23 @@ function SuggestionCard({ suggestion, index }) {
             ) : null}
           </View>
         </View>
-        {suggestion.potentialSaving > 0 ? (
-          <Txt style={styles.suggSaving}>−{formatUYU(suggestion.potentialSaving)}</Txt>
+        {/* Solo un ahorro VERIFICABLE va en verde: el importe de una
+            suscripcion que existe en la base. Aca se mostraba
+            `potentialSaving`, un numero que devolvia el modelo. */}
+        {suggestion.ahorroSuscripcion > 0 ? (
+          <Txt style={styles.suggSaving}>−{formatUYU(suggestion.ahorroSuscripcion)}</Txt>
         ) : null}
       </View>
       <Txt variant="body" color={COLORS.textMid} style={styles.suggDesc}>
         {suggestion.description}
       </Txt>
+      {/* El tamano de lo que esta mirando, no un ahorro prometido: por eso va
+          en gris y dice "hoy", no "ahorrarias". */}
+      {suggestion.gastoMensual > 0 ? (
+        <Txt variant="caption" color={COLORS.textLow} style={{ marginTop: SPACING.xs }}>
+          Hoy: {formatUYU(suggestion.gastoMensual)}/mes en {suggestion.category}
+        </Txt>
+      ) : null}
     </Card>
   );
 }
@@ -176,11 +186,16 @@ export default function SuggestionsScreen() {
                 </View>
               ) : null}
 
-              {suggestions.monthlySavingPotential > 0 ? (
+              {/* Antes esto mostraba `monthlySavingPotential`, que lo estimaba
+                  el modelo, y ademas lo multiplicaba por 12 — una cifra
+                  inventada, anualizada, en verde y al lado de numeros reales.
+                  Ahora solo aparece cuando hay algo que se puede afirmar: la
+                  suma de las suscripciones que propone dar de baja. */}
+              {suggestions.ahorroVerificable > 0 ? (
                 <Card variant="best" label={t('suggestions.savingPotential')} style={styles.bloque}>
-                  <Txt style={styles.ahorro}>{formatUYU(suggestions.monthlySavingPotential)}</Txt>
+                  <Txt style={styles.ahorro}>{formatUYU(suggestions.ahorroVerificable)}</Txt>
                   <Txt variant="caption" color={COLORS.textMid}>
-                    {formatUYU(suggestions.monthlySavingPotential * 12)} al año
+                    Dando de baja las suscripciones que marca abajo
                   </Txt>
                 </Card>
               ) : null}
