@@ -64,7 +64,11 @@ const montoMeta = async (id) =>
     const ahorro  = await sembrarMov(uid, { desc: 'TRANSFERENCIA A CAJA DE AHORRO', monto: 5000 });
     const sueldo  = await sembrarMov(uid, { desc: 'SUELDO', monto: 60000, tipo: 'credit', categoria: 'Salario' });
     const compra  = await sembrarMov(uid, { desc: 'SUPERMERCADO DISCO', monto: 3200, categoria: 'Supermercado' });
-    const tipeado = await sembrarMov(uid, { desc: 'TRANSFERENCIA', monto: 2000, source: 'manual' });
+    // Cargado a mano por la persona, con categoria Ahorro. Reportado desde la
+    // app: "agregue un ahorro y categoria ahorro, pero no me lo marco en metas".
+    // El filtro pedia source='ocr' y lo dejaba afuera — al reves de lo correcto,
+    // porque una etiqueta que el usuario eligio es mas fuerte que una regex.
+    const tipeado = await sembrarMov(uid, { desc: 'ahorro', monto: 2000, categoria: 'Ahorro', source: 'manual' });
     // Un debito que el categorizador no reconocio y que no dice nada: no es
     // candidato a nada. Reportado desde la app — 'MONTEVIDEO $195' aparecia
     // ofrecido como posible ahorro, sin un solo motivo.
@@ -108,7 +112,8 @@ const montoMeta = async (id) =>
     const ids = cands.map((c) => c.id);
     chequeo('ofrece la transferencia', ids.includes(ahorro), `${cands.length} candidatos`);
     chequeo('NO ofrece una compra de supermercado', !ids.includes(compra), '');
-    chequeo('NO ofrece lo cargado a mano', !ids.includes(tipeado), '');
+    chequeo('SI ofrece lo cargado a mano con categoria Ahorro', ids.includes(tipeado),
+      'una etiqueta que puso el usuario es una declaracion, no ruido');
     chequeo('NO ofrece un ingreso', !ids.includes(sueldo), '');
     chequeo('NO ofrece un movimiento sin ningun motivo', !ids.includes(opaco),
       'una fila sin explicacion no es una sugerencia');

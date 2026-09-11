@@ -21,6 +21,14 @@
  * — y un ahorro está necesariamente ahí adentro. Es al revés de adivinar qué
  * palabras significan ahorro.
  *
+ * NO SE FILTRA POR ORIGEN, y esto estuvo mal al principio. La primera versión
+ * exigía `source = 'ocr'` — "lo dijo el banco, no el usuario" — y dejaba afuera
+ * exactamente el caso más claro que existe: alguien carga un movimiento a mano,
+ * le pone categoría Ahorro, y la pantalla de metas no se entera. Reportado así.
+ * Una etiqueta que la persona eligió no es ruido: es una DECLARACIÓN, más fuerte
+ * que cualquier regex sobre la descripción del banco, que apenas es una
+ * inferencia. El ruido lo corta el piso de un motivo, no el origen del dato.
+ *
  * El vocabulario de transferencia sólo ORDENA, nunca filtra. Misma regla que
  * el buscador: "elegible es matchear los tokens requeridos; el score sólo
  * ordena". Si el texto no dice nada, el movimiento sigue estando en la lista,
@@ -60,6 +68,10 @@ function esRedondo(monto) {
 function puntuar(tx) {
   const motivos = [];
   let puntos = 0;
+  // Si la persona ETIQUETO el movimiento como Ahorro, ya dijo lo que es. Eso
+  // vale mas que cualquier regex sobre la descripcion del banco, que es una
+  // inferencia: esto es una declaracion.
+  if (tx.category === 'Ahorro') { motivos.push('lo marcaste como ahorro'); puntos += 4; }
   for (const p of PISTAS) {
     if (p.re.test(tx.description || '')) { motivos.push(p.motivo); puntos += p.puntos; }
   }
@@ -79,7 +91,6 @@ async function candidatosDeAhorro(db, userId, limite = 8) {
      WHERE user_id = $1
        AND type = 'debit'
        AND goal_id IS NULL                       -- no acreditado todavía
-       AND source = 'ocr'                        -- lo dijo el banco, no el usuario
        AND ABS(amount) >= $2
        AND date >= CURRENT_DATE - INTERVAL '${DIAS} days'
        AND (category IS NULL OR category <> ALL($3::text[]))
