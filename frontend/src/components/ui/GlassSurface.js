@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Platform, StyleSheet } from 'react-native';
+import { View, Platform, Animated, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS } from '../../theme';
 
@@ -161,15 +161,24 @@ export function GlassGrupo({ spacing = 24, style, children, ...rest }) {
   return <View style={style} {...rest}>{children}</View>;
 }
 
+// Version animable del GlassView. `Animated.createAnimatedComponent` va UNA vez
+// a nivel de modulo, no por render.
+//
+// Sin esto, pasarle un Animated.Value en un transform revienta con
+// "Transform with key of translateX must be number or a percentage": una vista
+// nativa no sabe resolver un valor animado, hay que envolverla para que
+// Animated le escriba numeros.
+const GlassViewAnimado = GlassView ? Animated.createAnimatedComponent(GlassView) : null;
+
 /**
  * Pieza de vidrio TEÑIDA — el pill de un selector, por ejemplo. En iOS 26 es un
  * `GlassView` con `tintColor`, que es lo que se funde con el resto del grupo;
  * en el resto, el color liso de siempre, que es lo que ya se veía.
  */
 export function GlassPieza({ tinte, radius, interactivo = false, style, children, ...rest }) {
-  if (nivelDeVidrio() === 'liquid') {
+  if (nivelDeVidrio() === 'liquid' && GlassViewAnimado) {
     return (
-      <GlassView
+      <GlassViewAnimado
         glassEffectStyle="regular"
         tintColor={tinte}
         // Por defecto NO: una pieza que no recibe toques —un pill decorativo
@@ -180,13 +189,18 @@ export function GlassPieza({ tinte, radius, interactivo = false, style, children
         {...rest}
       >
         {children}
-      </GlassView>
+      </GlassViewAnimado>
     );
   }
+  // Animated.View y no View: el que llama le pasa un transform animado, y el
+  // fallback tiene que aceptarlo igual que la version de vidrio.
   return (
-    <View style={[style, { backgroundColor: tinte }, radius ? { borderRadius: radius } : null]} {...rest}>
+    <Animated.View
+      style={[style, { backgroundColor: tinte }, radius ? { borderRadius: radius } : null]}
+      {...rest}
+    >
       {children}
-    </View>
+    </Animated.View>
   );
 }
 
