@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, ScrollView, StyleSheet, ActivityIndicator, Pressable,
-  RefreshControl, Alert, Animated,
+  RefreshControl, Alert, Animated, Easing,
 } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Toast from 'react-native-toast-message';
@@ -319,7 +319,12 @@ export default function DashboardScreen() {
     primeraCarga.current = false;
 
     if (primera) setLoading(true);
-    else Animated.timing(fade, { toValue: 0.45, duration: 110, useNativeDriver: true }).start();
+    // 0.62 y no 0.45: bajar mas se lee como que la pantalla se apaga. Y con
+    // curva, no lineal — una opacidad que baja a ritmo constante se nota como
+    // un efecto; con salida acelerada se nota como movimiento.
+    else Animated.timing(fade, {
+      toValue: 0.62, duration: 120, easing: Easing.in(Easing.quad), useNativeDriver: true,
+    }).start();
 
     (async () => {
       // allSettled y no all: si UNO de estos rechaza, `all` corta y el fade
@@ -334,7 +339,9 @@ export default function DashboardScreen() {
       ]);
       // Vuelve mas lento de lo que se fue: una entrada suave se lee como que el
       // contenido llego, y una salida rapida evita que se vea el dato viejo.
-      if (!primera) Animated.timing(fade, { toValue: 1, duration: 230, useNativeDriver: true }).start();
+      if (!primera) Animated.timing(fade, {
+        toValue: 1, duration: 260, easing: Easing.out(Easing.cubic), useNativeDriver: true,
+      }).start();
     })();
   }, [selectedMonth, cuenta]);
 

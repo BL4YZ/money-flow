@@ -131,10 +131,47 @@ export const SHADOWS = {
 };
 
 // Animated.spring — sin overshoot exagerado.
+/**
+ * Resortes, parametrizados COMO LOS DE APPLE.
+ *
+ * Antes esto era `friction`/`tension`, que son los números del modelo viejo de
+ * RN y no significan nada que uno pueda razonar: no hay forma de mirar
+ * "tension: 220" y saber cuánto tarda ni cuánto rebota, así que se terminan
+ * ajustando a prueba y error.
+ *
+ * Apple describe un resorte con dos cosas que sí se entienden:
+ *   response        cuánto dura una oscilación, en segundos
+ *   dampingFraction 1 = frena sin rebotar; por debajo, rebota
+ *
+ * La conversión al modelo físico que sí acepta RN (stiffness/damping/mass) es
+ * exacta, con masa 1:
+ *   ω₀ = 2π / response      stiffness = ω₀²      damping = 2 · fracción · ω₀
+ *
+ * Así los valores de abajo se pueden leer y retocar: "quiero que tarde menos"
+ * es bajar `response`, no adivinar una tensión.
+ *
+ * Y la fluidez de verdad no sale de estos números sino de DÓNDE corren: un
+ * resorte con `useNativeDriver: true` se anima en el hilo de UI y no se entera
+ * de lo que esté haciendo JavaScript. Por eso sólo se animan `transform` y
+ * `opacity` — `width`, `left` y los colores obligan a volver al hilo de JS y
+ * ahí cualquier render pesado se ve como tirones.
+ */
+const resorte = (response, fraccion) => {
+  const w0 = (2 * Math.PI) / response;
+  return { stiffness: Math.round(w0 * w0), damping: Math.round(2 * fraccion * w0 * 10) / 10, mass: 1 };
+};
+
 export const MOTION = {
-  press:   { friction: 9,  tension: 220 },
-  sheet:   { friction: 12, tension: 140 },
-  tabPill: { friction: 10, tension: 180 },
+  // Tacto de un botón: tiene que sentirse instantáneo, casi sin rebote.
+  press:   resorte(0.25, 0.90),   // stiffness 632, damping 45.2
+  // La hoja entra con un rebote apenas perceptible; sin nada de rebote parece
+  // que se frenó contra algo.
+  sheet:   resorte(0.50, 0.82),
+  // El pill recorre distancia: rebote suave para que se lea el movimiento.
+  tabPill: resorte(0.42, 0.80),
+  // Transiciones de contenido, sin rebote — un número que rebota se lee mal.
+  smooth:  resorte(0.45, 1.00),
+  snappy:  resorte(0.35, 0.86),
 };
 
 // ── Colores de marca de las cadenas ───────────────────────────────

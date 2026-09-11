@@ -12,14 +12,22 @@ import { COLORS, GRADIENTS, RADIUS, SHADOWS, FONTS, MOTION } from '../../theme';
  * El orden NO se toca: es navegación aprendida y cambiarlo rompe la memoria
  * muscular de cualquiera que ya use la app.
  *
- * El pill se desplaza en vez de aparecer y desaparecer por item. Para eso hay
- * que medir cada tab (`onLayout`) — no alcanza con repartir el ancho en seis
- * partes iguales porque las etiquetas tienen largos distintos.
+ * El pill se desplaza en vez de aparecer y desaparecer por item.
+ *
+ * SE ANIMA `translateX`, NO `left`, Y ESA ES LA DIFERENCIA ENTRE FLUIDO Y NO.
+ * Antes se animaban `left` y `width` a la vez, y ninguna de las dos es una
+ * propiedad que el hilo nativo pueda animar solo: obligaban a
+ * `useNativeDriver: false`, o sea a que cada cuadro cruzara el puente hacia
+ * JavaScript. Con la pantalla haciendo cualquier otra cosa —un fetch, un
+ * re-render— eso se ve como tirones.
+ *
+ * `width` ademas nunca hizo falta: los seis items son `flex: 1`, asi que miden
+ * todos igual. Se mide uno para saber el ancho y el pill solo se traslada, en
+ * el hilo de UI, sin enterarse de lo que pase en JS.
  */
 export default function FloatingTabBar({ state, navigation, tabs }) {
   const [medidas, setMedidas] = useState({});
   const x = useRef(new Animated.Value(0)).current;
-  const w = useRef(new Animated.Value(0)).current;
 
   const activo = medidas[state.index];
   // Con vidrio el fondo opaco tiene que salir, o no se ve nada detras. Se
@@ -28,11 +36,11 @@ export default function FloatingTabBar({ state, navigation, tabs }) {
 
   useEffect(() => {
     if (!activo) return;
-    Animated.parallel([
-      Animated.spring(x, { toValue: activo.x, ...MOTION.tabPill, useNativeDriver: false }),
-      Animated.spring(w, { toValue: activo.width, ...MOTION.tabPill, useNativeDriver: false }),
-    ]).start();
-  }, [state.index, activo && activo.x, activo && activo.width]);
+    // Un solo resorte, nativo. Si se toca otra pestaña a mitad de camino, el
+    // resorte se re-apunta desde donde esta y con la velocidad que lleva: no
+    // reinicia ni salta. Eso es lo que se siente como continuidad.
+    Animated.spring(x, { toValue: activo.x, ...MOTION.tabPill, useNativeDriver: true }).start();
+  }, [state.index, activo && activo.x]);
 
   return (
     <View style={styles.wrapper} pointerEvents="box-none">
@@ -45,7 +53,13 @@ export default function FloatingTabBar({ state, navigation, tabs }) {
           resto, desenfoque real con el canto iluminado a mano. Ver GlassSurface. */}
       <GlassSurface style={[styles.barra, vidrio && styles.barraVidrio]} radius={RADIUS.full}>
         {activo ? (
-          <Animated.View style={[styles.pill, { left: x, width: w }]} pointerEvents="none" />
+          <Animated.View
+            style={[
+              styles.pill,
+              { width: activo.width, transform: [{ translateX: x }] },
+            ]}
+            pointerEvents="none"
+          />
         ) : null}
 
         {state.routes.map((route, i) => {
@@ -111,6 +125,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 7,
     bottom: 7,
+    left: 0,          // la posicion la pone translateX, que si es nativo
     backgroundColor: COLORS.primarySoft,
     borderRadius: RADIUS.full,
   },
