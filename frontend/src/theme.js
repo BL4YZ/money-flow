@@ -161,14 +161,16 @@ export function storeDot(storeId) {
 // Identidad, igual que las tiendas: la misma categoría tiene siempre el mismo
 // color sin importar el orden en que venga del backend, porque si cambia entre
 // meses el gráfico deja de ser legible de un vistazo.
+// Los nombres tienen que ser EXACTAMENTE los de backend/services/categorizer.js.
+// Acá vivían además 'Comida' e 'Ingreso', que eran los nombres del segundo
+// categorizador duplicado: tener color para los cuatro es lo que hizo que la
+// duplicación se viera prolija en pantalla y nadie la notara durante meses.
 export const CATEGORY_COLORS = {
   // Ingresos — siempre verde
   Salario:         '#5fe0a8',
-  Ingreso:         '#46c98f',
   // Gastos — distintos entre sí y del verde
   Supermercado:    '#a29bfe',
   Restaurantes:    '#fd79a8',
-  Comida:          '#e17055',
   Transporte:      '#54a0ff',
   Salud:           '#ff6b6b',
   Streaming:       '#6c5ce7',

@@ -41,8 +41,8 @@ const KNOWN_SUBSCRIPTIONS = [
   { pattern: /meditacion|headspace|calm\b/i,          name: 'Calm / Headspace', cancelUrl: null,                                                        category: 'Salud' },
 
   // Delivery / Comida
-  { pattern: /pedidosya|pedidos[\s]?ya/i,             name: 'PedidosYa+',       cancelUrl: 'https://www.pedidosya.com.uy/',                             category: 'Comida' },
-  { pattern: /rappi\s*prime|rappi\s*pass/i,           name: 'Rappi Prime',      cancelUrl: 'https://www.rappi.com.uy/',                                 category: 'Comida' },
+  { pattern: /pedidosya|pedidos[\s]?ya/i,             name: 'PedidosYa+',       cancelUrl: 'https://www.pedidosya.com.uy/',                             category: 'Restaurantes' },
+  { pattern: /rappi\s*prime|rappi\s*pass/i,           name: 'Rappi Prime',      cancelUrl: 'https://www.rappi.com.uy/',                                 category: 'Restaurantes' },
 
   // Noticias
   { pattern: /new york times|nytimes/i,               name: 'NY Times',         cancelUrl: 'https://myaccount.nytimes.com/seg',                         category: 'Noticias' },

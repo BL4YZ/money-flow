@@ -110,6 +110,25 @@ async function initSchema() {
       CREATE UNIQUE INDEX IF NOT EXISTS idx_tx_user_external
         ON transactions (user_id, external_id) WHERE external_id IS NOT NULL;
 
+      -- REPARACIÓN DE DATOS, una sola vez. Había dos categorizadores con
+      -- distinto vocabulario de salida (ver services/categorizer.js), así que
+      -- las filas guardadas están partidas entre 'Comida'/'Restaurantes' y
+      -- 'Ingreso'/'Salario' — dos porciones de la misma torta. Sin esto, unificar
+      -- el código deja los datos viejos partidos igual.
+      --
+      -- 'Ingreso' NO se renombra a ciegas: la regla vieja era
+      -- /salario|sueldo|pago|deposito/, o sea que ahí adentro hay sueldos y
+      -- también transferencias, y 'pago' es tan amplio que arrastró cosas que no
+      -- son ingreso. Se vuelve a decidir mirando la descripción, igual que haría
+      -- el categorizador de hoy; lo que no se puede ubicar va a 'Otros' en vez de
+      -- inventarle una categoría.
+      UPDATE transactions SET category = 'Restaurantes' WHERE category = 'Comida';
+      UPDATE transactions SET category = CASE
+        WHEN description ~* '(salario|sueldo|haberes|remuneraci)' THEN 'Salario'
+        WHEN description ~* '(transfer|dep[oó]sito|ingreso)'      THEN 'Transferencia'
+        ELSE 'Otros'
+      END WHERE category = 'Ingreso';
+
       CREATE TABLE IF NOT EXISTS budgets (
         id           SERIAL PRIMARY KEY,
         user_id      UUID NOT NULL,

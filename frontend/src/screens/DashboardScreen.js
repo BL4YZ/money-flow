@@ -23,7 +23,6 @@ import {
 const CATEGORY_ICONS = {
   Supermercado: 'cart-outline',
   Restaurantes: 'restaurant-outline',
-  Comida: 'fast-food-outline',
   Transporte: 'car-outline',
   Salud: 'medkit-outline',
   Streaming: 'play-circle-outline',
@@ -36,7 +35,6 @@ const CATEGORY_ICONS = {
   Préstamos: 'cash-outline',
   Seguros: 'shield-checkmark-outline',
   Salario: 'wallet-outline',
-  Ingreso: 'trending-up-outline',
   Transferencia: 'swap-horizontal-outline',
   Otros: 'ellipsis-horizontal-circle-outline',
 };

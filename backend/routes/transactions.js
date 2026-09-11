@@ -3,6 +3,10 @@ const { body, validationResult } = require('express-validator');
 const db = require('../db');
 const authMiddleware = require('../middleware/auth');
 const { detectSubscriptions } = require('../services/subscriptionDetector');
+// Un solo categorizador para toda la app. Aca vivia una segunda copia con
+// nueve reglas y OTRO vocabulario de salida ('Comida', 'Ingreso'), asi que un
+// mismo comercio caia en dos categorias distintas segun por donde entraba.
+const { categorize } = require('../services/categorizer');
 
 const router = express.Router();
 router.use(authMiddleware);
@@ -224,19 +228,5 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
-// ─── Categorización simple por palabras clave ─────────────────
-function categorize(description) {
-  const desc = description.toLowerCase();
-  if (/netflix|spotify|disney|hbo|amazon prime|youtube premium/.test(desc)) return 'Streaming';
-  if (/supermercado|disco|devoto|geant|tienda inglesa|walmart/.test(desc)) return 'Supermercado';
-  if (/ute|antel|ancap|osse|saneamiento/.test(desc)) return 'Servicios';
-  if (/uber|cabify|bolt|taxi|bus|cutcsa|omnibus/.test(desc)) return 'Transporte';
-  if (/farmacia|medica|hospital|clinica|doctor/.test(desc)) return 'Salud';
-  if (/restaurant|delivery|pedidosya|rappi|pizza|burger/.test(desc)) return 'Comida';
-  if (/gym|gimnasio|sport|fitness/.test(desc)) return 'Deporte';
-  if (/cine|teatro|entretenimiento|juego/.test(desc)) return 'Entretenimiento';
-  if (/salario|sueldo|pago|deposito/.test(desc)) return 'Ingreso';
-  return 'Otros';
-}
 
 module.exports = router;
