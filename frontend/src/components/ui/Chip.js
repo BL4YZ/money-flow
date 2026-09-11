@@ -1,8 +1,8 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { View, Pressable, Animated, StyleSheet } from 'react-native';
+import { View, Pressable, Animated, PanResponder, StyleSheet } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Txt from './Text';
-import { GlassEdge, GlassFondo, GlassGrupo, GlassPieza } from './GlassSurface';
+import { GlassEdge, GlassFondo } from './GlassSurface';
 import { COLORS, RADIUS, FONTS, TYPE, MOTION } from '../../theme';
 
 /**
@@ -59,6 +59,8 @@ export function SortChip({ label, active, desc, onPress, style }) {
  * Segmented control. `tone` permite que el toggle Ingreso/Egreso pinte el
  * seleccionado con el color del dato en vez del hueso neutro.
  */
+const PAD = 4;   // padding del riel; lo necesita el arrastre para ubicar el dedo
+
 export function Segmented({ options, value, onChange, tone, style }) {
   // TODOS LOS SEGMENTOS MIDEN IGUAL, y eso no es cosmético: con anchos
   // distintos el pill tendría que animar `width`, que obliga a salir del hilo
@@ -76,20 +78,50 @@ export function Segmented({ options, value, onChange, tone, style }) {
   const activo = i >= 0;
   const tinte = tone || COLORS.primary;
 
+  // ARRASTRE. En iOS se apoya el dedo y se corre entre las opciones; con solo
+  // taps cada cambio es un salto y el pill nunca acompana al dedo.
+  //
+  // DOS TRAMPAS, las dos evitadas a proposito:
+  //
+  //  1. El PanResponder se crea UNA vez, asi que si leyera `ancho`, `value` u
+  //     `options` directo se quedaria con los de la primera pasada — y `ancho`
+  //     todavia vale 0 ahi. Por eso lee de un ref que se actualiza en cada
+  //     render.
+  //  2. Se mide por DESPLAZAMIENTO (`dx`), no por posicion. `locationX` cambia
+  //     de sistema de coordenadas cuando el dedo pasa sobre un hijo, asi que
+  //     una posicion absoluta salta sola al cruzar de segmento. El indice de
+  //     partida mas cuantos anchos se corrio no tiene ese problema.
+  const vivo = useRef({});
+  vivo.current = { ancho, options, value, onChange, i };
+
+  const pan = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_e, g) => Math.abs(g.dx) > 4 && Math.abs(g.dx) > Math.abs(g.dy),
+      onPanResponderGrant: () => { vivo.current.desde = vivo.current.i; },
+      onPanResponderMove: (_e, g) => {
+        const v = vivo.current;
+        if (!v.ancho || v.desde == null || v.desde < 0) return;
+        const k = Math.max(0, Math.min(v.options.length - 1, v.desde + Math.round(g.dx / v.ancho)));
+        const val = typeof v.options[k] === 'string' ? v.options[k] : v.options[k].value;
+        if (val !== v.value) v.onChange && v.onChange(val);
+      },
+    }),
+  ).current;
+
   return (
-    // El grupo es lo que hace que el pill y el riel se fundan al moverse, como
-    // dos gotas que se tocan. Fuera de iOS 26 es un View y no pasa nada.
-    <GlassGrupo spacing={28} style={[styles.track, style]}>
+    // GlassContainer quedo afuera: en el dispositivo dibujaba una mancha oscura
+    // pegada al pill que ademas tapaba la etiqueta de al lado. El efecto de
+    // fusion existe, pero no con un pill claro sobre fondo oscuro y etiquetas
+    // debajo. El pill vuelve a ser color solido, que es lo que se lee bien.
+    <View style={[styles.track, style]} {...pan.panHandlers}>
       <GlassFondo radius={RADIUS.full} />
 
       {/* El pill DESLIZA en vez de saltar de un segmento a otro. Antes el fondo
-          simplemente cambiaba de lugar, y sin movimiento no hay nada que se
-          funda ni que se lea como continuidad. */}
+          simplemente cambiaba de lugar, y sin movimiento no hay nada que se lea
+          como continuidad. */}
       {activo && ancho > 0 ? (
-        <GlassPieza
-          tinte={tinte}
-          radius={RADIUS.full}
-          style={[styles.pill, { width: ancho, transform: [{ translateX: x }] }]}
+        <Animated.View
+          style={[styles.pill, { width: ancho, backgroundColor: tinte, transform: [{ translateX: x }] }]}
           pointerEvents="none"
         />
       ) : null}
@@ -113,7 +145,7 @@ export function Segmented({ options, value, onChange, tone, style }) {
           </Pressable>
         );
       })}
-    </GlassGrupo>
+    </View>
   );
 }
 
@@ -163,7 +195,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: COLORS.glassBorder,
     borderRadius: RADIUS.full,
-    padding: 4,
+    padding: PAD,
   },
   segment: {
     borderRadius: RADIUS.full,
@@ -173,7 +205,7 @@ const styles = StyleSheet.create({
   },
   // Va detrás de las etiquetas: el texto del seleccionado tiene que leerse
   // POR ENCIMA del vidrio, no a través de él.
-  pill: { position: 'absolute', top: 4, bottom: 4, left: 4 },
+  pill: { position: 'absolute', top: PAD, bottom: PAD, left: PAD, borderRadius: RADIUS.full },
   segmentTxt: { fontFamily: FONTS.bold, fontSize: 13, lineHeight: 16 },
 
   itemChip: { paddingVertical: 7, paddingRight: 8, paddingLeft: 14 },
