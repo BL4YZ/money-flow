@@ -204,7 +204,7 @@ export function GlassPieza({ tinte, radius, interactivo = false, style, children
   );
 }
 
-export default function GlassSurface({ style, children, radius, ...rest }) {
+export default function GlassSurface({ style, children, radius, estilo = 'regular', ...rest }) {
   const nivel = nivelDeVidrio();
 
   // El canto superior iluminado. En iOS 26 no se dibuja: el material del
@@ -221,7 +221,11 @@ export default function GlassSurface({ style, children, radius, ...rest }) {
   if (nivel === 'liquid') {
     return (
       <GlassView
-        glassEffectStyle="regular"
+        // 'clear' deja ver el contenido de atras casi sin velo — es lo que hace
+        // que la barra de WhatsApp parezca un cristal y no un panel. 'regular'
+        // tiene mas cuerpo y es lo que quiere un boton, que tiene que leerse
+        // como superficie propia.
+        glassEffectStyle={estilo}
         isInteractive
         style={[style, radius ? { borderRadius: radius } : null]}
         {...rest}

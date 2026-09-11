@@ -3,7 +3,7 @@ import { View, Pressable, Animated, PanResponder, StyleSheet } from 'react-nativ
 import { LinearGradient } from 'expo-linear-gradient';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Txt from './Text';
-import GlassSurface, { nivelDeVidrio } from './GlassSurface';
+import GlassSurface, { GlassPieza, nivelDeVidrio } from './GlassSurface';
 import { COLORS, GRADIENTS, RADIUS, SHADOWS, FONTS, MOTION } from '../../theme';
 
 /**
@@ -68,8 +68,17 @@ export default function FloatingTabBar({ state, navigation, tabs }) {
 
   return (
     <View style={styles.wrapper} pointerEvents="box-none">
-      {/* Fade del contenido que scrollea por detrás. */}
-      <LinearGradient colors={GRADIENTS.scrollFade} style={styles.fade} pointerEvents="none" />
+      {/* EL FADE SOLO EXISTE SI NO HAY VIDRIO.
+          `scrollFade` termina en el fondo OPACO de la app, en una banda de 96px
+          donde la barra entra entera — asi que el vidrio estaba refractando un
+          rectangulo oscuro solido y no habia nada que ver a traves. Era la razon
+          de que no se pareciera a la barra de WhatsApp.
+          Con vidrio real el degradado sobra: el propio material es lo que separa
+          la barra del contenido, y dejar pasar lo de atras es justamente el
+          efecto. Sin vidrio sigue haciendo falta, o el contenido se corta seco. */}
+      {vidrio ? null : (
+        <LinearGradient colors={GRADIENTS.scrollFade} style={styles.fade} pointerEvents="none" />
+      )}
 
       {/* La barra flota SOBRE el contenido, asi que ser de vidrio no es un
           adorno: deja ver que hay algo abajo y de paso hace que el fade de
@@ -78,14 +87,20 @@ export default function FloatingTabBar({ state, navigation, tabs }) {
       <GlassSurface
         style={[styles.barra, vidrio && styles.barraVidrio]}
         radius={RADIUS.full}
+        estilo="clear"
         {...pan.panHandlers}
       >
+        {/* VIDRIO SOBRE VIDRIO, como el pill de WhatsApp. Un rectangulo de color
+            solido encima de una barra transparente se lee como una mancha
+            pintada; una pieza de vidrio tenue se lee como parte del mismo
+            cristal, apenas mas densa donde estas parado.
+            Sin GlassContainer: la fusion entre piezas ya se probo en el
+            selector de moneda y dibujaba una mancha oscura. */}
         {activo ? (
-          <Animated.View
-            style={[
-              styles.pill,
-              { width: activo.width, transform: [{ translateX: x }] },
-            ]}
+          <GlassPieza
+            tinte={COLORS.primarySoft}
+            radius={RADIUS.full}
+            style={[styles.pill, { width: activo.width, transform: [{ translateX: x }] }]}
             pointerEvents="none"
           />
         ) : null}
@@ -146,15 +161,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     ...SHADOWS.ambient,
   },
-  // Sobre vidrio el borde opaco delata el truco: pasa a una linea clara, que es
-  // como se ve el canto de un cristal y no como un marco dibujado alrededor.
-  barraVidrio: { borderColor: COLORS.glassBorder },
+  // SIN BORDE sobre vidrio. Una linea dibujada alrededor es justo lo que
+  // delata que es un panel pintado: en el material de Apple el canto lo define
+  // la refraccion, y por eso la barra de WhatsApp no tiene ningun borde.
+  barraVidrio: { borderWidth: 0 },
   pill: {
     position: 'absolute',
     top: 7,
     bottom: 7,
     left: 0,          // la posicion la pone translateX, que si es nativo
-    backgroundColor: COLORS.primarySoft,
     borderRadius: RADIUS.full,
   },
   item: {
