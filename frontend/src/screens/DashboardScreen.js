@@ -10,7 +10,7 @@ import { daysUntilDue } from '../utils/notifications';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import RefreshBadge from '../components/RefreshBadge';
-import SecuritySheet from '../components/SecuritySheet';
+import { usePlan } from '../context/PlanContext';
 import {
   Txt, Card, Input, Chip, Segmented, Badge, Button, BottomSheet, FloatingAction,
   EmptyState, ProgressBar, ScreenHeader, Glow, BarChart, formatUYU, formatMoney,
@@ -169,6 +169,7 @@ export default function DashboardScreen() {
   const { t, lang, toggleLanguage } = useLanguage();
 
   const [summary, setSummary] = useState(null);
+  const { isPremium, isTrial, trialDays, showUpgrade } = usePlan();
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -180,7 +181,6 @@ export default function DashboardScreen() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [chartMode, setChartMode] = useState('mes');   // 'mes' | 'cat'
-  const [seguridadVisible, setSeguridadVisible] = useState(false);
   const [customCategories, setCustomCategories] = useState([]);
   const [newCatInput, setNewCatInput] = useState('');
   const [showCatInput, setShowCatInput] = useState(false);
@@ -573,31 +573,45 @@ export default function DashboardScreen() {
           />
         }
       >
-        {/* Idioma, seguridad y salir viven ACA, a la derecha del nombre.
-            Antes eran una fila propia debajo del encabezado, y una fila entera
-            para tres cosas que casi nunca se tocan es alto perdido en la
-            primera pantalla — justo donde hay que entender que hacer.
-
-            Sin subtitulo y sin la marca del plan: el subtitulo era una frase
-            generica que no cambiaba nunca, y el diamante de premium al lado del
-            nombre se leia como un tilde de verificado sin serlo. */}
+        {/* Idioma y salir viven ACA, a la derecha del nombre. Antes eran una
+            fila propia debajo del encabezado, y una fila entera para dos cosas
+            que casi nunca se tocan es alto perdido en la primera pantalla —
+            justo donde hay que entender que hacer. */}
         <ScreenHeader
           title={firstName ? `Hola, ${firstName}` : 'MoneyFlow'}
+          subtitle={t('dashboard.heroSubtitle')}
           initials={iniciales}
           card={false}
+          titleBadge={
+            // PREMIUM: solo el diamante, sin pastilla ni gradiente. Es un
+            // estado, no algo que haya que tocar, y al lado del nombre una
+            // pastilla dorada le gana la mirada al nombre.
+            //
+            // GRATIS es otra cosa: ahi la marca SI invita a tocar —es la unica
+            // entrada al paywall desde el inicio— asi que sigue siendo una
+            // pastilla, chica y apagada.
+            isPremium ? (
+              <Ionicons name="diamond" size={13} color={COLORS.premium} />
+            ) : (
+              <Pressable onPress={() => showUpgrade()} hitSlop={8}>
+                <Badge
+                  variant={isTrial ? 'streak' : 'statusMuted'}
+                  icon={isTrial ? 'timer-outline' : 'lock-closed'}
+                  label={isTrial ? `${trialDays}d` : t('premium.freeBadge')}
+                />
+              </Pressable>
+            )
+          }
           actions={
             <>
-              {/* Sin palabra: tres etiquetas al lado del nombre no entran en un
-                  telefono angosto, y el nombre es lo que tiene que sobrevivir.
-                  El lector de pantalla los sigue nombrando. */}
-              <Button
-                label=""
-                variant="ghost"
-                size="sm"
-                icon="shield-checkmark-outline"
-                a11yLabel={t('common.security')}
-                onPress={() => setSeguridadVisible(true)}
-              />
+              {/* Sin palabra el de salir: dos etiquetas al lado del nombre no
+                  entran en un telefono angosto, y el nombre es lo que tiene que
+                  sobrevivir. El lector de pantalla lo sigue nombrando.
+
+                  ACA HABIA UN ESCUDO que abria la hoja "Seguridad y datos", y se
+                  saco por pedido. La hoja sigue existiendo y sigue estando a un
+                  toque desde Movimientos, que es donde alguien que esta por
+                  entregar el resumen de su banco realmente se lo pregunta. */}
               <Button
                 label={lang === 'es' ? 'EN' : 'ES'}
                 variant="ghost"
@@ -946,7 +960,6 @@ export default function DashboardScreen() {
         />
       </BottomSheet>
 
-      <SecuritySheet visible={seguridadVisible} onClose={() => setSeguridadVisible(false)} />
     </View>
   );
 }
