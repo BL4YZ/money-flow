@@ -35,6 +35,9 @@ const CASOS = [
   // El frágil: se importa desde 'expo-file-system/legacy' a propósito, porque
   // el entrypoint principal ya no lo trae. Ver CLAUDE.md.
   ['expo-file-system',     'build/legacy/FileSystem.d.ts', 'readAsStringAsync'],
+  ['expo-camera',          'build/index.d.ts',            'useCameraPermissions'],
+  ['expo-camera',          'build/index.d.ts',            'CameraView'],
+  ['expo-camera',          'build/Camera.types.d.ts',     'onBarcodeScanned'],
   ['expo-blur',            'build/index.d.ts',            'BlurView'],
   ['expo-glass-effect',    'build/index.d.ts',            'GlassView'],
   ['expo-glass-effect',    'build/index.d.ts',            'isLiquidGlassAvailable'],

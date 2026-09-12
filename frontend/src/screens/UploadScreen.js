@@ -5,6 +5,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import Toast from 'react-native-toast-message';
 import api from '../api/client';
 import { encryptFile } from '../utils/encryption';
+import ReceiptScanner from '../components/ReceiptScanner';
 import SecuritySheet from '../components/SecuritySheet';
 import { usePlan } from '../context/PlanContext';
 import { useLanguage } from '../context/LanguageContext';
@@ -30,6 +31,7 @@ export default function UploadScreen() {
   // adivinar entre pesos y dolares es multiplicar o dividir por 40 los
   // importes de alguien. 'auto' deja decidir al preambulo.
   const [moneda, setMoneda] = useState('auto');
+  const [escanerVisible, setEscanerVisible] = useState(false);
   const [result, setResult] = useState(null);
   const [fileName, setFileName] = useState(null);
   const [seguridadVisible, setSeguridadVisible] = useState(false);
@@ -185,6 +187,22 @@ export default function UploadScreen() {
           </View>
         </Pressable>
 
+        {/* EL ESCANER VA PRIMERO, y no es orden alfabetico: leyendo el QR el
+            importe sale EXACTO del comprobante, mientras que un resumen hay que
+            bajarlo del banco y acordarse de hacerlo. Es el camino con menos
+            friccion y el mas confiable a la vez. */}
+        <Button
+          label="Escanear ticket"
+          icon="qr-code-outline"
+          size="lg"
+          fullWidth
+          onPress={() => setEscanerVisible(true)}
+          style={{ marginTop: SPACING.m }}
+        />
+        <Txt variant="caption" color={COLORS.textLow} style={styles.pieEscaner}>
+          Del QR del comprobante sale el importe exacto, sin leer la foto.
+        </Txt>
+
         {/* En Uruguay una persona tiene cuenta en pesos y cuenta en dolares, y
             cada resumen es de UNA de las dos. Normalmente la moneda esta en el
             preambulo del archivo y esto queda en "Detectar"; el override existe
@@ -260,6 +278,10 @@ export default function UploadScreen() {
         <View style={{ height: 110 }} />
       </ScrollView>
       <SecuritySheet visible={seguridadVisible} onClose={() => setSeguridadVisible(false)} />
+      <ReceiptScanner
+        visible={escanerVisible}
+        onClose={() => setEscanerVisible(false)}
+      />
     </View>
   );
 }
@@ -274,6 +296,7 @@ function Stat({ label, value, color }) {
 }
 
 const styles = StyleSheet.create({
+  pieEscaner: { textAlign: 'center', marginTop: 6 },
   moneda: { marginTop: SPACING.m },
   root: { flex: 1, backgroundColor: COLORS.bg },
   content: { paddingHorizontal: SPACING.m, paddingTop: 60 },

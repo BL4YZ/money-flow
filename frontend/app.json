@@ -50,7 +50,7 @@
       },
       "infoPlist": {
         "NSPhotoLibraryUsageDescription": "Para subir estados de cuenta en imagen",
-        "NSCameraUsageDescription": "Para fotografiar estados de cuenta",
+        "NSCameraUsageDescription": "Para escanear el QR de tus comprobantes. Las fotos no se guardan ni se envían: sólo viaja el texto del código.",
         "NSUserNotificationsUsageDescription": "Para recordatorios de pagos y vencimientos de suscripciones"
       }
     },
@@ -64,7 +64,8 @@
         "READ_EXTERNAL_STORAGE",
         "WRITE_EXTERNAL_STORAGE",
         "RECEIVE_BOOT_COMPLETED",
-        "VIBRATE"
+        "VIBRATE",
+        "CAMERA"
       ]
     },
     "web": {
@@ -89,7 +90,13 @@
       "expo-localization",
       "expo-status-bar",
       "expo-font",
-      "expo-sharing"
+      "expo-sharing",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Para escanear el QR de tus comprobantes. Las fotos no se guardan ni se envían: sólo viaja el texto del código."
+        }
+      ]
     ],
     "extra": {
       "eas": {
