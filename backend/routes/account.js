@@ -92,17 +92,32 @@ router.get('/export', async (req, res) => {
 // de reinstalar o desde otro telefono.
 //
 // 'todo' es un valor valido: significa ver las dos juntas, convertidas a pesos.
+// Cada preferencia se manda SOLA, y por eso se aplican por separado: mandar la
+// moneda no puede apagar los avisos ni al reves. Antes el cuerpo entero era
+// obligatorio porque habia una sola.
 router.patch('/preferences', async (req, res) => {
-  const { display_currency } = req.body || {};
-  if (!['UYU', 'USD', 'todo'].includes(display_currency)) {
+  const { display_currency, notify_bills } = req.body || {};
+
+  if (display_currency !== undefined && !['UYU', 'USD', 'todo'].includes(display_currency)) {
     return res.status(400).json({ error: 'Moneda no válida' });
   }
+  if (notify_bills !== undefined && typeof notify_bills !== 'boolean') {
+    return res.status(400).json({ error: 'notify_bills tiene que ser true o false' });
+  }
+  if (display_currency === undefined && notify_bills === undefined) {
+    return res.status(400).json({ error: 'No hay nada para cambiar' });
+  }
+
   try {
     const { rows } = await db.query(
-      'UPDATE users SET display_currency = $1 WHERE id = $2 RETURNING display_currency',
-      [display_currency, req.userId]
+      `UPDATE users
+          SET display_currency = COALESCE($1, display_currency),
+              notify_bills     = COALESCE($2, notify_bills)
+        WHERE id = $3
+      RETURNING display_currency, notify_bills`,
+      [display_currency ?? null, notify_bills ?? null, req.userId],
     );
-    res.json({ display_currency: rows[0].display_currency });
+    res.json(rows[0]);
   } catch (err) {
     console.error('PATCH /account/preferences error:', err.message);
     res.status(500).json({ error: 'Error al guardar la preferencia' });

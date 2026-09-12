@@ -15,6 +15,7 @@ import DashboardScreen from '../screens/DashboardScreen';
 import UploadScreen from '../screens/UploadScreen';
 import SubscriptionsScreen from '../screens/SubscriptionsScreen';
 import GoalsScreen from '../screens/GoalsScreen';
+import SettingsScreen from '../screens/SettingsScreen';
 import SuggestionsScreen from '../screens/SuggestionsScreen';
 import ShoppingScreen from '../screens/ShoppingScreen';
 import SearchScreen from '../screens/SearchScreen';
@@ -67,6 +68,7 @@ export default function AppNavigator() {
             <>
               <Stack.Screen name="Main" component={MainTabs} />
               <Stack.Screen name="Sugerencias" component={SuggestionsScreen} />
+              <Stack.Screen name="Configuracion" component={SettingsScreen} />
               <Stack.Screen
                 name="Paywall"
                 component={PaywallScreen}

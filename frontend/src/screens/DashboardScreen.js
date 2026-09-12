@@ -3,6 +3,7 @@ import {
   View, ScrollView, StyleSheet, ActivityIndicator, Pressable,
   RefreshControl, Alert, Animated, Easing,
 } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Toast from 'react-native-toast-message';
 import api from '../api/client';
@@ -165,8 +166,9 @@ function CategoryRow({ cat, total, totalIncome, active, onPress, budget, onSetBu
 }
 
 export default function DashboardScreen() {
-  const { user, logout } = useAuth();
-  const { t, lang, toggleLanguage } = useLanguage();
+  const navigation = useNavigation();
+  const { user } = useAuth();
+  const { t } = useLanguage();
 
   const [summary, setSummary] = useState(null);
   const { isPremium, isTrial, trialDays, showUpgrade } = usePlan();
@@ -573,14 +575,16 @@ export default function DashboardScreen() {
           />
         }
       >
-        {/* Idioma y salir viven ACA, a la derecha del nombre. Antes eran una
-            fila propia debajo del encabezado, y una fila entera para dos cosas
-            que casi nunca se tocan es alto perdido en la primera pantalla —
-            justo donde hay que entender que hacer. */}
+        {/* EL PERFIL ABRE LA CONFIGURACION. El idioma era un boton "EN/ES" aca
+            arriba, al lado de salir: dos controles que casi nadie toca ocupando
+            lugar en la pantalla donde hay que entender que hacer. Los dos se
+            mudaron adentro, y el engranaje esta ademas del avatar porque "tocar
+            la foto" no se le ocurre a nadie que no lo sepa de antes. */}
         <ScreenHeader
           title={firstName ? `Hola, ${firstName}` : 'MoneyFlow'}
           subtitle={t('dashboard.heroSubtitle')}
           initials={iniciales}
+          onAvatarPress={() => navigation.navigate('Configuracion')}
           card={false}
           titleBadge={
             // PREMIUM: solo el diamante, sin pastilla ni gradiente. Es un
@@ -602,32 +606,8 @@ export default function DashboardScreen() {
               </Pressable>
             )
           }
-          actions={
-            <>
-              {/* Sin palabra el de salir: dos etiquetas al lado del nombre no
-                  entran en un telefono angosto, y el nombre es lo que tiene que
-                  sobrevivir. El lector de pantalla lo sigue nombrando.
-
-                  ACA HABIA UN ESCUDO que abria la hoja "Seguridad y datos", y se
-                  saco por pedido. La hoja sigue existiendo y sigue estando a un
-                  toque desde Movimientos, que es donde alguien que esta por
-                  entregar el resumen de su banco realmente se lo pregunta. */}
-              <Button
-                label={lang === 'es' ? 'EN' : 'ES'}
-                variant="ghost"
-                size="sm"
-                onPress={toggleLanguage}
-              />
-              <Button
-                label=""
-                variant="ghost"
-                size="sm"
-                icon="log-out-outline"
-                a11yLabel={t('common.logout')}
-                onPress={logout}
-              />
-            </>
-          }
+          actionIcon="settings-outline"
+          onActionPress={() => navigation.navigate('Configuracion')}
         />
 
         {/* SELECTOR DE CUENTA, SIEMPRE VISIBLE.

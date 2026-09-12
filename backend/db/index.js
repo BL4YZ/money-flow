@@ -57,6 +57,12 @@ async function initSchema() {
   try {
     await p.query(`
       ALTER TABLE users ADD COLUMN IF NOT EXISTS push_token VARCHAR(200);
+
+      -- Recordatorios de vencimientos: encendido salvo que la persona lo apague.
+      -- NO alcanza con borrar el push_token para apagarlos: el cliente lo
+      -- registra de nuevo en cada login y en cada vuelta a primer plano, asi que
+      -- el aviso se volveria a encender solo y el interruptor seria mentira.
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS notify_bills BOOLEAN NOT NULL DEFAULT TRUE;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS plan VARCHAR(20) NOT NULL DEFAULT 'free';
       ALTER TABLE users ADD COLUMN IF NOT EXISTS plan_expires_at TIMESTAMPTZ;
 

@@ -17,23 +17,34 @@ export default function ScreenHeader({
   subtitle,
   initials,          // muestra el avatar si viene
   onAvatarPress,
+  // Flecha de volver, en el lugar del avatar. Las pantallas del stack quedaban
+  // con el gesto del sistema como unica salida, que es justo el tipo de camino
+  // invisible que esta app viene arreglando.
+  onBack,
   // Marca al lado del titulo, en la misma linea: es un ESTADO de quien mira
   // (su plan, por ejemplo), no una accion. Por eso va pegada al nombre y no
   // entre los botones, donde compite con cosas que se tocan.
   titleBadge,
   actionIcon,
   onActionPress,
-  // Botones sueltos al extremo derecho, en la MISMA linea del nombre. Existe
-  // porque en el Dashboard esos botones ocupaban una fila entera para si solos
-  // debajo del encabezado: tres cosas que casi nunca se tocan comiendose el
-  // alto de la primera pantalla.
-  actions,
   card = true,
   style,
 }) {
   return (
     <View style={[card ? styles.card : styles.plano, style]}>
       <View style={styles.fila}>
+        {onBack ? (
+          <Pressable
+            onPress={onBack}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Volver"
+            style={({ pressed }) => [styles.accion, styles.volver, pressed && styles.pressed]}
+          >
+            <Ionicons name="chevron-back" size={20} color={COLORS.textHigh} />
+          </Pressable>
+        ) : null}
+
         {initials ? (
           <Pressable
             onPress={onAvatarPress}
@@ -57,8 +68,6 @@ export default function ScreenHeader({
             </Txt>
           ) : null}
         </View>
-
-        {actions ? <View style={styles.acciones}>{actions}</View> : null}
 
         {actionIcon ? (
           <Pressable
@@ -100,7 +109,7 @@ const styles = StyleSheet.create({
   tituloFila: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   titulo: { fontFamily: FONTS.extrabold, fontSize: 20, lineHeight: 23, letterSpacing: -0.4, color: COLORS.textHigh },
   sub: { fontSize: 12.5, lineHeight: 16 },
-  acciones: { flexDirection: 'row', alignItems: 'center', marginLeft: 8 },
+  volver: { marginLeft: 0, marginRight: 12 },
   accion: {
     width: 40,
     height: 40,

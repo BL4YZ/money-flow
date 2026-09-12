@@ -25,7 +25,7 @@ async function sendBillReminders() {
       SELECT b.*, u.push_token
       FROM bills b
       JOIN users u ON u.id = b.user_id
-      WHERE b.is_active = true AND u.push_token IS NOT NULL
+      WHERE b.is_active = true AND u.push_token IS NOT NULL AND u.notify_bills
     `);
 
     const messages = [];
