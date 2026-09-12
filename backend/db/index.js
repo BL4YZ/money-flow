@@ -187,7 +187,7 @@ async function initSchema() {
       -- primera persona que escanea ahi.
       --
       -- ES GLOBAL, SIN user_id, Y ESO ES A PROPOSITO: un RUT es la misma empresa
-      -- para todo el mundo. Que alguien nombre a Unitex una vez le ahorra el
+      -- para todo el mundo. Que alguien nombre a Vinitex una vez le ahorra el
       -- paso a todos los demas — y no hay dato personal en la tabla, solo
       -- informacion comercial que ya viene impresa en el ticket. Por lo mismo NO
       -- entra en el borrado de cuenta: no es de nadie.
@@ -196,6 +196,29 @@ async function initSchema() {
         nombre     VARCHAR(120) NOT NULL,
         updated_at TIMESTAMPTZ DEFAULT NOW()
       );
+
+      -- REPARACION DE UN NOMBRE QUE PUSE YO, NO UN USUARIO. scripts/verify-
+      -- receipts.js mandaba una descripcion con el RUT real del ticket que se usa
+      -- de ejemplo: lo nombro 'Unitex' y despues lo piso con 'Unitex devolucion',
+      -- el texto del caso de la nota de credito. Como el .env local apunta a la
+      -- misma base que Render, eso se escribio en produccion, y como el padron es
+      -- global y sobrevive al borrado de la cuenta de prueba, le aparecio a una
+      -- persona escaneando su ticket: un gasto suyo rotulado como la devolucion
+      -- de otro comercio. El comercio es VINITEX (CONAPLUS S.A.) — 'Unitex' fue
+      -- ademas un error mio leyendo el logo.
+      --
+      -- Se corrige SOLO si el nombre sigue siendo uno de esos dos: si alguien ya
+      -- lo arreglo a mano desde la app, su correccion manda sobre esta.
+      UPDATE cfe_emisores SET nombre = 'Vinitex', updated_at = NOW()
+       WHERE rut = '215080550011' AND nombre IN ('Unitex', 'Unitex devolución');
+
+      -- Y los movimientos que ya se guardaron con ese rotulo. Igual de acotado:
+      -- solo los que salieron del escaner, solo de ese RUT, y solo si nadie les
+      -- cambio el texto despues.
+      UPDATE transactions SET description = 'Vinitex'
+       WHERE source = 'receipt'
+         AND external_id LIKE 'cfe|215080550011|%'
+         AND description IN ('Unitex', 'Unitex devolución', 'Comprobante 215080550011');
 
       CREATE TABLE IF NOT EXISTS budgets (
         id           SERIAL PRIMARY KEY,

@@ -14,6 +14,17 @@
  *   - una FOTO en /api/upload ya no dice "no se pudo leer el PDF"
  *
  * Se registra un usuario descartable y se borra solo por DELETE /api/account.
+ *
+ * OJO: `localhost` NO es un entorno aparte. El .env local apunta a la MISMA
+ * base de Supabase que usa Render, asi que todo lo que este script escriba es
+ * produccion. El usuario se borra solo; el PADRON DE EMISORES no, porque esta
+ * deliberadamente fuera del borrado de cuenta (un RUT es la misma empresa para
+ * todos). Por eso este script NUNCA manda `description` con un RUT real: la
+ * primera version lo nombro 'Unitex' y despues lo piso con 'Unitex devolucion'
+ * —el texto de un caso de prueba— y ese nombre le aparecio a una persona
+ * escaneando su ticket de verdad. El comercio ni siquiera es Unitex: es
+ * Vinitex. Para el padron se usan RUTs inventados, y al final se chequea que
+ * la fila del RUT real quedo como estaba.
  */
 require('dotenv').config({ path: require('path').resolve(__dirname, '../.env') });
 const db = require('../db');
@@ -49,9 +60,13 @@ const api = async (metodo, ruta, cuerpo) => {
   if (!alta.data?.token) { console.error('no se pudo registrar:', alta.status, alta.data); process.exit(1); }
   token = alta.data.token;
 
+  const { rows: antes } = await db.query('SELECT nombre FROM cfe_emisores WHERE rut = $1',
+    ['215080550011']);
+  const padronAntes = antes[0]?.nombre || null;
+
   try {
     // 1. El camino feliz.
-    let r = await api('POST', '/receipts/qr', { qr: QR_REAL, description: 'Unitex' });
+    let r = await api('POST', '/receipts/qr', { qr: QR_REAL });
     chequeo('carga el comprobante', r.status === 201 && r.data.nueva === true, `HTTP ${r.status}`);
     chequeo('con el TOTAL del QR, exacto', r.data.comprobante?.total === 1007,
       `$${r.data.comprobante?.total}`);
@@ -60,7 +75,7 @@ const api = async (metodo, ruta, cuerpo) => {
       'el QR no trae moneda; el ticket la imprime pero el código no');
 
     // 2. LO QUE IMPORTA: escanear dos veces el mismo ticket.
-    r = await api('POST', '/receipts/qr', { qr: QR_REAL, description: 'Unitex' });
+    r = await api('POST', '/receipts/qr', { qr: QR_REAL });
     chequeo('escanearlo de nuevo NO duplica', r.status === 200 && r.data.nueva === false, `HTTP ${r.status}`);
 
     const movs = await api('GET', '/transactions');
@@ -73,12 +88,12 @@ const api = async (metodo, ruta, cuerpo) => {
     // 3. Nota de crédito: plata que vuelve.
     r = await api('POST', '/receipts/qr', {
       qr: QR_REAL.replace(',101,', ',102,').replace(',424298,', ',424299,'),
-      description: 'Unitex devolución',
     });
     chequeo('una nota de crédito entra como INGRESO',
       r.status === 201 && r.data.comprobante?.tipo?.match(/Cr[eé]dito/), r.data.comprobante?.tipo);
     const movs2 = await api('GET', '/transactions');
-    const nc = (movs2.data.transactions || []).find((t) => /devoluci/i.test(t.description));
+    const nc = (movs2.data.transactions || [])
+      .find((t) => t.external_id === 'cfe|215080550011|102|A|424299');
     chequeo('...y queda como credit', nc?.type === 'credit', nc?.type);
 
     // 4. Un QR cualquiera.
@@ -133,6 +148,15 @@ const api = async (metodo, ruta, cuerpo) => {
     chequeo('borrar una cuenta no borra el padron', quedan.length === 1,
       'un RUT es la misma empresa para todos');
     await db.query('DELETE FROM cfe_emisores WHERE rut = $1', [RUT_NUEVO]);
+    // LO QUE ESTE SCRIPT NO PUEDE HACER: dejar nombrado un RUT real. El padron
+    // es global y sobrevive al borrado de la cuenta de prueba, asi que un nombre
+    // escrito aca se le aparece a cualquiera que escanee en ese comercio.
+    const { rows: despues } = await db.query('SELECT nombre FROM cfe_emisores WHERE rut = $1',
+      ['215080550011']);
+    chequeo('no ensucia el padron con el RUT real',
+      (despues[0]?.nombre || null) === padronAntes,
+      padronAntes === null ? 'sigue sin nombre' : `sigue como "${padronAntes}"`);
+
   } finally {
     await api('DELETE', '/account', { password: PASS });
   }

@@ -31,6 +31,9 @@ export default function ReceiptScanner({ visible, onClose, onCargado }) {
   // sin obligar a escanear otra vez.
   const [ultimoQr, setUltimoQr] = useState(null);
   const [nombre, setNombre] = useState('');
+  // El padron es global y nadie lo valida: lo que escribio el primero queda
+  // para todos. Asi que tiene que poder corregirse, no solo completarse.
+  const [corrigiendo, setCorrigiendo] = useState(false);
   // Un QR se lee MUCHAS veces por segundo mientras esté en cuadro. Sin esto se
   // dispararían decenas de requests por el mismo ticket.
   const yaLeido = useRef(false);
@@ -39,6 +42,8 @@ export default function ReceiptScanner({ visible, onClose, onCargado }) {
     yaLeido.current = false;
     setResultado(null);
     setEnviando(false);
+    setCorrigiendo(false);
+    setNombre('');
     onClose && onClose();
   }, [onClose]);
 
@@ -94,6 +99,7 @@ export default function ReceiptScanner({ visible, onClose, onCargado }) {
       setResultado(r);
       onCargado && onCargado(r);
       setNombre('');
+      setCorrigiendo(false);
       Toast.show({ type: 'success', text1: `Guardado como ${n}` });
     } catch (_) {
       Toast.show({ type: 'error', text1: 'No se pudo guardar el nombre' });
@@ -134,11 +140,17 @@ export default function ReceiptScanner({ visible, onClose, onCargado }) {
 
           {/* Se pregunta UNA sola vez por comercio: el nombre entra en el padron
               compartido, asi que el proximo escaneo en ese RUT —tuyo o de
-              cualquiera— ya viene nombrado. El QR trae el RUT, nunca el nombre. */}
-          {!c.emisorConocido ? (
+              cualquiera— ya viene nombrado. El QR trae el RUT, nunca el nombre.
+
+              Y SE PUEDE CORREGIR. El padron no lo valida nadie, asi que un
+              nombre equivocado —o el de otro comercio, o una nota que no es un
+              nombre— se queda ahi para todo el mundo hasta que alguien lo
+              arregle. Si solo se pudiera completar cuando esta vacio, el unico
+              arreglo posible seria tocar la base a mano. */}
+          {!c.emisorConocido || corrigiendo ? (
             <View style={styles.nombrar}>
               <Txt variant="caption" color={COLORS.textLow} style={styles.textoCentrado}>
-                ¿Qué comercio es? Se pregunta una sola vez.
+                {c.emisorConocido ? '¿Cómo se llama en realidad?' : '¿Qué comercio es? Se pregunta una sola vez.'}
               </Txt>
               <Input
                 value={nombre}
@@ -148,15 +160,24 @@ export default function ReceiptScanner({ visible, onClose, onCargado }) {
                 style={{ marginTop: SPACING.s }}
               />
               <Button
-                label="Guardar nombre"
+                label={c.emisorConocido ? 'Corregir nombre' : 'Guardar nombre'}
                 onPress={guardarNombre}
                 loading={enviando}
-                disabled={!nombre.trim()}
+                disabled={!nombre.trim() || nombre.trim() === c.emisorNombre}
                 fullWidth
                 style={{ marginTop: SPACING.s }}
               />
             </View>
-          ) : null}
+          ) : (
+            <Pressable
+              onPress={() => { setNombre(c.emisorNombre || ''); setCorrigiendo(true); }}
+              hitSlop={8}
+            >
+              <Txt variant="caption" color={COLORS.textLow} style={styles.corregir}>
+                No es {c.emisorNombre} · corregir
+              </Txt>
+            </Pressable>
+          )}
           {/* El QR NO trae la moneda: el ticket la imprime pero el código no.
               Se dice, en vez de que el usuario lo descubra por un total 40 veces
               corrido. */}
@@ -168,7 +189,7 @@ export default function ReceiptScanner({ visible, onClose, onCargado }) {
           <Button
             label="Escanear otro"
             variant="secondary"
-            onPress={() => { yaLeido.current = false; setResultado(null); }}
+            onPress={() => { yaLeido.current = false; setResultado(null); setCorrigiendo(false); setNombre(''); }}
             style={{ marginTop: SPACING.m }}
           />
         </View>
@@ -234,6 +255,7 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.l,
   },
   nombrar: { alignSelf: 'stretch', marginTop: SPACING.m },
+  corregir: { textAlign: 'center', marginTop: SPACING.s, textDecorationLine: 'underline' },
   ayuda: { position: 'absolute', left: SPACING.l, right: SPACING.l, bottom: 90, gap: 4 },
   velo: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
   cerrar: {
