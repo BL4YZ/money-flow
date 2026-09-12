@@ -8,6 +8,13 @@
  *     215080550011,101,A,424298,1007.00,20260730,nh28472Ha%2FIdlJGEd%2BYJdXTUBp8%3D
  *     └ RUT emisor  └tipo └serie └número └total  └fecha   └hash de seguridad
  *
+ * LA FECHA NO VIENE SIEMPRE IGUAL, y eso rompió un escaneo real. La DGI
+ * documenta `aaaammdd` y así la imprime Unitex, pero otro comprobante —mismo
+ * servicio, mismo formato de query— la trae como `30/07/2026`. El parser exigía
+ * ocho dígitos, devolvía null, y la app decía "ese QR no es un comprobante"
+ * sobre un comprobante perfectamente válido. Se aceptan las dos formas (ver
+ * `fechaISO`); lo que no se acepta es una fecha que no existe.
+ *
  * POR QUÉ ESTO IMPORTA MÁS QUE LEER EL TICKET. El importe y la fecha salen
  * EXACTOS: no hay OCR que se equivoque de coma, ni foto torcida, ni papel
  * térmico lavado. Y `RUT+tipo+serie+número` identifica el comprobante de forma
@@ -41,6 +48,29 @@ const TIPOS = {
   112: { nombre: 'Nota de Crédito de e-Factura',    signo: 'credit' },
   113: { nombre: 'Nota de Débito de e-Factura',     signo: 'debit'  },
 };
+
+// Fecha del comprobante a ISO, o null si no es una fecha de verdad.
+//
+// Se aceptan `aaaammdd` (lo que dice la especificación) y `dd/mm/aaaa` con
+// barras o guiones (lo que imprimen varios emisores). **El día va primero**: en
+// Uruguay se escribe así siempre — el mismo ticket pone "29/06/2028" en la fecha
+// de vencimiento. Leerlo al revés cargaría el gasto en otro mes sin que nada
+// avisara, así que el mes fuera de 1..12 se rechaza en vez de reinterpretarse.
+function fechaISO(texto) {
+  const s = String(texto || '').trim();
+  let a, m, d, q;
+  if ((q = s.match(/^(\d{4})(\d{2})(\d{2})$/)))              { [, a, m, d] = q; }
+  else if ((q = s.match(/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})$/))) { [, a, m, d] = q; }
+  else if ((q = s.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/))) { [, d, m, a] = q; }
+  else return null;
+
+  const iso = `${a}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  // Que el 31 de febrero no entre como 3 de marzo: si la fecha no sobrevive el
+  // viaje de ida y vuelta, no era una fecha.
+  const fecha = new Date(`${iso}T00:00:00Z`);
+  if (Number.isNaN(fecha.getTime()) || fecha.toISOString().slice(0, 10) !== iso) return null;
+  return iso;
+}
 
 /**
  * Devuelve los datos del comprobante, o null si el texto no es un QR de la DGI.
@@ -80,7 +110,8 @@ function parseCfeQr(texto) {
   if (!/^\d{12}$/.test(rut)) return null;
   if (!Number.isFinite(tipo)) return null;
   if (!Number.isFinite(total) || total < 0) return null;
-  if (!/^\d{8}$/.test(fecha)) return null;
+  const fechaIso = fechaISO(fecha);
+  if (!fechaIso) return null;
   if (!serie || !numero) return null;
 
   const meta = TIPOS[tipo] || { nombre: `Comprobante ${tipo}`, signo: 'debit' };
@@ -93,8 +124,8 @@ function parseCfeQr(texto) {
     serie,
     numero,
     total,
-    // ISO para que entre directo en la columna `date`.
-    date: `${fecha.slice(0, 4)}-${fecha.slice(4, 6)}-${fecha.slice(6, 8)}`,
+    // Ya en ISO, para que entre directo en la columna `date`.
+    date: fechaIso,
     hash,
     // Clave de idempotencia: RUT + tipo + serie + número es único en el país.
     // Mismo rol que el `external_id` del resumen bancario, y por eso el mismo
@@ -105,4 +136,4 @@ function parseCfeQr(texto) {
   };
 }
 
-module.exports = { parseCfeQr, TIPOS };
+module.exports = { parseCfeQr, TIPOS, __testing: { fechaISO } };
