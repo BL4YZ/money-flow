@@ -3,7 +3,7 @@ import { View, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Txt from './Text';
-import { COLORS, GRADIENTS, RADIUS, FONTS, storeDot } from '../../theme';
+import { COLORS, GRADIENTS, RADIUS, FONTS, storeDot, estilos } from '../../theme';
 
 /**
  * Badges y pills. Reemplaza bestBadge (×3), storeDot, discountBadge, streakPill
@@ -89,7 +89,10 @@ export function StoreBadge({ storeId, name, style }) {
   );
 }
 
-const styles = StyleSheet.create({
+// Se declara con `estilos()` y no con `StyleSheet.create` suelto: create COPIA
+// los colores al cargar el modulo, asi que un cambio de tema en caliente no
+// repintaria nada. Ver theme.js.
+const styles = estilos(() => StyleSheet.create({
   pill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -113,4 +116,4 @@ const styles = StyleSheet.create({
     paddingHorizontal: 13,
   },
   storeName: { fontFamily: FONTS.semibold },
-});
+}));

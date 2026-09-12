@@ -17,8 +17,7 @@ import {
   EmptyState, ProgressBar, ScreenHeader, Glow, BarChart, formatUYU, formatMoney,
 } from '../components/ui';
 import {
-  COLORS, SPACING, RADIUS, FONTS, categoryColor,
-} from '../theme';
+  COLORS, SPACING, RADIUS, FONTS, categoryColor, estilos } from '../theme';
 
 const CATEGORY_ICONS = {
   Supermercado: 'cart-outline',
@@ -944,7 +943,10 @@ export default function DashboardScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+// Se declara con `estilos()` y no con `StyleSheet.create` suelto: create COPIA
+// los colores al cargar el modulo, asi que un cambio de tema en caliente no
+// repintaria nada. Ver theme.js.
+const styles = estilos(() => StyleSheet.create({
   root: { flex: 1, backgroundColor: COLORS.bg },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.bg },
   content: { paddingHorizontal: SPACING.m, paddingTop: 60 },
@@ -1026,4 +1028,4 @@ const styles = StyleSheet.create({
 
   catChips: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.s },
   newCatRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.s, marginTop: SPACING.s },
-});
+}));

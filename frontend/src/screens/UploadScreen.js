@@ -13,7 +13,7 @@ import { useLanguage } from '../context/LanguageContext';
 import {
   Txt, Card, Badge, Button, Segmented, ProgressBar, ScreenHeader, Glow, formatUYU,
 } from '../components/ui';
-import { COLORS, SPACING, RADIUS, FONTS, SHADOWS } from '../theme';
+import { COLORS, SPACING, RADIUS, FONTS, SHADOWS, estilos } from '../theme';
 
 /**
  * Movimientos: por dónde entran.
@@ -441,7 +441,10 @@ function Stat({ label, value, color }) {
   );
 }
 
-const styles = StyleSheet.create({
+// Se declara con `estilos()` y no con `StyleSheet.create` suelto: create COPIA
+// los colores al cargar el modulo, asi que un cambio de tema en caliente no
+// repintaria nada. Ver theme.js.
+const styles = estilos(() => StyleSheet.create({
   root: { flex: 1, backgroundColor: COLORS.bg },
   content: { paddingHorizontal: SPACING.m, paddingTop: 60 },
   bloque: { marginTop: SPACING.m },
@@ -502,4 +505,4 @@ const styles = StyleSheet.create({
   txDesc: { fontFamily: FONTS.semibold },
   txMeta: { fontSize: 12, marginTop: 2 },
   txAmount: { fontFamily: FONTS.amountBold, fontSize: 13, lineHeight: 16, marginLeft: SPACING.s },
-});
+}));

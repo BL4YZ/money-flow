@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Pressable, StyleSheet } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Txt from './Text';
-import { COLORS, RADIUS, FONTS } from '../../theme';
+import { COLORS, RADIUS, FONTS, estilos } from '../../theme';
 
 /**
  * Cabecera de pantalla. Reemplaza los 5 topBar y los 6 bloques hero que estaban
@@ -82,7 +82,10 @@ export default function ScreenHeader({
   );
 }
 
-const styles = StyleSheet.create({
+// Se declara con `estilos()` y no con `StyleSheet.create` suelto: create COPIA
+// los colores al cargar el modulo, asi que un cambio de tema en caliente no
+// repintaria nada. Ver theme.js.
+const styles = estilos(() => StyleSheet.create({
   card: {
     backgroundColor: COLORS.surface,
     borderWidth: 1.5,
@@ -121,4 +124,4 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginLeft: 12,
   },
-});
+}));

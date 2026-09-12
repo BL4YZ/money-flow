@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { View, StyleSheet, ActivityIndicator } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
+import { useTema } from '../context/ThemeContext';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 
@@ -8,7 +9,7 @@ import { useAuth } from '../context/AuthContext';
 import { PlanProvider } from '../context/PlanContext';
 import UpgradeModal from '../components/UpgradeModal';
 import { FloatingTabBar } from '../components/ui';
-import { COLORS } from '../theme';
+import { COLORS, estilos } from '../theme';
 
 import LoginScreen from '../screens/LoginScreen';
 import DashboardScreen from '../screens/DashboardScreen';
@@ -51,8 +52,11 @@ function MainTabs() {
 
 export default function AppNavigator() {
   const { user, loading } = useAuth();
+  const { tema, listo } = useTema();
+  // Dónde estabas navegando, para que remontar por el tema no te mueva de lugar.
+  const estadoNav = useRef();
 
-  if (loading) {
+  if (loading || !listo) {
     return (
       <View style={styles.loading}>
         <ActivityIndicator size="large" color={COLORS.primary} />
@@ -61,7 +65,22 @@ export default function AppNavigator() {
   }
 
   return (
-    <NavigationContainer>
+    // REMONTAR AL CAMBIAR DE TEMA, y no sólo confiar en el re-render.
+    //
+    // Los colores viven en objetos que se mutan (ver theme.js), así que una
+    // pantalla repinta bien en cuanto vuelve a renderizar — pero una pantalla
+    // que NO consume el contexto del tema puede no renderizar nunca, y quedaría
+    // con los colores viejos hasta que algo más la toque. Con la `key` se
+    // remonta todo y no queda nada a medio pintar.
+    //
+    // `initialState` es lo que hace que eso no se note: sin él, cambiar el tema
+    // te devuelve al inicio — es decir, te saca de la pantalla de Configuración
+    // en el momento exacto en que estás tocando el interruptor.
+    <NavigationContainer
+      key={tema}
+      initialState={estadoNav.current}
+      onStateChange={(estado) => { estadoNav.current = estado; }}
+    >
       <PlanProvider>
         <Stack.Navigator screenOptions={{ headerShown: false }}>
           {user ? (
@@ -85,11 +104,14 @@ export default function AppNavigator() {
   );
 }
 
-const styles = StyleSheet.create({
+// Se declara con `estilos()` y no con `StyleSheet.create` suelto: create COPIA
+// los colores al cargar el modulo, asi que un cambio de tema en caliente no
+// repintaria nada. Ver theme.js.
+const styles = estilos(() => StyleSheet.create({
   loading: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: COLORS.bg,
   },
-});
+}));

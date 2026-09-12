@@ -5,7 +5,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import Toast from 'react-native-toast-message';
 import api from '../api/client';
 import { Txt, Input, Button, formatMoney } from './ui';
-import { COLORS, SPACING, RADIUS, FONTS } from '../theme';
+import { COLORS, SPACING, RADIUS, FONTS, estilos } from '../theme';
 
 /**
  * Escáner del QR de un comprobante fiscal.
@@ -237,7 +237,10 @@ export default function ReceiptScanner({ visible, onClose, onCargado }) {
   );
 }
 
-const styles = StyleSheet.create({
+// Se declara con `estilos()` y no con `StyleSheet.create` suelto: create COPIA
+// los colores al cargar el modulo, asi que un cambio de tema en caliente no
+// repintaria nada. Ver theme.js.
+const styles = estilos(() => StyleSheet.create({
   root: { flex: 1, backgroundColor: COLORS.bg, justifyContent: 'center' },
   centro: { alignItems: 'center', paddingHorizontal: SPACING.l },
   titulo: { marginTop: SPACING.m, marginBottom: 6 },
@@ -269,4 +272,4 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-});
+}));

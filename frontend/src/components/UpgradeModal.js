@@ -7,7 +7,7 @@ import api from '../api/client';
 import { usePlan } from '../context/PlanContext';
 import { useLanguage } from '../context/LanguageContext';
 import { Txt, Button, Badge, BottomSheet } from './ui';
-import { COLORS, SPACING, RADIUS, FONTS } from '../theme';
+import { COLORS, SPACING, RADIUS, FONTS, estilos } from '../theme';
 
 const FEATURES = [
   { icon: 'flash',         key: 'featureAI' },
@@ -91,7 +91,10 @@ export default function UpgradeModal() {
   );
 }
 
-const styles = StyleSheet.create({
+// Se declara con `estilos()` y no con `StyleSheet.create` suelto: create COPIA
+// los colores al cargar el modulo, asi que un cambio de tema en caliente no
+// repintaria nada. Ver theme.js.
+const styles = estilos(() => StyleSheet.create({
   badgeRow: { alignItems: 'center', marginBottom: SPACING.m },
   featureRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 9 },
   featureIcon: {
@@ -110,4 +113,4 @@ const styles = StyleSheet.create({
     borderTopColor: COLORS.borderSubtle,
   },
   price: { fontFamily: FONTS.amountBold, fontSize: 24, lineHeight: 29, color: COLORS.textHigh, marginBottom: 3 },
-});
+}));

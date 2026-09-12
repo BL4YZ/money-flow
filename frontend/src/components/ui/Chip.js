@@ -3,7 +3,7 @@ import { View, Pressable, Animated, PanResponder, StyleSheet } from 'react-nativ
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Txt from './Text';
 import { GlassEdge, GlassFondo } from './GlassSurface';
-import { COLORS, RADIUS, FONTS, TYPE, MOTION } from '../../theme';
+import { COLORS, RADIUS, FONTS, TYPE, MOTION, estilos } from '../../theme';
 
 /**
  * Chips. Reemplaza catChip, chip, sortChip, itemChip, freqBtn y chartToggleBtn
@@ -170,7 +170,10 @@ export function ListItemChip({ label, qty = 1, onRemove, style }) {
   );
 }
 
-const styles = StyleSheet.create({
+// Se declara con `estilos()` y no con `StyleSheet.create` suelto: create COPIA
+// los colores al cargar el modulo, asi que un cambio de tema en caliente no
+// repintaria nada. Ver theme.js.
+const styles = estilos(() => StyleSheet.create({
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -227,4 +230,4 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginLeft: 9,
   },
-});
+}));

@@ -12,7 +12,7 @@ import {
   Txt, Card, Input, Chip, SortChip, Badge, StoreDot, Button,
   Glow, EmptyState, OfferRowSkeleton, ScreenHeader, formatUYU, formatUnitPrice,
 } from '../components/ui';
-import { COLORS, SPACING, RADIUS, GRADIENTS, FONTS } from '../theme';
+import { COLORS, SPACING, RADIUS, GRADIENTS, FONTS, estilos } from '../theme';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -484,7 +484,10 @@ export default function SearchScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+// Se declara con `estilos()` y no con `StyleSheet.create` suelto: create COPIA
+// los colores al cargar el modulo, asi que un cambio de tema en caliente no
+// repintaria nada. Ver theme.js.
+const styles = estilos(() => StyleSheet.create({
   root: { flex: 1, backgroundColor: COLORS.bg },
   content: { paddingHorizontal: SPACING.m, paddingTop: 60 },
   pressed: { opacity: 0.75 },
@@ -548,4 +551,4 @@ const styles = StyleSheet.create({
   },
   sustitutos: { flexDirection: 'row', alignItems: 'flex-start', marginTop: 9 },
   sustitutosTxt: { flex: 1, marginLeft: 7, fontSize: 11.5, lineHeight: 16 },
-});
+}));

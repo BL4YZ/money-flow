@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { Pressable, Animated, StyleSheet } from 'react-native';
 import { GlassEdge, GlassFondo } from './GlassSurface';
-import { COLORS, RADIUS, MOTION } from '../../theme';
+import { COLORS, RADIUS, MOTION, estilos } from '../../theme';
 
 const ANCHO = 46;
 const ALTO = 28;
@@ -51,7 +51,10 @@ export default function Toggle({ value, onValueChange, disabled, style }) {
   );
 }
 
-const styles = StyleSheet.create({
+// Se declara con `estilos()` y no con `StyleSheet.create` suelto: create COPIA
+// los colores al cargar el modulo, asi que un cambio de tema en caliente no
+// repintaria nada. Ver theme.js.
+const styles = estilos(() => StyleSheet.create({
   track: {
     width: ANCHO,
     height: ALTO,
@@ -65,4 +68,4 @@ const styles = StyleSheet.create({
   trackOn:  { backgroundColor: COLORS.primary,       borderColor: COLORS.primary },
   knob: { width: KNOB, height: KNOB, borderRadius: KNOB / 2, overflow: 'hidden' },
   disabled: { opacity: 0.45 },
-});
+}));

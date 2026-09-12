@@ -8,7 +8,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { usePlan } from '../context/PlanContext';
 import { getOfferings, purchasePackage, restorePurchases } from '../services/purchases';
 import { Txt, Card, Button, Badge } from '../components/ui';
-import { COLORS, SPACING, RADIUS, GRADIENTS, FONTS, SHADOWS } from '../theme';
+import { COLORS, SPACING, RADIUS, GRADIENTS, FONTS, SHADOWS, estilos } from '../theme';
 
 const FEATURES = [
   { icon: 'flash',         label: 'featureAI' },
@@ -209,7 +209,10 @@ export default function PaywallScreen({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+// Se declara con `estilos()` y no con `StyleSheet.create` suelto: create COPIA
+// los colores al cargar el modulo, asi que un cambio de tema en caliente no
+// repintaria nada. Ver theme.js.
+const styles = estilos(() => StyleSheet.create({
   root: { flex: 1, backgroundColor: COLORS.bg },
   scroll: { paddingHorizontal: SPACING.m, paddingTop: 76, paddingBottom: SPACING.l },
   pressed: { opacity: 0.7 },
@@ -245,4 +248,4 @@ const styles = StyleSheet.create({
   precio: { fontFamily: FONTS.amountBold, fontSize: 20, lineHeight: 25, color: COLORS.textHigh, marginBottom: 3 },
   legal: { marginTop: SPACING.m, marginBottom: SPACING.s, fontSize: 11, lineHeight: 16 },
   devRow: { flexDirection: 'row', gap: SPACING.s },
-});
+}));

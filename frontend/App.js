@@ -18,8 +18,25 @@ import { JetBrainsMono_700Bold }   from '@expo-google-fonts/jetbrains-mono/700Bo
 
 import { AuthProvider } from './src/context/AuthContext';
 import { LanguageProvider } from './src/context/LanguageContext';
+import { ThemeProvider, useTema } from './src/context/ThemeContext';
 import AppNavigator from './src/navigation/AppNavigator';
 import { COLORS } from './src/theme';
+
+/**
+ * Dentro del ThemeProvider, para que la barra de estado se entere del tema: con
+ * `style="light"` fijo, en tema claro la hora y la señal quedaban blancas sobre
+ * blanco. Es el detalle que delata un tema claro puesto a medias.
+ */
+function Contenido() {
+  const { tema } = useTema();
+  return (
+    <>
+      <StatusBar style={tema === 'claro' ? 'dark' : 'light'} />
+      <AppNavigator />
+      <Toast />
+    </>
+  );
+}
 
 export default function App() {
   // Los pesos se cargan como familias separadas porque los paquetes de
@@ -54,13 +71,13 @@ export default function App() {
           adentro de un <Modal> devuelve ceros en Android, que es exactamente
           donde se necesita. */}
       <SafeAreaProvider initialMetrics={initialWindowMetrics}>
+      <ThemeProvider>
       <LanguageProvider>
         <AuthProvider>
-          <StatusBar style="light" />
-          <AppNavigator />
-          <Toast />
+          <Contenido />
         </AuthProvider>
       </LanguageProvider>
+      </ThemeProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

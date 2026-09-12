@@ -14,7 +14,7 @@ import {
   Txt, Card, Input, Chip, Segmented, Badge, Button, BottomSheet,
   Glow, EmptyState, ScreenHeader, Toggle, formatUYU,
 } from '../components/ui';
-import { COLORS, SPACING, RADIUS, FONTS, serviceMeta } from '../theme';
+import { COLORS, SPACING, RADIUS, FONTS, serviceMeta, estilos } from '../theme';
 
 const EMPTY_FORM = { name: '', amount: '', frequency: 'monthly' };
 const EMPTY_BILL_FORM = { name: '', amount: '', due_day: '', reminder_days: '3', category: 'Servicios' };
@@ -615,7 +615,10 @@ export default function SubscriptionsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+// Se declara con `estilos()` y no con `StyleSheet.create` suelto: create COPIA
+// los colores al cargar el modulo, asi que un cambio de tema en caliente no
+// repintaria nada. Ver theme.js.
+const styles = estilos(() => StyleSheet.create({
   root: { flex: 1, backgroundColor: COLORS.bg },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.bg },
   content: { paddingHorizontal: SPACING.m, paddingTop: 60 },
@@ -676,4 +679,4 @@ const styles = StyleSheet.create({
 
   optimizeRow: { flexDirection: 'row', alignItems: 'center' },
   catChips: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.s },
-});
+}));

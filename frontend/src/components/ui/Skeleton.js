@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Animated, StyleSheet } from 'react-native';
-import { COLORS, RADIUS } from '../../theme';
+import { COLORS, RADIUS, estilos } from '../../theme';
 
 /**
  * Bloque de carga. La regla del diseño: el skeleton tiene la MISMA geometría
@@ -63,7 +63,10 @@ export function CardSkeleton({ style }) {
   );
 }
 
-const styles = StyleSheet.create({
+// Se declara con `estilos()` y no con `StyleSheet.create` suelto: create COPIA
+// los colores al cargar el modulo, asi que un cambio de tema en caliente no
+// repintaria nada. Ver theme.js.
+const styles = estilos(() => StyleSheet.create({
   fila: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -86,4 +89,4 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.l,
     padding: 16,
   },
-});
+}));

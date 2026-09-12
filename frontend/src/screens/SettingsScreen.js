@@ -7,11 +7,12 @@ import api from '../api/client';
 import SecuritySheet from '../components/SecuritySheet';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
+import { useTema } from '../context/ThemeContext';
 import { usePlan } from '../context/PlanContext';
 import {
   Txt, Card, Badge, Button, Segmented, Toggle, ScreenHeader, Glow,
 } from '../components/ui';
-import { COLORS, SPACING, RADIUS, FONTS } from '../theme';
+import { COLORS, SPACING, RADIUS, FONTS, estilos } from '../theme';
 
 /**
  * Configuración, detrás del perfil.
@@ -36,6 +37,7 @@ export default function SettingsScreen() {
   const navigation = useNavigation();
   const { user, logout } = useAuth();
   const { lang, t, switchLanguage } = useLanguage();
+  const { preferencia, cambiarTema } = useTema();
   const { plan, isTrial, trialDays, showUpgrade } = usePlan();
 
   const [seguridadVisible, setSeguridadVisible] = useState(false);
@@ -104,6 +106,31 @@ export default function SettingsScreen() {
         </Card>
 
         <Card label={t('settings.preferencias')} style={styles.bloque}>
+          {/* EL TEMA VA PRIMERO porque es lo que la persona vino a buscar acá:
+              una app toda oscura no le gusta a todo el mundo, y hasta ahora no
+              había forma de cambiarla.
+
+              Tres opciones y no un interruptor: quien puso el teléfono en claro
+              de día y oscuro de noche ya eligió, y obligarlo a mantener esto a
+              mano sería sacarle algo que el sistema ya le hace solo. */}
+          <Txt variant="caption" color={COLORS.textMid} style={styles.etiqueta}>
+            {t('settings.tema')}
+          </Txt>
+          <Segmented
+            options={[
+              { value: 'sistema', label: t('settings.temaSistema') },
+              { value: 'claro', label: t('settings.temaClaro') },
+              { value: 'oscuro', label: t('settings.temaOscuro') },
+            ]}
+            value={preferencia}
+            onChange={cambiarTema}
+          />
+          <Txt variant="caption" color={COLORS.textLow} style={styles.ayuda}>
+            {t('settings.temaAyuda')}
+          </Txt>
+
+          <View style={styles.separador} />
+
           <Txt variant="caption" color={COLORS.textMid} style={styles.etiqueta}>
             {t('settings.idioma')}
           </Txt>
@@ -162,7 +189,10 @@ export default function SettingsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+// Se declara con `estilos()` y no con `StyleSheet.create` suelto: create COPIA
+// los colores al cargar el modulo, asi que un cambio de tema en caliente no
+// repintaria nada. Ver theme.js.
+const styles = estilos(() => StyleSheet.create({
   root: { flex: 1, backgroundColor: COLORS.bg },
   content: { paddingHorizontal: SPACING.m, paddingTop: 60 },
   bloque: { marginTop: SPACING.m },
@@ -177,7 +207,8 @@ const styles = StyleSheet.create({
   avatarTxt: { fontFamily: FONTS.extrabold, fontSize: 15, lineHeight: 18, color: COLORS.textHigh },
 
   etiqueta: { marginBottom: 6 },
+  ayuda: { marginTop: 6 },
   separador: { height: 1, backgroundColor: COLORS.border, marginVertical: SPACING.m },
   filaToggle: { flexDirection: 'row', alignItems: 'center' },
   filaTitulo: { fontFamily: FONTS.semibold, marginBottom: 2 },
-});
+}));

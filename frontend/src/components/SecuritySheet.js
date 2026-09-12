@@ -9,7 +9,7 @@ import * as Sharing from 'expo-sharing';
 import api from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { Txt, Card, Input, Button, BottomSheet } from './ui';
-import { COLORS, SPACING, RADIUS, FONTS } from '../theme';
+import { COLORS, SPACING, RADIUS, FONTS, estilos } from '../theme';
 
 /**
  * Qué pasa con el resumen del usuario, contado como un recorrido.
@@ -229,7 +229,10 @@ export default function SecuritySheet({ visible, onClose }) {
   );
 }
 
-const styles = StyleSheet.create({
+// Se declara con `estilos()` y no con `StyleSheet.create` suelto: create COPIA
+// los colores al cargar el modulo, asi que un cambio de tema en caliente no
+// repintaria nada. Ver theme.js.
+const styles = estilos(() => StyleSheet.create({
   resumen: { marginBottom: SPACING.m },
   resumenTitulo: { fontFamily: FONTS.bold, marginBottom: SPACING.s },
   resumenFila: { flexDirection: 'row', alignItems: 'flex-start', marginTop: 6 },
@@ -253,4 +256,4 @@ const styles = StyleSheet.create({
     height: 1, backgroundColor: COLORS.borderSubtle,
     marginTop: SPACING.xs, marginBottom: SPACING.m,
   },
-});
+}));

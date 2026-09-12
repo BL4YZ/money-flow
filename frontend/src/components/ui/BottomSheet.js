@@ -6,7 +6,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Txt from './Text';
 import Button from './Button';
-import { COLORS, RADIUS, SPACING, FONTS, MOTION } from '../../theme';
+import { COLORS, RADIUS, SPACING, FONTS, MOTION, estilos } from '../../theme';
 
 /**
  * La hoja inferior. UNA sola: reemplaza los tres modalOverlay/modalCard/
@@ -111,7 +111,10 @@ export default function BottomSheet({
   );
 }
 
-const styles = StyleSheet.create({
+// Se declara con `estilos()` y no con `StyleSheet.create` suelto: create COPIA
+// los colores al cargar el modulo, asi que un cambio de tema en caliente no
+// repintaria nada. Ver theme.js.
+const styles = estilos(() => StyleSheet.create({
   root: { flex: 1, justifyContent: 'flex-end' },
   scrim: { backgroundColor: COLORS.scrim },
   kav: { justifyContent: 'flex-end' },
@@ -141,4 +144,4 @@ const styles = StyleSheet.create({
   acciones: { flexDirection: 'row', marginTop: SPACING.l, gap: 10 },
   btnSecundario: { flex: 1 },
   btnPrimario: { flex: 1.4 },
-});
+}));

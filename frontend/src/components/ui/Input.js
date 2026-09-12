@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, TextInput, Pressable, StyleSheet } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Txt from './Text';
-import { COLORS, RADIUS, FONTS, TYPE } from '../../theme';
+import { COLORS, RADIUS, FONTS, TYPE, estilos } from '../../theme';
 
 /**
  * El input. Reemplaza input, inputRow, inputIcon y searchInput.
@@ -100,7 +100,10 @@ export default function Input({
   );
 }
 
-const styles = StyleSheet.create({
+// Se declara con `estilos()` y no con `StyleSheet.create` suelto: create COPIA
+// los colores al cargar el modulo, asi que un cambio de tema en caliente no
+// repintaria nada. Ver theme.js.
+const styles = estilos(() => StyleSheet.create({
   halo: { borderRadius: RADIUS.m + 3, padding: 3, margin: -3 },
   haloOn: { backgroundColor: COLORS.focusHalo },
   caja: {
@@ -155,4 +158,4 @@ const styles = StyleSheet.create({
   sugerenciaBorde: { borderBottomWidth: 1, borderBottomColor: COLORS.borderSubtle },
   sugerenciaTxt: { fontFamily: FONTS.medium, fontSize: 14 },
   error: { marginTop: 7, fontSize: 12.5 },
-});
+}));

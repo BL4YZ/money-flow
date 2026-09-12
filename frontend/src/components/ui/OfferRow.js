@@ -3,7 +3,7 @@ import { View, Image, Pressable, StyleSheet } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Txt, { formatUYU } from './Text';
 import { StoreDot } from './Badge';
-import { COLORS, RADIUS, FONTS } from '../../theme';
+import { COLORS, RADIUS, FONTS, estilos } from '../../theme';
 
 /**
  * Fila de producto/oferta. Unifica resultCard/resultImg (Search) y
@@ -76,7 +76,10 @@ export default function OfferRow({
   );
 }
 
-const styles = StyleSheet.create({
+// Se declara con `estilos()` y no con `StyleSheet.create` suelto: create COPIA
+// los colores al cargar el modulo, asi que un cambio de tema en caliente no
+// repintaria nada. Ver theme.js.
+const styles = estilos(() => StyleSheet.create({
   fila: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -121,4 +124,4 @@ const styles = StyleSheet.create({
   },
   delta: { fontFamily: FONTS.semibold, fontSize: 12, lineHeight: 16, color: COLORS.expense },
   mismo: { fontSize: 12, lineHeight: 16 },
-});
+}));

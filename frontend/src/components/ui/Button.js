@@ -4,7 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Txt from './Text';
 import GlassSurface, { GlassEdge } from './GlassSurface';
-import { COLORS, GRADIENTS, RADIUS, SHADOWS, MOTION } from '../../theme';
+import { COLORS, GRADIENTS, RADIUS, SHADOWS, MOTION, estilos } from '../../theme';
 
 /**
  * El botón. Reemplaza las 15 implementaciones que había (signInBtn, ctaBtn,
@@ -187,11 +187,14 @@ export default function Button({
   );
 }
 
-const styles = StyleSheet.create({
+// Se declara con `estilos()` y no con `StyleSheet.create` suelto: create COPIA
+// los colores al cargar el modulo, asi que un cambio de tema en caliente no
+// repintaria nada. Ver theme.js.
+const styles = estilos(() => StyleSheet.create({
   base: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
   },
   fullWidth: { alignSelf: 'stretch' },
-});
+}));

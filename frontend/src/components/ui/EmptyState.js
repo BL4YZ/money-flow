@@ -3,7 +3,7 @@ import { View, StyleSheet } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Txt from './Text';
 import Button from './Button';
-import { COLORS, RADIUS, FONTS } from '../../theme';
+import { COLORS, RADIUS, FONTS, estilos } from '../../theme';
 
 /**
  * Estado vacío. Uno solo, no cinco: reemplaza emptyCard, empty y emptyResults,
@@ -38,7 +38,10 @@ export default function EmptyState({
   );
 }
 
-const styles = StyleSheet.create({
+// Se declara con `estilos()` y no con `StyleSheet.create` suelto: create COPIA
+// los colores al cargar el modulo, asi que un cambio de tema en caliente no
+// repintaria nada. Ver theme.js.
+const styles = estilos(() => StyleSheet.create({
   caja: {
     alignItems: 'center',
     backgroundColor: COLORS.surface,
@@ -61,4 +64,4 @@ const styles = StyleSheet.create({
   },
   titulo: { fontFamily: FONTS.bold, fontSize: 17, lineHeight: 22, color: COLORS.textHigh, marginBottom: 7 },
   texto: { fontSize: 14, lineHeight: 21.5, maxWidth: 300, marginBottom: 18 },
-});
+}));

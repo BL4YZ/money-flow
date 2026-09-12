@@ -9,7 +9,7 @@ import { esErrorDeRed } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { Txt, Input, Button, Segmented } from '../components/ui';
-import { COLORS, SPACING, RADIUS, GRADIENTS, FONTS, SHADOWS } from '../theme';
+import { COLORS, SPACING, RADIUS, GRADIENTS, FONTS, SHADOWS, estilos } from '../theme';
 
 export default function LoginScreen() {
   const { login, register } = useAuth();
@@ -174,7 +174,10 @@ export default function LoginScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+// Se declara con `estilos()` y no con `StyleSheet.create` suelto: create COPIA
+// los colores al cargar el modulo, asi que un cambio de tema en caliente no
+// repintaria nada. Ver theme.js.
+const styles = estilos(() => StyleSheet.create({
   root: { flex: 1, backgroundColor: COLORS.bg },
   glow: { position: 'absolute', top: -80, left: -60, right: -60, height: 340 },
   scroll: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: SPACING.l, paddingVertical: SPACING.xxl },
@@ -201,4 +204,4 @@ const styles = StyleSheet.create({
 
   social: { flexDirection: 'row', gap: SPACING.s },
   footer: { alignItems: 'center', marginTop: SPACING.xl },
-});
+}));

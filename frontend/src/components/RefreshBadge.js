@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, View, StyleSheet } from 'react-native';
 import Txt from './ui/Text';
-import { COLORS, SPACING, RADIUS, SHADOWS, FONTS } from '../theme';
+import { COLORS, SPACING, RADIUS, SHADOWS, FONTS, estilos } from '../theme';
 import { useLanguage } from '../context/LanguageContext';
 
 /**
@@ -52,7 +52,10 @@ export default function RefreshBadge({ refreshing }) {
   );
 }
 
-const styles = StyleSheet.create({
+// Se declara con `estilos()` y no con `StyleSheet.create` suelto: create COPIA
+// los colores al cargar el modulo, asi que un cambio de tema en caliente no
+// repintaria nada. Ver theme.js.
+const styles = estilos(() => StyleSheet.create({
   wrapper: {
     position: 'absolute',
     top: 64,
@@ -90,4 +93,4 @@ const styles = StyleSheet.create({
     color: COLORS.textHigh,
     letterSpacing: 0.2,
   },
-});
+}));

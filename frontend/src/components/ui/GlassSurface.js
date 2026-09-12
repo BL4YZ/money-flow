@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Platform, Animated, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS } from '../../theme';
+import { COLORS, estilos } from '../../theme';
 
 /**
  * Superficie de vidrio, con tres niveles según lo que el dispositivo pueda dar.
@@ -120,7 +120,7 @@ export function GlassFondo({ radius, style }) {
         style={[StyleSheet.absoluteFill, styles.recorta, radius ? { borderRadius: radius } : null, style]}
         pointerEvents="none"
       >
-        <BlurView intensity={26} tint="light" style={StyleSheet.absoluteFill} />
+        <BlurView intensity={26} tint={temaActual() === 'claro' ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
         <View style={[StyleSheet.absoluteFill, { backgroundColor: COLORS.glassFill }]} />
         <GlassEdge />
       </View>
@@ -247,7 +247,10 @@ export default function GlassSurface({ style, children, radius, estilo = 'regula
           style={[StyleSheet.absoluteFill, styles.recorta, radius ? { borderRadius: radius } : null]}
           pointerEvents="none"
         >
-          <BlurView intensity={38} tint="dark" style={StyleSheet.absoluteFill} />
+          {/* El tinte del desenfoque se DA VUELTA con el tema: sobre contenido
+              claro, un blur oscuro es lo que da cuerpo al cristal, y uno
+              claro lo hace desaparecer. */}
+          <BlurView intensity={38} tint={temaActual() === 'claro' ? 'light' : 'dark'} style={StyleSheet.absoluteFill} />
           <View style={[StyleSheet.absoluteFill, { backgroundColor: COLORS.glassTint }]} />
           {canto}
         </View>
@@ -263,9 +266,12 @@ export default function GlassSurface({ style, children, radius, estilo = 'regula
   );
 }
 
-const styles = StyleSheet.create({
+// Se declara con `estilos()` y no con `StyleSheet.create` suelto: create COPIA
+// los colores al cargar el modulo, asi que un cambio de tema en caliente no
+// repintaria nada. Ver theme.js.
+const styles = estilos(() => StyleSheet.create({
   // El desenfoque se dibuja en una capa absoluta, asi que la superficie tiene
   // que recortar: sin esto el blur se sale por las esquinas redondeadas.
   recorta: { overflow: 'hidden' },
   canto: { position: 'absolute', top: 0, left: 0, right: 0, height: 1.5 },
-});
+}));

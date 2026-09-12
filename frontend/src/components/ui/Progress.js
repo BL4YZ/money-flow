@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { View, Animated, StyleSheet } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import Txt from './Text';
-import { COLORS, RADIUS, FONTS } from '../../theme';
+import { COLORS, RADIUS, FONTS, estilos } from '../../theme';
 
 /**
  * Progreso. Reemplaza progressBar/Track/Fill (×3), ringOverlay, ringContainer y
@@ -156,7 +156,10 @@ export function ProgressRing({
   );
 }
 
-const styles = StyleSheet.create({
+// Se declara con `estilos()` y no con `StyleSheet.create` suelto: create COPIA
+// los colores al cargar el modulo, asi que un cambio de tema en caliente no
+// repintaria nada. Ver theme.js.
+const styles = estilos(() => StyleSheet.create({
   fila: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 7 },
   label: { fontFamily: FONTS.semibold },
   detail: { fontSize: 13, lineHeight: 16 },
@@ -175,6 +178,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   anilloLabel: { fontFamily: FONTS.semibold, fontSize: 10, lineHeight: 12, marginTop: 2 },
-});
+}));
 
 export default ProgressBar;

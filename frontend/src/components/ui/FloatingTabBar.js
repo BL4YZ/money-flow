@@ -4,7 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Txt from './Text';
 import GlassSurface, { nivelDeVidrio } from './GlassSurface';
-import { COLORS, GRADIENTS, RADIUS, SHADOWS, FONTS, MOTION } from '../../theme';
+import { COLORS, GRADIENTS, RADIUS, SHADOWS, FONTS, MOTION, estilos } from '../../theme';
 
 /**
  * Tab bar flotante de 6 items.
@@ -143,7 +143,10 @@ export default function FloatingTabBar({ state, navigation, tabs }) {
   );
 }
 
-const styles = StyleSheet.create({
+// Se declara con `estilos()` y no con `StyleSheet.create` suelto: create COPIA
+// los colores al cargar el modulo, asi que un cambio de tema en caliente no
+// repintaria nada. Ver theme.js.
+const styles = estilos(() => StyleSheet.create({
   wrapper: {
     position: 'absolute',
     left: 0, right: 0, bottom: 0,
@@ -181,4 +184,4 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
   },
   label: { fontFamily: FONTS.bold, fontSize: 9.5, lineHeight: 12, marginTop: 3 },
-});
+}));

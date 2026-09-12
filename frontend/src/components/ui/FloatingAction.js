@@ -3,7 +3,7 @@ import { Animated, Pressable, StyleSheet, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Txt from './Text';
 import { GlassEdge, GlassPieza, nivelDeVidrio } from './GlassSurface';
-import { COLORS, RADIUS, SPACING, SHADOWS, MOTION } from '../../theme';
+import { COLORS, RADIUS, SPACING, SHADOWS, MOTION, estilos } from '../../theme';
 
 /**
  * El botón flotante de la acción principal de una pantalla.
@@ -97,7 +97,10 @@ export default function FloatingAction({
   );
 }
 
-const styles = StyleSheet.create({
+// Se declara con `estilos()` y no con `StyleSheet.create` suelto: create COPIA
+// los colores al cargar el modulo, asi que un cambio de tema en caliente no
+// repintaria nada. Ver theme.js.
+const styles = estilos(() => StyleSheet.create({
   raiz: { position: 'absolute', right: SPACING.m },
   caja: {
     flexDirection: 'row',
@@ -112,4 +115,4 @@ const styles = StyleSheet.create({
   circulo: { width: 60, height: 60 },
   solido: { backgroundColor: COLORS.primary },
   label: { marginLeft: 7 },
-});
+}));

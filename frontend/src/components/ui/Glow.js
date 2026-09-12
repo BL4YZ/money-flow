@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import Svg, { Defs, RadialGradient, Stop, Rect } from 'react-native-svg';
-import { COLORS } from '../../theme';
+import { COLORS, estilos } from '../../theme';
 
 /**
  * Halo radial de la esquina superior. Es lo que da profundidad al fondo plano y
@@ -46,6 +46,9 @@ export default function Glow({
   );
 }
 
-const styles = StyleSheet.create({
+// Se declara con `estilos()` y no con `StyleSheet.create` suelto: create COPIA
+// los colores al cargar el modulo, asi que un cambio de tema en caliente no
+// repintaria nada. Ver theme.js.
+const styles = estilos(() => StyleSheet.create({
   wrap: { position: 'absolute', zIndex: 0 },
-});
+}));

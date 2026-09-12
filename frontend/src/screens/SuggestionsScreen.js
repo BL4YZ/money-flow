@@ -9,7 +9,7 @@ import {
   Txt, Card, Input, Button, Badge, OfferRow, EmptyState,
   OfferRowSkeleton, ScreenHeader, formatUYU,
 } from '../components/ui';
-import { COLORS, SPACING, RADIUS, FONTS } from '../theme';
+import { COLORS, SPACING, RADIUS, FONTS, estilos } from '../theme';
 
 // Prioridad = feedback del sistema sobre la sugerencia, no un dato de dinero.
 // Por eso usa success/warning/error y no income/expense.
@@ -308,7 +308,10 @@ export default function SuggestionsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+// Se declara con `estilos()` y no con `StyleSheet.create` suelto: create COPIA
+// los colores al cargar el modulo, asi que un cambio de tema en caliente no
+// repintaria nada. Ver theme.js.
+const styles = estilos(() => StyleSheet.create({
   root: { flex: 1, backgroundColor: COLORS.bg },
   content: { paddingHorizontal: SPACING.m, paddingTop: 60 },
   bloque: { marginTop: SPACING.m },
@@ -363,4 +366,4 @@ const styles = StyleSheet.create({
   },
   statValue: { fontFamily: FONTS.amountBold, fontSize: 15, lineHeight: 19, marginBottom: 2 },
   storesLabel: { marginTop: SPACING.s },
-});
+}));

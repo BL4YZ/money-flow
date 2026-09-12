@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Pressable, StyleSheet } from 'react-native';
 import Txt from './Text';
-import { COLORS, RADIUS, FONTS } from '../../theme';
+import { COLORS, RADIUS, FONTS, estilos } from '../../theme';
 
 const ALTO = 104;
 const ALTO_BARRA_MAX = 64;
@@ -75,7 +75,10 @@ export default function BarChart({
   );
 }
 
-const styles = StyleSheet.create({
+// Se declara con `estilos()` y no con `StyleSheet.create` suelto: create COPIA
+// los colores al cargar el modulo, asi que un cambio de tema en caliente no
+// repintaria nada. Ver theme.js.
+const styles = estilos(() => StyleSheet.create({
   caja: {
     flexDirection: 'row',
     alignItems: 'flex-end',
@@ -106,4 +109,4 @@ const styles = StyleSheet.create({
   toggleBtn: { paddingVertical: 5, paddingHorizontal: 7, borderRadius: 6, marginTop: 4 },
   toggleBtnOn: { backgroundColor: COLORS.primary },
   toggleTxt: { fontFamily: FONTS.bold, fontSize: 9.5, lineHeight: 12 },
-});
+}));

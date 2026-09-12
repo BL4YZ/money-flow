@@ -3,7 +3,7 @@ import { View, Pressable, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Txt from './Text';
-import { COLORS, GRADIENTS, RADIUS, SPACING, SHADOWS } from '../../theme';
+import { COLORS, GRADIENTS, RADIUS, SPACING, SHADOWS, estilos } from '../../theme';
 
 /**
  * La card. Reemplaza emptyCard, insightCard, storeCard, resultCard, productCard
@@ -77,7 +77,10 @@ export default function Card({
   return <View style={caja}>{cuerpo}</View>;
 }
 
-const styles = StyleSheet.create({
+// Se declara con `estilos()` y no con `StyleSheet.create` suelto: create COPIA
+// los colores al cargar el modulo, asi que un cambio de tema en caliente no
+// repintaria nada. Ver theme.js.
+const styles = estilos(() => StyleSheet.create({
   card: {
     borderRadius: RADIUS.l,
     borderWidth: 1.5,
@@ -90,4 +93,4 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 10,
   },
-});
+}));

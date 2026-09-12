@@ -4,7 +4,7 @@
 // REGLA: ningún color hex fuera de este archivo. El estado anterior tenía 66
 // hex sueltos en el código contra 41 acá; eso es lo que este rediseño cierra.
 
-export const COLORS = {
+const OSCURO = {
   bg: '#121110',
   surface: '#191817',
   surfaceRaised: '#201e1c',
@@ -96,7 +96,82 @@ export const COLORS = {
 };
 
 // Solo 3 gradientes en toda la app (expo-linear-gradient)
-export const GRADIENTS = {
+/**
+ * La misma app con la luz prendida.
+ *
+ * NO ES "INVERTIR LOS HEX". Un tema claro bien hecho cambia de reglas, no de
+ * numeros: sobre blanco el gris del texto secundario tiene que ser MAS oscuro
+ * que su equivalente oscuro para dar el mismo contraste, los verdes y rojos de
+ * dato pierden legibilidad y hay que bajarles la luminosidad, y el vidrio deja
+ * de ser un velo blanco para ser uno negro — blanco sobre blanco no es vidrio,
+ * es nada. Cada par se midio; ver scripts/verify-contraste.js.
+ *
+ * Los tokens son los MISMOS nombres: ningun componente sabe que tema esta
+ * puesto, y esa es la unica forma de que agregar el tema claro no signifique
+ * revisar 34 archivos a ojo.
+ */
+const CLARO = {
+  bg: '#faf8f5',
+  surface: '#ffffff',
+  surfaceRaised: '#ffffff',
+  surfaceSunken: '#f1ede8',
+  surfaceOverlay: '#e8e3dc',
+
+  borderSubtle: '#ece7e0',
+  border: '#dcd6cd',
+  borderStrong: '#bdb5ab',
+
+  // VIDRIO SOBRE CLARO: el velo se da vuelta. En oscuro el cristal se aclara
+  // con blanco; sobre blanco eso no existe, asi que el cuerpo lo pone un velo
+  // claro y lo que separa la pieza del fondo es el borde, no el relleno.
+  glassTint: 'rgba(255,255,255,0.55)',
+  glassEdge: 'rgba(255,255,255,0.90)',
+  glassBorder: 'rgba(26,25,23,0.12)',
+  glassFill: 'rgba(26,25,23,0.06)',
+  glassFillPressed: 'rgba(26,25,23,0.12)',
+  glassPill: 'rgba(26,25,23,0.08)',
+  // Mismo criterio medido que en oscuro, del otro lado: el boton flotante es
+  // oscuro sobre fondo claro, asi que el tinte es oscuro y el icono va claro.
+  glassAction: 'rgba(30,28,26,0.78)',
+
+  primary: '#1e1c1a',
+  primaryPressed: '#0c0b0a',
+  primarySoft: '#eceae5',
+  primaryBorder: '#9c948a',
+  primaryBorderSoft: '#d3ccc3',
+  accent: '#0f8f7a',
+  accentSoft: '#e2f5f0',
+
+  // Bajado de #9a6b16, que daba 4.39 con su propio texto encima: por debajo
+  // del 4.5 de la WCAG. Con #8f6314 da 4.98 y sobre blanco 5.30.
+  premium: '#8f6314',
+  premiumSoft: '#fbf1dd',
+  premiumBorder: '#dcc08f',
+
+  income: '#0d7a4f',
+  expense: '#b53a26',
+  neutralData: '#6b655d',
+
+  success: '#0f7a52',
+  warning: '#94670f',
+  error: '#b22d1f',
+  successSoft: '#e1f4ea',
+  warningSoft: '#fbf0da',
+  errorSoft: '#fceae7',
+  errorBorder: '#eeb3aa',
+
+  textHigh: '#1a1917',
+  textMid: '#544e47',
+  textLow: '#7a736b',
+  textDisabled: 'rgba(122,115,107,0.6)',
+  onPrimary: '#faf8f5',
+  onPremium: '#fff7e8',
+  onExpense: '#fceae7',
+  scrim: 'rgba(26,25,23,0.42)',
+  focusHalo: 'rgba(30,28,26,0.14)',
+};
+
+const GRADIENTES_OSCURO = {
   premium: ['#f7d79a', '#c9922f'],
   action: ['#ffffff', '#d9d2c9'],
   glow: ['rgba(63,215,189,0.20)', 'rgba(18,17,16,0)'],
@@ -105,6 +180,17 @@ export const GRADIENTS = {
   // Velo dorado de la card `locked`
   lockedVeil: ['rgba(240,192,115,0.14)', 'rgba(25,24,23,0)'],
 };
+
+const GRADIENTES_CLARO = {
+  premium: ['#d8a951', '#8f6314'],
+  // El boton de accion es oscuro sobre claro: el degrade va del gris al negro.
+  action: ['#3a3733', '#141312'],
+  glow: ['rgba(15,143,122,0.14)', 'rgba(250,248,245,0)'],
+  scrollFade: ['rgba(250,248,245,0)', '#faf8f5'],
+  lockedVeil: ['rgba(154,107,22,0.10)', 'rgba(255,255,255,0)'],
+};
+
+
 
 export const SPACING = { xs: 4, s: 8, m: 16, l: 24, xl: 32, xxl: 48 };
 export const RADIUS = { s: 8, m: 12, l: 16, xl: 20, xxl: 24, full: 999 };
@@ -139,11 +225,121 @@ export const TYPE = {
 };
 
 // iOS + Android en el mismo token: hacer spread, no elegir.
-export const SHADOWS = {
+const SOMBRAS_OSCURO = {
   ambient: { shadowColor: '#000',    shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.55, shadowRadius: 16, elevation: 8 },
   glow:    { shadowColor: '#ece8e3', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.16, shadowRadius: 18, elevation: 10 },
   gold:    { shadowColor: '#f0c073', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.34, shadowRadius: 18, elevation: 10 },
 };
+
+// SOBRE CLARO LA SOMBRA TIENE QUE SER MAS SUAVE Y MAS OSCURA. Una sombra al
+// 0.55 como la del tema oscuro, sobre blanco, se ve como un borron gris: en
+// oscuro la sombra casi no se distingue del fondo y puede ser fuerte; en claro
+// se ve entera. Y el `glow` deja de ser un halo claro —invisible sobre blanco—
+// para ser una sombra comun.
+const SOMBRAS_CLARO = {
+  ambient: { shadowColor: '#4a423a', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.13, shadowRadius: 16, elevation: 8 },
+  glow:    { shadowColor: '#2b2621', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.20, shadowRadius: 16, elevation: 10 },
+  gold:    { shadowColor: '#8f6314', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.26, shadowRadius: 16, elevation: 10 },
+};
+
+// ─────────────────────────────────────────────────────────────────────
+// EL TEMA, EN CALIENTE
+//
+// EL PROBLEMA, QUE NO ES OBVIO: `StyleSheet.create` COPIA los colores en el
+// momento en que se ejecuta el modulo. Un `const styles = StyleSheet.create(...)`
+// arriba de cada archivo congela la paleta del arranque, asi que cambiar
+// `COLORS` despues no repinta absolutamente nada. Por eso no alcanza con
+// "guardar una preferencia".
+//
+// La salida tiene dos mitades:
+//
+//  1. `COLORS`, `GRADIENTS` y `SHADOWS` son objetos que se MUTAN, no que se
+//     reemplazan. Todos los usos sueltos dentro del JSX —`color={COLORS.textMid}`,
+//     que son la mayoria— se leen en cada render, asi que con mutarlos y volver
+//     a renderizar ya quedan bien, sin tocar una sola linea de esos archivos.
+//  2. Los `StyleSheet` se declaran con `estilos(...)`, que guarda la receta y la
+//     vuelve a ejecutar cuando cambia el tema, rellenando el MISMO objeto que ya
+//     tienen los componentes en la mano.
+//
+// Se mutan en lugar de exportar un hook para no reescribir 564 usos repartidos
+// en 34 archivos, que es la clase de refactor donde uno se olvida de tres y en
+// tema claro quedan tres textos invisibles.
+const PALETAS   = { oscuro: OSCURO, claro: CLARO };
+const GRADIENTES = { oscuro: GRADIENTES_OSCURO, claro: GRADIENTES_CLARO };
+const SOMBRAS    = { oscuro: SOMBRAS_OSCURO, claro: SOMBRAS_CLARO };
+
+export const COLORS = { ...OSCURO };
+export const GRADIENTS = { ...GRADIENTES_OSCURO };
+export const SHADOWS = { ...SOMBRAS_OSCURO };
+
+let temaPuesto = 'oscuro';
+export const temaActual = () => temaPuesto;
+
+const recetas = new Set();
+
+/**
+ * Declara una hoja de estilos que sobrevive a un cambio de tema.
+ *
+ *   const styles = estilos((C) => StyleSheet.create({ root: { color: C.textHigh } }));
+ *
+ * Devuelve SIEMPRE el mismo objeto: se vacia y se rellena, en vez de
+ * reemplazarse, porque los componentes ya lo tienen capturado en su closure.
+ */
+export function estilos(receta) {
+  const caja = {};
+  const rehacer = () => {
+    const nuevo = receta(COLORS);
+    Object.keys(caja).forEach((k) => delete caja[k]);
+    Object.assign(caja, nuevo);
+  };
+  rehacer();
+  recetas.add(rehacer);
+  return caja;
+}
+
+export function aplicarTema(nombre) {
+  const tema = PALETAS[nombre] ? nombre : 'oscuro';
+  if (tema === temaPuesto) return tema;
+  temaPuesto = tema;
+  Object.assign(COLORS, PALETAS[tema]);
+  Object.assign(GRADIENTS, GRADIENTES[tema]);
+  Object.assign(SHADOWS, SOMBRAS[tema]);
+  recetas.forEach((rehacer) => rehacer());
+  return tema;
+}
+
+// Los colores de MARCA no se pueden espejar: el rojo de Netflix es el rojo de
+// Netflix. Pero fueron elegidos para contrastar sobre un fondo casi negro, y
+// varios sobre blanco desaparecen. En claro se les baja la luminosidad hasta
+// 42% conservando tono y saturacion, que es lo minimo que hace falta para que
+// un punto de color se siga viendo, sin inventar un color nuevo.
+const LUZ_MAXIMA_EN_CLARO = 42;
+export function tono(color) {
+  if (temaPuesto !== 'claro' || typeof color !== 'string') return color;
+  const hsl = color.match(/^hsl\((\d+),\s*(\d+)%,\s*(\d+)%\)$/);
+  if (hsl) {
+    const l = Math.min(parseInt(hsl[3], 10), LUZ_MAXIMA_EN_CLARO);
+    return `hsl(${hsl[1]}, ${hsl[2]}%, ${l}%)`;
+  }
+  const m = color.match(/^#([0-9a-f]{6})$/i);
+  if (!m) return color;
+  const n = parseInt(m[1], 16);
+  const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => v / 255);
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  if (l * 100 <= LUZ_MAXIMA_EN_CLARO) return color;
+  const d = max - min;
+  const sat = d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1));
+  let h = 0;
+  if (d !== 0) {
+    if (max === r)      h = 60 * (((g - b) / d) % 6);
+    else if (max === g) h = 60 * ((b - r) / d + 2);
+    else                h = 60 * ((r - g) / d + 4);
+  }
+  return `hsl(${Math.round((h + 360) % 360)}, ${Math.round(sat * 100)}%, ${LUZ_MAXIMA_EN_CLARO}%)`;
+}
+
+
 
 // Animated.spring — sin overshoot exagerado.
 /**
@@ -232,7 +428,9 @@ export const STORE_COLORS = {
  */
 export function storeDot(storeId) {
   const s = STORE_COLORS[storeId];
-  return s ? s.dot : COLORS.textLow;
+  // `tono` sólo hace algo en claro: estos valores se eligieron midiendo contra
+  // un fondo casi negro, y varios sobre blanco desaparecen.
+  return s ? tono(s.dot) : COLORS.textLow;
 }
 
 // ── Colores de categoría de gasto ─────────────────────────────────
@@ -271,10 +469,12 @@ export const CATEGORY_COLORS = {
  * para que ninguna quede ilegible sobre el fondo oscuro.
  */
 export function categoryColor(name = 'Otros') {
-  if (CATEGORY_COLORS[name]) return CATEGORY_COLORS[name];
+  if (CATEGORY_COLORS[name]) return tono(CATEGORY_COLORS[name]);
   let hash = 0;
   for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
-  return `hsl(${Math.abs(hash) % 360}, 60%, 68%)`;
+  // La luminosidad fija de 68% es para que se lea sobre el fondo oscuro; sobre
+  // blanco es justo al reves, y `tono` la baja.
+  return tono(`hsl(${Math.abs(hash) % 360}, 60%, 68%)`);
 }
 
 // ── Colores de servicios de suscripción ───────────────────────────
@@ -304,6 +504,6 @@ export const SERVICE_COLORS = {
 export function serviceMeta(name) {
   const s = SERVICE_COLORS[name];
   return s
-    ? { icon: s.ionicon, color: s.icon }
+    ? { icon: s.ionicon, color: tono(s.icon) }
     : { icon: 'phone-portrait-outline', color: COLORS.primary };
 }
