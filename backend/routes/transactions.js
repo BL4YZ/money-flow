@@ -98,6 +98,55 @@ router.get('/accounts', async (req, res) => {
   }
 });
 
+// ─── GET /api/transactions/origenes ──────────────────
+//
+// De donde salio cada movimiento: del resumen del banco, de un ticket escaneado
+// o escrito a mano.
+//
+// NO ES ADORNO. La app tiene tres puertas de entrada y ninguna pantalla decia
+// cual habia usado el usuario, asi que "de donde sale este numero" no tenia
+// respuesta. Ademas le da un numero real al boton de borrar lo importado, que
+// hasta ahora era a ciegas: una accion destructiva que no dice cuanto se lleva
+// se toca con miedo o no se toca.
+//
+// `ocr` es el nombre viejo de la fuente "resumen del banco" — la columna se
+// llamo asi cuando el unico camino era leer un PDF. Se traduce aca en vez de
+// migrar la columna, que obligaria a tocar el upsert, el borrado y los indices.
+router.get('/origenes', async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT COALESCE(source, 'manual') AS origen,
+              COUNT(*)::int              AS movimientos,
+              MAX(date)                  AS ultimo
+         FROM transactions
+        WHERE user_id = $1
+        GROUP BY COALESCE(source, 'manual')`,
+      [req.userId],
+    );
+
+    const de = (o) => rows.find((r) => r.origen === o) || { movimientos: 0, ultimo: null };
+    const banco = de('ocr');
+    const ticket = de('receipt');
+    // Todo lo que no vino del banco ni de un ticket lo escribio una persona.
+    const aMano = rows
+      .filter((r) => r.origen !== 'ocr' && r.origen !== 'receipt')
+      .reduce((acc, r) => ({
+        movimientos: acc.movimientos + r.movimientos,
+        ultimo: !acc.ultimo || (r.ultimo && r.ultimo > acc.ultimo) ? r.ultimo : acc.ultimo,
+      }), { movimientos: 0, ultimo: null });
+
+    res.json({
+      banco,
+      ticket,
+      manual: aMano,
+      total: banco.movimientos + ticket.movimientos + aMano.movimientos,
+    });
+  } catch (err) {
+    console.error('GET /transactions/origenes error:', err.message);
+    res.status(500).json({ error: 'Error al obtener los orígenes' });
+  }
+});
+
 // ─── GET /api/transactions/summary ───────────────────────────
 // Resumen por categoría para el dashboard
 router.get('/summary', async (req, res) => {
