@@ -24,9 +24,13 @@ import { COLORS, RADIUS, SPACING, SHADOWS, MOTION } from '../../theme';
  * no elegido a ojo (ver `glassAction` en theme.js). Fuera de iOS 26 no hay
  * material que teñir, así que queda el relleno sólido: feo antes que invisible.
  *
- * LLEVA ETIQUETA, y es el mismo argumento que ya se usó en la barra de
- * pestañas: un icono solo no alcanza cuando la pregunta del usuario es "¿qué
- * hago acá?". Un "+" pelado sigue exigiendo que lo interpreten.
+ * REDONDO Y CON UN "+" SOLO, por pedido. Con `label` se dibuja como pastilla y
+ * sin `label` como círculo — las dos formas viven acá para que la decisión sea
+ * de quien lo usa y no haya que reescribir el botón para cambiarla.
+ *
+ * SIN TEXTO, `accessibilityLabel` DEJA DE SER UN EXTRA: es lo único que nombra
+ * al botón para quien usa lector de pantalla, porque ya no hay palabra que
+ * leer. Por eso `a11yLabel` es un prop propio y no el `label` visible.
  *
  * La sombra va en la vista de AFUERA. `overflow: 'hidden'` y una sombra en la
  * misma vista se pelean —iOS recorta la sombra contra el borde— y sin sombra
@@ -34,7 +38,8 @@ import { COLORS, RADIUS, SPACING, SHADOWS, MOTION } from '../../theme';
  */
 export default function FloatingAction({
   icon = 'add',
-  label,
+  label,          // con texto es pastilla; sin texto, círculo
+  a11yLabel,      // lo que se lee en voz alta — obligatorio si no hay label
   onPress,
   // Queda por encima de la barra de pestañas flotante, no encima de ella.
   bottom = 104,
@@ -48,12 +53,15 @@ export default function FloatingAction({
 
   const contenido = (
     <>
-      <Ionicons name={icon} size={21} color={COLORS.onPrimary} />
+      {/* Sin palabra al lado, el icono carga solo con decir qué hace: crece. */}
+      <Ionicons name={icon} size={label ? 21 : 28} color={COLORS.onPrimary} />
       {label ? (
         <Txt variant="h2" color={COLORS.onPrimary} style={styles.label}>{label}</Txt>
       ) : null}
     </>
   );
+
+  const caja = [styles.caja, label ? styles.pastilla : styles.circulo];
 
   return (
     <Animated.View
@@ -64,7 +72,7 @@ export default function FloatingAction({
         onPressIn={() => anim(0.96)}
         onPressOut={() => anim(1)}
         accessibilityRole="button"
-        accessibilityLabel={label}
+        accessibilityLabel={a11yLabel || label}
       >
         {liquido ? (
           // El Pressable va por FUERA para que el vidrio reciba el toque: sin
@@ -74,12 +82,12 @@ export default function FloatingAction({
             tinte={COLORS.glassAction}
             radius={RADIUS.full}
             interactivo
-            style={styles.caja}
+            style={caja}
           >
             {contenido}
           </GlassPieza>
         ) : (
-          <View style={[styles.caja, styles.solido]}>
+          <View style={[...caja, styles.solido]}>
             <GlassEdge radius={RADIUS.full} />
             {contenido}
           </View>
@@ -95,11 +103,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 52,
-    paddingHorizontal: 20,
     borderRadius: RADIUS.full,
     overflow: 'hidden',
   },
+  pastilla: { minHeight: 52, paddingHorizontal: 20 },
+  // 60 y no 52: sin texto que lo acompañe, el círculo tiene que sostener solo
+  // la presencia que antes repartía con la palabra.
+  circulo: { width: 60, height: 60 },
   solido: { backgroundColor: COLORS.primary },
   label: { marginLeft: 7 },
 });

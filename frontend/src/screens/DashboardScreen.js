@@ -834,7 +834,7 @@ export default function DashboardScreen() {
           nuevos, pero el boton de agregar no puede parpadear — es lo unico que
           tiene que estar siempre, sobre todo cuando la pantalla esta vacia y no
           hay ningun otro lugar donde empezar. */}
-      <FloatingAction label={t('common.add')} icon="add" onPress={openCreate} />
+      <FloatingAction icon="add" a11yLabel={t('dashboard.newTransaction')} onPress={openCreate} />
 
       {/* Alta / edición de movimiento */}
       <BottomSheet
