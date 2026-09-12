@@ -8,7 +8,6 @@ import Toast from 'react-native-toast-message';
 import api from '../api/client';
 import { daysUntilDue } from '../utils/notifications';
 import { useAuth } from '../context/AuthContext';
-import { usePlan } from '../context/PlanContext';
 import { useLanguage } from '../context/LanguageContext';
 import RefreshBadge from '../components/RefreshBadge';
 import SecuritySheet from '../components/SecuritySheet';
@@ -167,7 +166,6 @@ function CategoryRow({ cat, total, totalIncome, active, onPress, budget, onSetBu
 
 export default function DashboardScreen() {
   const { user, logout } = useAuth();
-  const { isPremium, isTrial, trialDays, showUpgrade } = usePlan();
   const { t, lang, toggleLanguage } = useLanguage();
 
   const [summary, setSummary] = useState(null);
@@ -575,36 +573,46 @@ export default function DashboardScreen() {
           />
         }
       >
+        {/* Idioma, seguridad y salir viven ACA, a la derecha del nombre.
+            Antes eran una fila propia debajo del encabezado, y una fila entera
+            para tres cosas que casi nunca se tocan es alto perdido en la
+            primera pantalla — justo donde hay que entender que hacer.
+
+            Sin subtitulo y sin la marca del plan: el subtitulo era una frase
+            generica que no cambiaba nunca, y el diamante de premium al lado del
+            nombre se leia como un tilde de verificado sin serlo. */}
         <ScreenHeader
           title={firstName ? `Hola, ${firstName}` : 'MoneyFlow'}
-          subtitle={t('dashboard.heroSubtitle')}
           initials={iniciales}
-          // EL "+" SE FUE DE ACA. Era de 19px y en textMid, entre el avatar y
-          // los botones de idioma y salir: leia como un icono de utilidad, no
-          // como la accion principal de la pantalla. Los usuarios reportaron
-          // que no encontraban como cargar un movimiento. Ahora es el boton
-          // flotante de abajo a la derecha; dejarlo en los dos lados diluiria
-          // otra vez cual es EL camino.
           card={false}
-          titleBadge={
-            // PREMIUM: solo el diamante, sin pastilla ni gradiente. Es un
-            // estado, no algo que haya que tocar, y al lado del nombre una
-            // pastilla dorada le gana la mirada al nombre. Como un tilde de
-            // verificado: se nota si lo buscas y no molesta si no.
-            //
-            // GRATIS es otra cosa: ahi la marca SI invita a tocar, asi que
-            // sigue siendo una pastilla, chica y apagada.
-            isPremium ? (
-              <Ionicons name="diamond" size={13} color={COLORS.premium} />
-            ) : (
-              <Pressable onPress={() => showUpgrade()} hitSlop={8}>
-                <Badge
-                  variant={isTrial ? 'streak' : 'statusMuted'}
-                  icon={isTrial ? 'timer-outline' : 'lock-closed'}
-                  label={isTrial ? `${trialDays}d` : t('premium.freeBadge')}
-                />
-              </Pressable>
-            )
+          actions={
+            <>
+              {/* Sin palabra: tres etiquetas al lado del nombre no entran en un
+                  telefono angosto, y el nombre es lo que tiene que sobrevivir.
+                  El lector de pantalla los sigue nombrando. */}
+              <Button
+                label=""
+                variant="ghost"
+                size="sm"
+                icon="shield-checkmark-outline"
+                a11yLabel={t('common.security')}
+                onPress={() => setSeguridadVisible(true)}
+              />
+              <Button
+                label={lang === 'es' ? 'EN' : 'ES'}
+                variant="ghost"
+                size="sm"
+                onPress={toggleLanguage}
+              />
+              <Button
+                label=""
+                variant="ghost"
+                size="sm"
+                icon="log-out-outline"
+                a11yLabel={t('common.logout')}
+                onPress={logout}
+              />
+            </>
           }
         />
 
@@ -629,20 +637,6 @@ export default function DashboardScreen() {
           style={{ marginTop: SPACING.m }}
         />
 
-        {/* La marca del plan se fue al lado del nombre: aca quedaban mezcladas
-            una etiqueta de estado y tres botones, y el separador flexible
-            existia solo para empujarla al otro extremo. */}
-        <View style={styles.utilRow}>
-          <Button
-            label=""
-            variant="ghost"
-            size="sm"
-            icon="shield-checkmark-outline"
-            onPress={() => setSeguridadVisible(true)}
-          />
-          <Button label={lang === 'es' ? 'EN' : 'ES'} variant="ghost" size="sm" onPress={toggleLanguage} />
-          <Button label="Salir" variant="ghost" size="sm" icon="log-out-outline" onPress={logout} />
-        </View>
 
         {/* Selector de mes */}
         <View style={styles.monthRow}>
@@ -964,7 +958,6 @@ const styles = StyleSheet.create({
   bloque: { marginTop: SPACING.m },
   pressed: { opacity: 0.75 },
 
-  utilRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', marginTop: SPACING.s, gap: SPACING.xs },
 
   monthRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',

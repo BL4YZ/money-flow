@@ -4,6 +4,8 @@ export default {
     cancel: 'Cancel',
     delete: 'Delete',
     add: 'Add',
+    logout: 'Sign out',
+    security: 'Security and privacy',
     edit: 'Edit',
     close: 'Close',
     confirm: 'Confirm',

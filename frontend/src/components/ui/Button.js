@@ -66,6 +66,9 @@ export default function Button({
   loading = false,
   disabled = false,
   fullWidth = false,
+  // Un boton de solo icono (label vacio) no tiene NINGUN nombre para un lector
+  // de pantalla: se anuncia como "boton" y nada mas. Con esto lo tiene.
+  a11yLabel,
   style,
 }) {
   const scale = useRef(new Animated.Value(1)).current;
@@ -115,6 +118,8 @@ export default function Button({
           onPress={onPress}
           onPressIn={() => anim(0.98)}
           onPressOut={() => anim(1)}
+          accessibilityRole="button"
+          accessibilityLabel={a11yLabel || label || undefined}
         >
           <GlassSurface
             style={[caja, { borderWidth: p.border === 'transparent' ? 0 : 1.5, borderColor: p.border }]}

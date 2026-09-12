@@ -23,6 +23,11 @@ export default function ScreenHeader({
   titleBadge,
   actionIcon,
   onActionPress,
+  // Botones sueltos al extremo derecho, en la MISMA linea del nombre. Existe
+  // porque en el Dashboard esos botones ocupaban una fila entera para si solos
+  // debajo del encabezado: tres cosas que casi nunca se tocan comiendose el
+  // alto de la primera pantalla.
+  actions,
   card = true,
   style,
 }) {
@@ -52,6 +57,8 @@ export default function ScreenHeader({
             </Txt>
           ) : null}
         </View>
+
+        {actions ? <View style={styles.acciones}>{actions}</View> : null}
 
         {actionIcon ? (
           <Pressable
@@ -93,6 +100,7 @@ const styles = StyleSheet.create({
   tituloFila: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   titulo: { fontFamily: FONTS.extrabold, fontSize: 20, lineHeight: 23, letterSpacing: -0.4, color: COLORS.textHigh },
   sub: { fontSize: 12.5, lineHeight: 16 },
+  acciones: { flexDirection: 'row', alignItems: 'center', marginLeft: 8 },
   accion: {
     width: 40,
     height: 40,
