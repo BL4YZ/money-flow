@@ -43,6 +43,17 @@ export const COLORS = {
   // El pill de la barra: una zona MAS DENSA del mismo cristal, no una pieza
   // aparte. Es un color con alfa y no un GlassView a proposito — ver la nota en
   // FloatingTabBar sobre por que el material de Apple no se puede trasladar.
+  // El vidrio de una ACCION, no de una superficie. El boton flotante de agregar
+  // tiene que pertenecer al mismo material que la barra de navegacion y, a la
+  // vez, gritar que es un boton — que es justo lo que no hacia el "+" gris de
+  // 19px que tenia el encabezado, y por lo que los usuarios no encontraban como
+  // cargar un movimiento.
+  //
+  // La opacidad esta MEDIDA, no elegida a ojo: al 72% el hueso compone #afaca8
+  // sobre el fondo de la app, y el icono oscuro encima da 8.34:1 — nitido. Al
+  // 45% daba 3.93:1, que es donde un icono empieza a desaparecer. Sigue siendo
+  // translucido: se ve pasar el contenido por detras.
+  glassAction: 'rgba(236,232,227,0.72)',
   glassPill: 'rgba(255,255,255,0.16)',
   borderStrong: '#46403a',
 

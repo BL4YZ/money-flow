@@ -13,7 +13,7 @@ import { useLanguage } from '../context/LanguageContext';
 import RefreshBadge from '../components/RefreshBadge';
 import SecuritySheet from '../components/SecuritySheet';
 import {
-  Txt, Card, Input, Chip, Segmented, Badge, Button, BottomSheet,
+  Txt, Card, Input, Chip, Segmented, Badge, Button, BottomSheet, FloatingAction,
   EmptyState, ProgressBar, ScreenHeader, Glow, BarChart, formatUYU, formatMoney,
 } from '../components/ui';
 import {
@@ -579,8 +579,12 @@ export default function DashboardScreen() {
           title={firstName ? `Hola, ${firstName}` : 'MoneyFlow'}
           subtitle={t('dashboard.heroSubtitle')}
           initials={iniciales}
-          actionIcon="add"
-          onActionPress={openCreate}
+          // EL "+" SE FUE DE ACA. Era de 19px y en textMid, entre el avatar y
+          // los botones de idioma y salir: leia como un icono de utilidad, no
+          // como la accion principal de la pantalla. Los usuarios reportaron
+          // que no encontraban como cargar un movimiento. Ahora es el boton
+          // flotante de abajo a la derecha; dejarlo en los dos lados diluiria
+          // otra vez cual es EL camino.
           card={false}
           titleBadge={
             // PREMIUM: solo el diamante, sin pastilla ni gradiente. Es un
@@ -799,6 +803,9 @@ export default function DashboardScreen() {
         {/* "No hay datos" a secas seria mentira estando parado en una cuenta
             vacia mientras la otra tiene movimientos: lo que falta es de ESTA
             cuenta. */}
+        {/* Con la pantalla vacía, describir dónde está el botón es peor que
+            darlo: es el momento exacto en que la persona no sabe qué hacer, y
+            es cuando menos ganas tiene de buscar. */}
         {sinDatos ? (
           <EmptyState
             icon="document-text-outline"
@@ -806,16 +813,28 @@ export default function DashboardScreen() {
               ? (cuenta === 'USD' ? 'Sin movimientos en dólares' : 'Sin movimientos en pesos')
               : t('dashboard.noData')}
             text={cuentaVaciaPeroHayOtra
-              ? 'Podés cargar uno con el + de arriba, o subir el resumen de esa cuenta.'
+              ? 'Podés cargar uno con el botón de abajo, o subir el resumen de esa cuenta.'
               : t('dashboard.noDataHint')}
+            actionLabel={t('dashboard.newTransaction')}
+            actionIcon="add"
+            onAction={openCreate}
             style={styles.bloque}
           />
         ) : null}
 
-        {/* Aire para la tab bar flotante. */}
-        <View style={{ height: 110 }} />
+        {/* Aire para la tab bar flotante Y para el boton de agregar, que queda
+            por encima de ella: con 110 el ultimo bloque se escondia debajo. */}
+        <View style={{ height: 172 }} />
       </ScrollView>
       </Animated.View>
+
+      {/* LA ACCION PRINCIPAL DE LA PANTALLA, donde se la busca.
+          Va FUERA del Animated.View que hace el cruce de opacidad al cambiar de
+          cuenta: el contenido puede bajar a 45% mientras llegan los numeros
+          nuevos, pero el boton de agregar no puede parpadear — es lo unico que
+          tiene que estar siempre, sobre todo cuando la pantalla esta vacia y no
+          hay ningun otro lugar donde empezar. */}
+      <FloatingAction label={t('common.add')} icon="add" onPress={openCreate} />
 
       {/* Alta / edición de movimiento */}
       <BottomSheet

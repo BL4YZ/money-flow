@@ -26,5 +26,6 @@ export { default as Skeleton, OfferRowSkeleton, CardSkeleton } from './Skeleton'
 export { default as ScreenHeader } from './ScreenHeader';
 export { default as Toggle } from './Switch';
 export { default as FloatingTabBar } from './FloatingTabBar';
+export { default as FloatingAction } from './FloatingAction';
 export { default as Glow } from './Glow';
 export { default as BarChart } from './BarChart';
