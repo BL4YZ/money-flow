@@ -180,6 +180,23 @@ async function initSchema() {
       -- esto es como quiere ver los totales el usuario, no en que opero.
       ALTER TABLE users ADD COLUMN IF NOT EXISTS display_currency VARCHAR(10) NOT NULL DEFAULT 'UYU';
 
+      -- Nombre del comercio detras de un RUT.
+      --
+      -- El QR del comprobante trae el RUT pero NO el nombre, asi que sin esto
+      -- cada ticket entra como "Comprobante 215080550011". El nombre lo pone la
+      -- primera persona que escanea ahi.
+      --
+      -- ES GLOBAL, SIN user_id, Y ESO ES A PROPOSITO: un RUT es la misma empresa
+      -- para todo el mundo. Que alguien nombre a Unitex una vez le ahorra el
+      -- paso a todos los demas — y no hay dato personal en la tabla, solo
+      -- informacion comercial que ya viene impresa en el ticket. Por lo mismo NO
+      -- entra en el borrado de cuenta: no es de nadie.
+      CREATE TABLE IF NOT EXISTS cfe_emisores (
+        rut        VARCHAR(12) PRIMARY KEY,
+        nombre     VARCHAR(120) NOT NULL,
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
       CREATE TABLE IF NOT EXISTS budgets (
         id           SERIAL PRIMARY KEY,
         user_id      UUID NOT NULL,

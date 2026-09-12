@@ -4,7 +4,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Toast from 'react-native-toast-message';
 import api from '../api/client';
-import { Txt, Button, formatMoney } from './ui';
+import { Txt, Input, Button, formatMoney } from './ui';
 import { COLORS, SPACING, RADIUS, FONTS } from '../theme';
 
 /**
@@ -27,6 +27,10 @@ export default function ReceiptScanner({ visible, onClose, onCargado }) {
   const [permiso, pedirPermiso] = useCameraPermissions();
   const [enviando, setEnviando] = useState(false);
   const [resultado, setResultado] = useState(null);
+  // El QR del ultimo escaneo, para poder re-enviarlo con el nombre del comercio
+  // sin obligar a escanear otra vez.
+  const [ultimoQr, setUltimoQr] = useState(null);
+  const [nombre, setNombre] = useState('');
   // Un QR se lee MUCHAS veces por segundo mientras esté en cuadro. Sin esto se
   // dispararían decenas de requests por el mismo ticket.
   const yaLeido = useRef(false);
@@ -55,6 +59,7 @@ export default function ReceiptScanner({ visible, onClose, onCargado }) {
 
     yaLeido.current = true;
     setEnviando(true);
+    setUltimoQr(data);
     try {
       const { data: r } = await api.post('/receipts/qr', { qr: data });
       setResultado(r);
@@ -75,6 +80,27 @@ export default function ReceiptScanner({ visible, onClose, onCargado }) {
       setEnviando(false);
     }
   }, [enviando, onCargado]);
+
+  // Nombrar el comercio re-envia el MISMO comprobante. Es seguro porque el
+  // endpoint es idempotente: actualiza la fila en vez de crear otra. Y el nombre
+  // queda en el padron compartido, asi que es la ultima vez que alguien tiene
+  // que escribirlo para ese RUT.
+  const guardarNombre = useCallback(async () => {
+    const n = nombre.trim();
+    if (!n || !ultimoQr) return;
+    setEnviando(true);
+    try {
+      const { data: r } = await api.post('/receipts/qr', { qr: ultimoQr, description: n });
+      setResultado(r);
+      onCargado && onCargado(r);
+      setNombre('');
+      Toast.show({ type: 'success', text1: `Guardado como ${n}` });
+    } catch (_) {
+      Toast.show({ type: 'error', text1: 'No se pudo guardar el nombre' });
+    } finally {
+      setEnviando(false);
+    }
+  }, [nombre, ultimoQr, onCargado]);
 
   const cuerpo = () => {
     if (!permiso) return <ActivityIndicator color={COLORS.primary} />;
@@ -99,9 +125,38 @@ export default function ReceiptScanner({ visible, onClose, onCargado }) {
         <View style={styles.centro}>
           <Ionicons name="checkmark-circle" size={44} color={COLORS.success} />
           <Txt style={styles.monto}>{formatMoney(c.total, c.currency)}</Txt>
+          {c.emisorNombre ? (
+            <Txt variant="h2" style={styles.texto}>{c.emisorNombre}</Txt>
+          ) : null}
           <Txt variant="body" color={COLORS.textMid} style={styles.texto}>
             {c.tipo} {c.serie}-{c.numero} · {c.fecha}
           </Txt>
+
+          {/* Se pregunta UNA sola vez por comercio: el nombre entra en el padron
+              compartido, asi que el proximo escaneo en ese RUT —tuyo o de
+              cualquiera— ya viene nombrado. El QR trae el RUT, nunca el nombre. */}
+          {!c.emisorConocido ? (
+            <View style={styles.nombrar}>
+              <Txt variant="caption" color={COLORS.textLow} style={styles.textoCentrado}>
+                ¿Qué comercio es? Se pregunta una sola vez.
+              </Txt>
+              <Input
+                value={nombre}
+                onChangeText={setNombre}
+                placeholder="Nombre del comercio"
+                autoFocus
+                style={{ marginTop: SPACING.s }}
+              />
+              <Button
+                label="Guardar nombre"
+                onPress={guardarNombre}
+                loading={enviando}
+                disabled={!nombre.trim()}
+                fullWidth
+                style={{ marginTop: SPACING.s }}
+              />
+            </View>
+          ) : null}
           {/* El QR NO trae la moneda: el ticket la imprime pero el código no.
               Se dice, en vez de que el usuario lo descubra por un total 40 veces
               corrido. */}
@@ -178,6 +233,7 @@ const styles = StyleSheet.create({
     borderColor: COLORS.textHigh,
     borderRadius: RADIUS.l,
   },
+  nombrar: { alignSelf: 'stretch', marginTop: SPACING.m },
   ayuda: { position: 'absolute', left: SPACING.l, right: SPACING.l, bottom: 90, gap: 4 },
   velo: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
   cerrar: {

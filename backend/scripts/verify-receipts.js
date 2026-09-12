@@ -98,6 +98,41 @@ const api = async (metodo, ruta, cuerpo) => {
     });
     chequeo('una foto en /upload ya no dice "no se pudo leer el PDF"',
       r.status === 422 && /fotos/i.test(r.data?.error || ''), r.data?.error || `HTTP ${r.status}`);
+    // 6. EL PADRON COMPARTIDO. El QR trae el RUT, nunca el nombre, asi que sin
+    //    esto cada ticket entra como "Comprobante 215080550011". Lo que se
+    //    verifica es que nombrarlo UNA vez alcance — incluso para otra persona.
+    const RUT_NUEVO = '219999999999';
+    const qrNuevo = QR_REAL.replace('215080550011', RUT_NUEVO);
+    await db.query('DELETE FROM cfe_emisores WHERE rut = $1', [RUT_NUEVO]);
+
+    r = await api('POST', '/receipts/qr', { qr: qrNuevo });
+    chequeo('un comercio nuevo entra sin nombre', r.data.comprobante?.emisorConocido === false,
+      'la app pregunta una sola vez');
+
+    r = await api('POST', '/receipts/qr', { qr: qrNuevo, description: 'Ferreteria del Barrio' });
+    chequeo('nombrarlo actualiza, no duplica', r.data.nueva === false, `HTTP ${r.status}`);
+    chequeo('...y el movimiento queda nombrado',
+      r.data.comprobante?.emisorNombre === 'Ferreteria del Barrio', r.data.comprobante?.emisorNombre);
+
+    // OTRO usuario, mismo RUT: tiene que venir nombrado sin preguntar.
+    const tokenViejo = token;
+    const otro = await api('POST', '/auth/register', {
+      name: 'Otro', email: `otro-${Date.now()}@ejemplo.local`, password: PASS,
+    });
+    token = otro.data.token;
+    r = await api('POST', '/receipts/qr', { qr: qrNuevo });
+    chequeo('OTRA persona ya lo ve nombrado',
+      r.data.comprobante?.emisorConocido === true
+      && r.data.comprobante?.emisorNombre === 'Ferreteria del Barrio',
+      r.data.comprobante?.emisorNombre);
+    await api('DELETE', '/account', { password: PASS });
+    token = tokenViejo;
+
+    // El padron es global y NO pertenece a nadie: borrar la cuenta no se lo lleva.
+    const { rows: quedan } = await db.query('SELECT nombre FROM cfe_emisores WHERE rut = $1', [RUT_NUEVO]);
+    chequeo('borrar una cuenta no borra el padron', quedan.length === 1,
+      'un RUT es la misma empresa para todos');
+    await db.query('DELETE FROM cfe_emisores WHERE rut = $1', [RUT_NUEVO]);
   } finally {
     await api('DELETE', '/account', { password: PASS });
   }

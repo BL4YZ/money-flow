@@ -41,9 +41,27 @@ router.post('/qr', [
   }
 
   try {
-    // La descripción la pone quien escanea (el nombre del comercio, que el QR
-    // no trae). Sin eso queda el RUT, que al menos identifica sin inventar.
-    const descripcion = (req.body.description || '').trim() || `Comprobante ${cfe.rutEmisor}`;
+    // EL NOMBRE DEL COMERCIO NO VIENE EN EL QR, sólo el RUT. Se busca en el
+    // padrón compartido: si alguien ya nombró ese RUT, este escaneo entra
+    // nombrado sin preguntar nada. Es la diferencia entre "Unitex" y
+    // "Comprobante 215080550011" en la lista de movimientos.
+    const dado = (req.body.description || '').trim();
+    const { rows: conocidos } = await db.query(
+      'SELECT nombre FROM cfe_emisores WHERE rut = $1', [cfe.rutEmisor],
+    );
+    const nombreConocido = conocidos[0]?.nombre || null;
+
+    // Si lo nombran acá y no estaba, queda para todos. Lo que el usuario escribe
+    // gana sobre lo guardado: quien está mirando el ticket sabe más.
+    if (dado && dado !== nombreConocido) {
+      await db.query(
+        `INSERT INTO cfe_emisores (rut, nombre) VALUES ($1, $2)
+         ON CONFLICT (rut) DO UPDATE SET nombre = EXCLUDED.nombre, updated_at = NOW()`,
+        [cfe.rutEmisor, dado.slice(0, 120)],
+      ).catch(() => {});   // que falle el padrón no puede tumbar el movimiento
+    }
+
+    const descripcion = dado || nombreConocido || `Comprobante ${cfe.rutEmisor}`;
 
     // EL QR NO TRAE LA MONEDA. El ticket la imprime ("Moneda: UYU") pero no va
     // en el código, así que un comprobante en dólares entraría como pesos si se
@@ -79,6 +97,10 @@ router.post('/qr', [
       transactionId: r.rows[0].id,
       comprobante: {
         emisor: cfe.rutEmisor,
+        // La app usa esto para preguntar el nombre UNA vez por comercio, en vez
+        // de pedirlo en cada escaneo o dejarlo como un RUT para siempre.
+        emisorNombre: dado || nombreConocido || null,
+        emisorConocido: !!(dado || nombreConocido),
         tipo: cfe.tipoNombre,
         serie: cfe.serie,
         numero: cfe.numero,
